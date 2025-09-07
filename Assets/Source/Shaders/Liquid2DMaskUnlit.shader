@@ -1,14 +1,17 @@
-﻿Shader "Custom/Liquid2DMaskUnlit"
+﻿Shader "Custom/URP/2D/Liquid2DMaskUnlit"
 {
     Properties
     {
         _MainTex ("Texture", 2D) = "white" {}
-        _Color ("Main Color", Color) = (0.2, 0.6, 1, 1)
-        _Cutoff("Alpha cutoff", Range(0,1)) = 0.25
-        _Stroke ("Stroke Alpha", Range(0,1)) = 0.48
-        _StrokeColor ("Stroke Color", Color) = (0.2, 0.6, 1, 1)
-        _Stroke2 ("Stroke Alpha", Range(0,1)) = 0.1
-        _StrokeColor2 ("Stroke Color", Color) = (0.2, 0.6, 1, 1)
+        _Cutoff("Alpha cutoff", Range(0,1)) = 0.1
+        //_HardEdges("Hard Edges", Float) = 1
+        
+        
+//        _Color ("Main Color", Color) = (0.2, 0.6, 1, 1)
+//        _Stroke ("Stroke Alpha", Range(0,1)) = 0.4
+//        _StrokeColor ("Stroke Color", Color) = (0.6, 0.2, 1, 1)
+//        _Stroke2 ("Stroke Alpha", Range(0,1)) = 0.6
+//        _StrokeColor2 ("Stroke Color", Color) = (0.2, 0.2, 1, 1)
     }
     
     SubShader
@@ -42,7 +45,6 @@
             {
                 float4 positionCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
-                half2 taps[4] : TEXCOORD1;
             };
 
             TEXTURE2D_X(_MainTex);
@@ -74,9 +76,9 @@
 				half4 col = SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv);
 				clip(col.a - _Cutoff);
 
-				if (col.a < _Stroke) col = _StrokeColor;
-				else if (col.a < _Stroke2) col = _StrokeColor2;
-                else col = _Color;
+				// if (col.a < _Stroke) col = _StrokeColor;
+				// else if (col.a < _Stroke2) col = _StrokeColor2;
+                // else col = _Color;
 				return col;
             }
             

@@ -1,4 +1,4 @@
-﻿Shader "Custom/Liquid2dBlur"
+﻿Shader "Custom/URP/2D/Liquid2dBlur"
 {
     SubShader
     {
@@ -31,12 +31,11 @@
             {
                 float4 positionCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
-                half2 taps[4] : TEXCOORD1;
             };
 
             TEXTURE2D_X(_MainTex);
             SAMPLER(sampler_linear_clamp_MainTex);
-            half4 _MainTex_TexelSize;
+            half2 _MainTex_TexelSize;
             half _BlurOffset;
 
             Varying vert(Attribute IN)
@@ -52,11 +51,10 @@
 
             half4 frag(Varying IN) : SV_Target
             {
-                half pixelOffset = _BlurOffset;
-                half4 col = SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(pixelOffset +0.5, pixelOffset +0.5) * _MainTex_TexelSize);
-                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(-pixelOffset -0.5, pixelOffset +0.5) * _MainTex_TexelSize);
-                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(-pixelOffset -0.5, -pixelOffset -0.5) * _MainTex_TexelSize);
-                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(pixelOffset +0.5, -pixelOffset -0.5) * _MainTex_TexelSize);
+                half4 col = SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(_BlurOffset +0.5, _BlurOffset +0.5) * _MainTex_TexelSize);
+                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(-_BlurOffset -0.5, _BlurOffset +0.5) * _MainTex_TexelSize);
+                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(-_BlurOffset -0.5, -_BlurOffset -0.5) * _MainTex_TexelSize);
+                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(_BlurOffset +0.5, -_BlurOffset -0.5) * _MainTex_TexelSize);
                 return col * 0.25;
             }
             

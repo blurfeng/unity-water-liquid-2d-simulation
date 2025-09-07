@@ -78,8 +78,9 @@ MonoBehaviour:
   m_Name: Liquid2dFeature
   m_EditorClassIdentifier: 
   m_Active: 1
+  shaderMask: {fileID: 4800000, guid: 8fd75c58d0bc46e583c51a43a35a2b20, type: 3}
   shaderBlur: {fileID: 4800000, guid: ba2a65ae22134d45b98c9bead0df1a34, type: 3}
-  shaderMask: {fileID: 4800000, guid: 22ec51fd89bf43c799b2934514998e2d, type: 3}
+  shaderLiquid2DMask: {fileID: 4800000, guid: 22ec51fd89bf43c799b2934514998e2d, type: 3}
   settings:
     renderingLayerMask: 2
     iterations: 7
