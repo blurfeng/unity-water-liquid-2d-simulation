@@ -65,7 +65,7 @@ namespace Fs.Liquid2D
                 _filteringSettings =
                     new FilteringSettings(
                         RenderQueueRange.all,
-                        renderingLayerMask: (uint)_defaultFeatureSettings.liquid2DLayer);
+                        renderingLayerMask: (uint)_defaultFeatureSettings.liquid2DLayerMask);
             }
 
             public void Dispose()
@@ -211,7 +211,7 @@ namespace Fs.Liquid2D
                 }
 
                 // 最终将最后一个模糊 RT 拷贝回 正常尺寸的绘制RT。
-                cmd.Blit(_blurRTs[^1], _liquidDrawRT);
+                cmd.Blit(_blurRTs[_featureSettings.iterations - 1], _liquidDrawRT);
 
                 // ---- 对模糊后的流体 RT 进行遮罩 ---- //
                 // 设置绘制目标为当前相机的渲染目标。
@@ -232,30 +232,7 @@ namespace Fs.Liquid2D
             public override void OnCameraCleanup(CommandBuffer cmd)
             {
             }
-
-            /// <summary>
-            /// 更新设置。
-            /// 每次执行时都会调用来支持运行时动态修改配置，确保设置是最新的。
-            /// </summary>
-            private void UpdateSettings()
-            {
-                if (!IsMaterialValid) return;
-
-                // 获取 Volume。
-                Liquid2DVolume volumeComponent = VolumeManager.instance.stack.GetComponent<Liquid2DVolume>();
-                bool isActive = volumeComponent != null && volumeComponent.isActive.value;
-
-                // ---- 根据 Volume 设置和默认值更新配置 ---- //
-
-                _featureSettings.iterations = isActive && volumeComponent.iterations.overrideState
-                    ? volumeComponent.iterations.value
-                    : _defaultFeatureSettings.iterations;
-
-                _featureSettings.blurSpread = isActive && volumeComponent.blurSpread.overrideState
-                    ? volumeComponent.blurSpread.value
-                    : _defaultFeatureSettings.blurSpread;
-            }
-
+            
             /// <summary>
             /// 生成一个简单的四边形网格。
             /// 用于全屏渲染。
@@ -281,6 +258,59 @@ namespace Fs.Liquid2D
                 mesh.triangles = new int[] { 0, 1, 2, 2, 3, 0 };
                 return mesh;
             }
+            
+            #region Volume
+            
+            private Liquid2DVolumeData VolumeData
+            {
+                get
+                {
+                    if (_volumeData == null)
+                    {
+                        // 获取 Volume。
+                        Liquid2DVolume volumeComponent = VolumeManager.instance.stack.GetComponent<Liquid2DVolume>();
+                        if (volumeComponent != null)
+                        {
+                            volumeComponent.GetData(_featureSettings.nameTag, out _volumeData);
+                        }
+                    }
+
+                    return _volumeData;
+                }
+            }
+            private Liquid2DVolumeData _volumeData = null;
+            
+            /// <summary>
+            /// 更新设置。
+            /// 每次执行时都会调用来支持运行时动态修改配置，确保设置是最新的。
+            /// </summary>
+            private void UpdateSettings()
+            {
+                if (!IsMaterialValid) return;
+                
+                // 获取 Volume。
+                Liquid2DVolume volumeComponent = VolumeManager.instance.stack.GetComponent<Liquid2DVolume>();
+                bool isActive =
+                    volumeComponent != null
+                    && volumeComponent.isActive.value
+                    && volumeComponent.liquid2DVolumeDataList.overrideState
+                    && VolumeData != null && VolumeData.isActive;
+                
+                // ---- 重载设置。 ---- //
+                _featureSettings.iterations = isActive && VolumeData.isActive
+                    ? VolumeData.iterations
+                    : _defaultFeatureSettings.iterations;
+                
+                _featureSettings.blurSpread = isActive && VolumeData.isActive
+                    ? VolumeData.blurSpread
+                    : _defaultFeatureSettings.blurSpread;
+                
+                _featureSettings.liquid2DLayerMask = isActive && VolumeData.isActive
+                    ? VolumeData.liquid2DLayerMask
+                    : _defaultFeatureSettings.liquid2DLayerMask;
+            }
+
+            #endregion
         }
 
         [SerializeField, Tooltip("用于模糊流体粒子的 Shader。")]
