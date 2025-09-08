@@ -21,7 +21,7 @@ namespace Volumes
 
             var comp = (Liquid2d)target;
         
-            if (RenderingLayerMaskUtil.IsHaveLayer)
+            if (Liquid2DLayerUtil.IsHaveLayer)
             {
                 EditorGUILayout.BeginHorizontal();
                 GUILayout.Space(13f);
@@ -33,7 +33,7 @@ namespace Volumes
                 EditorGUI.BeginDisabledGroup(!comp.renderingLayerMask.overrideState);
                 // MaskField。
                 int mask = (int)comp.renderingLayerMask.value;
-                mask = EditorGUILayout.MaskField("Rendering Layer Mask", mask, RenderingLayerMaskUtil.LayerNames);
+                mask = EditorGUILayout.MaskField("Rendering Layer Mask", mask, Liquid2DLayerUtil.Liquid2DLayerNames);
                 comp.renderingLayerMask.value = unchecked((uint)mask);
                 EditorGUI.EndDisabledGroup();
             

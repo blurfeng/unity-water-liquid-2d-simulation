@@ -46,9 +46,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7f424e78a4fd4648b4e7dc22e0d1abf2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  sprite: {fileID: -2413806693520163455, guid: a86470a33a6bf42c4b3595704624658b, type: 3}
-  color: {r: 0, g: 1.3420684, b: 5.3403134, a: 1}
-  material: {fileID: 2100000, guid: 7453d47e894769e43b1338caed5ddfeb, type: 2}
+  settings:
+    sprite: {fileID: -2413806693520163455, guid: 343064a745fc23b4cabccb1d13822cff, type: 3}
+    material: {fileID: 2100000, guid: 7453d47e894769e43b1338caed5ddfeb, type: 2}
+    color: {r: 0, g: 1, b: 4, a: 1}
 --- !u!58 &5961824672208803902
 CircleCollider2D:
   m_ObjectHideFlags: 0

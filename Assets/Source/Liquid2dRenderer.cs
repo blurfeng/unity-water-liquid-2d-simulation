@@ -2,40 +2,28 @@
 using UnityEngine;
 using UnityEngine.Rendering;
 
+/// <summary>
+/// 2D液体渲染器。
+/// 挂载此组件到流体粒子对象上以启用液体渲染。
+/// </summary>
 public class Liquid2dRenderer : MonoBehaviour
 {
-    private static readonly int _color = Shader.PropertyToID("_Color");
-    private static readonly int _mainTex = Shader.PropertyToID("_MainTex");
-
     [SerializeField]
-    private Sprite sprite;
+    private Liquid2dParticleRendererSettings settings = new Liquid2dParticleRendererSettings();
+    public Liquid2dParticleRendererSettings Settings => settings;
     
-    [SerializeField, ColorUsage(true, true)]
-    private Color color = new Color(0f, 1f, 4f, 1f);
-    
-    [SerializeField]
-    private Material material;
-    
-    private static Mesh _quadMesh;
-    private MaterialPropertyBlock _mpb;
     private void Awake()
     {
         if (!IsValid()) return;
-        
-        if (_quadMesh == null)
-            _quadMesh = GenerateQuadMesh();
-
-        if (_mpb == null)
-        {
-            _mpb = new MaterialPropertyBlock();
-            _mpb.SetColor(_color, color);
-            _mpb.SetTexture(_mainTex, sprite.texture);
-        }
     }
 
     private void OnEnable()
     {
-        if (!IsValid()) return;
+        if (!IsValid())
+        {
+            Debug.LogWarning("Liquid2dRenderer is not valid.");
+            return;
+        }
         
         Liquid2dFeature.RegisterLiquidParticle(this);
     }
@@ -47,38 +35,54 @@ public class Liquid2dRenderer : MonoBehaviour
         Liquid2dFeature.UnregisterLiquidParticle(this);
     }
     
-    public void Render(CommandBuffer cmd)
-    {
-        if (!IsValid()) return;
-        
-        Matrix4x4 matrix = Matrix4x4.TRS(transform.position, transform.rotation, transform.localScale);
-        cmd.DrawMesh(_quadMesh, matrix, material, 0, 0, _mpb);
-    }
-
-    Mesh GenerateQuadMesh()
-    {
-        var mesh = new Mesh();
-        mesh.vertices = new Vector3[] {
-            new Vector3(-0.5f, -0.5f, 0),
-            new Vector3(0.5f, -0.5f, 0),
-            new Vector3(0.5f, 0.5f, 0),
-            new Vector3(-0.5f, 0.5f, 0)
-        };
-        mesh.uv = new Vector2[] {
-            new Vector2(0, 0),
-            new Vector2(1, 0),
-            new Vector2(1, 1),
-            new Vector2(0, 1)
-        };
-        mesh.triangles = new int[] { 0, 1, 2, 2, 3, 0 };
-        return mesh;
-    }
-    
     private bool IsValid()
     {
-        if (material == null || sprite == null)
+        if (!settings.IsValid())
             return false;
 
         return true;
+    }
+}
+
+/// <summary>
+/// 流体粒子渲染器设置。
+/// </summary>
+[Serializable]
+public class Liquid2dParticleRendererSettings
+{
+    [SerializeField]
+    public Sprite sprite;
+    
+    [SerializeField]
+    public Material material;
+    
+    [SerializeField, ColorUsage(true, true)]
+    public Color color = new Color(0f, 1f, 4f, 1f);
+    
+    public bool IsValid()
+    {
+        return sprite != null && material != null;
+    }
+    
+    public bool Equals(Liquid2dParticleRendererSettings other)
+    {
+        if (other == null) return false;
+        return sprite == other.sprite && material == other.material;
+    }
+
+    public override bool Equals(object obj)
+    {
+        return Equals(obj as Liquid2dParticleRendererSettings);
+    }
+
+    public override int GetHashCode()
+    {
+        unchecked
+        {
+            int hash = 17;
+            hash = hash * 23 + (sprite ? sprite.GetHashCode() : 0);
+            hash = hash * 23 + (material ? material.GetHashCode() : 0);
+            return hash;
+        }
     }
 }

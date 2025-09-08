@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using Volumes;
@@ -26,46 +25,50 @@ public class Liquid2dFeature : ScriptableRendererFeature
         private static class ShaderIDs
         {
             internal static readonly int MainTexId = Shader.PropertyToID("_MainTex");
+            internal static readonly int ColorId = Shader.PropertyToID("_Color");
             internal static readonly int BlurOffsetId = Shader.PropertyToID("_BlurOffset");
         }
         
-        private readonly Liquid2dSettings _defaultSettings;
-        private readonly Liquid2dSettings _settings;
-        private readonly Material _materialSpriteMask;
+        private readonly Liquid2dFeatureSettings _defaultFeatureSettings;
+        // 当前设置。数据来源为 Volume 或默认设置。
+        private readonly Liquid2dFeatureSettings _featureSettings;
+        
         private readonly Material _materialBlur;
-        private readonly Material _materialLiquid2DMask;
-        private bool IsMaterialValid => _materialSpriteMask != null && _materialBlur != null && _materialLiquid2DMask != null;
+        private readonly Material _materialEffect;
+        private bool IsMaterialValid => _materialBlur != null && _materialEffect != null;
+        
+        
+        // 模糊 RT 描述符缓存。
         private readonly MaterialPropertyBlock _propertyBlock;
-        private FilteringSettings _filteringSettings;
-        private RTHandle _maskRT;
-
-        private RenderTextureDescriptor _descBlur;
+        private RTHandle _liquidDrawRT;
         private readonly List<RTHandle> _blurRTs = new List<RTHandle>();
+        private static Mesh _quadMesh;
+        private FilteringSettings _filteringSettings;
 
-        public Liquid2dPass(Material materialSpriteMask, Material materialBlur, Material materialLiquid2DMask, Liquid2dSettings settings)
+        public Liquid2dPass(Material materialBlur, Material materialEffect, Liquid2dFeatureSettings featureSettings)
         {
             // Configures where the render pass should be injected.
             renderPassEvent = RenderPassEvent.BeforeRenderingPostProcessing;
 
-            _materialSpriteMask = materialSpriteMask;
             _materialBlur = materialBlur;
-            _materialLiquid2DMask = materialLiquid2DMask;
-            _defaultSettings = settings;
-            _settings = settings.Clone();
+            _materialEffect = materialEffect;
+            _defaultFeatureSettings = featureSettings;
+            _featureSettings = featureSettings.Clone();
             
             _propertyBlock = new MaterialPropertyBlock();
+            _quadMesh = GenerateQuadMesh();
             
             // 只渲染指定 Rendering Layer 的物体。
             _filteringSettings = 
                 new FilteringSettings(
                     RenderQueueRange.all, 
-                    renderingLayerMask: (uint)_defaultSettings.renderingLayerMask);
+                    renderingLayerMask: (uint)_defaultFeatureSettings.liquid2dLayer);
         }
         
         public void Dispose()
         {
-            _maskRT?.Release();
-            _maskRT = null;
+            _liquidDrawRT?.Release();
+            _liquidDrawRT = null;
             
             if (_blurRTs.Count > 0)
             {
@@ -95,16 +98,9 @@ public class Liquid2dFeature : ScriptableRendererFeature
             desc.depthBufferBits = 0;
             // 选择有Alpha通道的颜色格式，后续处理需要。
             desc.colorFormat = RenderTextureFormat.ARGB32;
-            
-            // 分配 Mask RT。
-            RenderingUtils.ReAllocateIfNeeded(ref _maskRT, desc, name:"_MaskRT");
-            
-            _descBlur = renderingData.cameraData.cameraTargetDescriptor;
-            _descBlur.msaaSamples = 1;
-            _descBlur.depthBufferBits = 0;
-            _descBlur.colorFormat = RenderTextureFormat.ARGB32;
-            _descBlur.width = renderingData.cameraData.cameraTargetDescriptor.width / 1; //Mathf.Max(512, Screen.width / 1);
-            _descBlur.height = renderingData.cameraData.cameraTargetDescriptor.height / 1; //Mathf.Max(512,  Screen.height / 1);
+
+            // 分配 流体绘制 RT。
+            RenderingUtils.ReAllocateIfNeeded(ref _liquidDrawRT, desc, name:"Liquid Draw RT");
         }
 
         // Here you can implement the rendering logic.
@@ -119,67 +115,105 @@ public class Liquid2dFeature : ScriptableRendererFeature
             // 创建命令缓冲区。
             CommandBuffer cmd = CommandBufferPool.Get("Liquid2d");
             
-            // ---- 遮罩 RT ---- //
-            // 设置绘制目标为_outlineMaskRT。并在渲染前清空RT。
-            cmd.SetRenderTarget(_maskRT);
+            // ---- 绘制流体基础 RT ---- //
+            // 设置绘制目标为流体绘制RT。并在渲染前清空RT。
+            cmd.SetRenderTarget(_liquidDrawRT);
             cmd.ClearRenderTarget(true, true, Color.clear);
             
-            // // 设置绘制属性并创建渲染列表，然后绘制。
-            // var drawingSettings = CreateDrawingSettings(_shaderTagIds, ref  renderingData, SortingCriteria.None);
-            // var rendererListParams = new RendererListParams(renderingData.cullResults, drawingSettings, _filteringSettings);
-            // var list = context.CreateRendererList(ref rendererListParams);
-            // // 绘制一批已有的渲染器。这里的来源是 context（场景中的 Sprite Renderer），但我们指定了过滤，只绘制我们想要的物体。
-            // cmd.DrawRendererList(list);
-            
-            // var drawingSettings = CreateDrawingSettings(_shaderTagIds, ref renderingData, SortingCriteria.None);
-            // drawingSettings.overrideMaterial = _materialSpriteMask;
-            // var rendererListParams = new RendererListParams(renderingData.cullResults, drawingSettings, _filteringSettings);
-            // var list = context.CreateRendererList(ref rendererListParams);
-            // cmd.DrawRendererList(list);
-
-            foreach (var p in Liquid2dFeature._liquidParticles)
+            // 绘制所有流体粒子到 流体绘制RT。这里使用 GPU Instancing 来批量绘制。
+            foreach (var kvp in _particlesDic)
             {
-                p.Render(cmd);
+                var settings = kvp.Key;
+                var list = kvp.Value;
+                if (list.Count == 0 || settings.sprite == null) continue;
+
+                // 计算每个粒子的矩阵和颜色等属性。
+                var matrices = new Matrix4x4[list.Count];
+                var colorArray = new Vector4[list.Count];
+                for (int i = 0; i < list.Count; i++)
+                {
+                    var item = list[i];
+                    // 计算每个粒子的矩阵。
+                    matrices[i] = Matrix4x4.TRS(item.transform.position, item.transform.rotation, item.transform.localScale);
+                    // 获取每个粒子的颜色。
+                    colorArray[i] = item.Settings.color;
+                }
+                
+                // 设置材质属性块，传入颜色数组和纹理。
+                var mpb = new MaterialPropertyBlock();
+                // 传入颜色数组。
+                mpb.SetVectorArray(ShaderIDs.ColorId, colorArray);
+                // 传入纹理。批量绘制要求材质和纹理相同。
+                mpb.SetTexture(ShaderIDs.MainTexId, settings.sprite.texture);
+                
+                // 批量绘制流体粒子。
+                cmd.DrawMeshInstanced(_quadMesh, 0, settings.material, 0, matrices, list.Count, mpb);
             }
             
             // ---- 对流体粒子进行模糊 ----//
             
-            // 分配模糊 RT。
-            if (_settings.iterations + 1 > _blurRTs.Count)
+            // 分配模糊 RT。// 需要的模糊 RT 数量比当前多，进行分配。
+            if (_featureSettings.iterations + 1 > _blurRTs.Count)
             {
-                for (var i = _blurRTs.Count; i < _settings.iterations + 1; ++i)
+                // 使用当前相机的渲染目标描述符来配置 RT。
+                RenderTextureDescriptor descBlur = renderingData.cameraData.cameraTargetDescriptor;
+                descBlur.msaaSamples = 1;
+                descBlur.depthBufferBits = 0;
+                descBlur.colorFormat = RenderTextureFormat.ARGB32;
+            
+#if UNITY_EDITOR
+                // 在编辑器模式下，使用全分辨率。
+                // 因为当前有Scene和Game两个视图可能导致获取的 renderingData.cameraData.cameraTargetDescriptor.width 数据不正确。
+                if (Camera.main)
                 {
-                    RTHandle blurRt = null;
-                    RenderingUtils.ReAllocateIfNeeded(ref blurRt, _descBlur, name:$"blurRt{i}");
-                    _blurRTs.Add(blurRt);
+                    descBlur.width = Camera.main.pixelWidth / 4;
+                    descBlur.height = Camera.main.pixelHeight / 4;
+                }
+#else
+                // 这里使用当前相机尺寸四分之一的尺寸来提升性能。// 注意。缩放尺寸也会影响模糊的效果。
+                _descBlur.width = renderingData.cameraData.cameraTargetDescriptor.width / 4;
+                _descBlur.height = renderingData.cameraData.cameraTargetDescriptor.height / 4;
+#endif
+                for (var i = _blurRTs.Count; i < _featureSettings.iterations + 1; ++i)
+                {
+                    RTHandle blurRT = null;
+                    RenderingUtils.ReAllocateIfNeeded(ref blurRT, descBlur, name:$"Blur RT {i}");
+                    _blurRTs.Add(blurRT);
                 }
             }
             
-            // 先将 Mask RT 拷贝到第一个模糊 RT。
-            cmd.Blit(_maskRT, _blurRTs[0]);
+            // 先将 流体绘制RT 拷贝到第一个模糊 RT。
+            cmd.Blit(_liquidDrawRT, _blurRTs[0]);
             
             // 进行多次迭代模糊。
-            for (var i = 0; i < _settings.iterations; ++i)
+            for (var i = 0; i < _featureSettings.iterations; ++i)
             {
+                // 设置绘制目标为下一个模糊 RT，并先清空它。
                 cmd.SetRenderTarget(_blurRTs[i + 1]);
                 cmd.ClearRenderTarget(true, true, Color.clear);
-                float offset = 0.5f + i * _settings.blurSpread;
+                
+                // 模糊偏移强度递增。
+                float offset = 0.5f + i * _featureSettings.blurSpread;
+                
+                // 设置模糊材质属性块，传入当前模糊 RT 和偏移强度。
                 MaterialPropertyBlock propertyBlockBlur = new MaterialPropertyBlock();
                 propertyBlockBlur.SetTexture(ShaderIDs.MainTexId, _blurRTs[i]);
                 propertyBlockBlur.SetFloat(ShaderIDs.BlurOffsetId, offset);
+                
+                // 绘制一个全屏三角形，使用模糊材质，并传入属性块。
                 cmd.DrawProcedural(Matrix4x4.identity, _materialBlur, 0, MeshTopology.Triangles, 3, 1, propertyBlockBlur);
             }
             
-            // 最终将最后一个模糊 RT 拷贝回 Mask RT。
-            cmd.Blit(_blurRTs[_blurRTs.Count - 1], _maskRT);
+            // 最终将最后一个模糊 RT 拷贝回 正常尺寸的绘制RT。
+            cmd.Blit(_blurRTs[^1], _liquidDrawRT);
             
             // ---- 对模糊后的流体 RT 进行遮罩 ---- //
             // 设置绘制目标为当前相机的渲染目标。
             cmd.SetRenderTarget(renderingData.cameraData.renderer.cameraColorTargetHandle);
-            // 设置外描边材质属性块，传入 Mask RT。
-            _propertyBlock.SetTexture("_MainTex", _maskRT);
+            // 设置外描边材质属性块，传入绘制RT。
+            _propertyBlock.SetTexture(ShaderIDs.MainTexId, _liquidDrawRT);
             // 绘制一个全屏三角形，使用外描边材质，并传入属性块。
-            cmd.DrawProcedural(Matrix4x4.identity, _materialLiquid2DMask, 0, MeshTopology.Triangles, 3, 1, _propertyBlock);
+            cmd.DrawProcedural(Matrix4x4.identity, _materialEffect, 0, MeshTopology.Triangles, 3, 1, _propertyBlock);
 
             // ---- 执行绘制 ---- //
             context.ExecuteCommandBuffer(cmd);
@@ -205,61 +239,72 @@ public class Liquid2dFeature : ScriptableRendererFeature
             bool isActive = volumeComponent != null && volumeComponent.isActive.value;
             
             // ---- 根据 Volume 设置和默认值更新配置 ---- //
-            _settings.renderingLayerMask = isActive && volumeComponent.renderingLayerMask.overrideState ?
-                (ERenderingLayerMask)volumeComponent.renderingLayerMask.value : _defaultSettings.renderingLayerMask;
-            uint renderingLayerMask = (uint)_settings.renderingLayerMask;
-            // 更新过滤设置，最终应用于渲染。
-            if (renderingLayerMask != _filteringSettings.renderingLayerMask)
-            {
-                _filteringSettings.renderingLayerMask = renderingLayerMask;
-            }
             
-            _settings.iterations = isActive && volumeComponent.iterations.overrideState ?
-                volumeComponent.iterations.value : _defaultSettings.iterations;
+            _featureSettings.iterations = isActive && volumeComponent.iterations.overrideState ?
+                volumeComponent.iterations.value : _defaultFeatureSettings.iterations;
             
-            _settings.blurSpread = isActive && volumeComponent.blurSpread.overrideState ?
-                volumeComponent.blurSpread.value : _defaultSettings.blurSpread;
-            
-            // ---- 更新材质 ---- //
-            //_material.SetColor(_outlineColorId, outlineColor);
-            //_material.SetFloat(_outlineWidthId, outlineWidth);
+            _featureSettings.blurSpread = isActive && volumeComponent.blurSpread.overrideState ?
+                volumeComponent.blurSpread.value : _defaultFeatureSettings.blurSpread;
+        }
+        
+        /// <summary>
+        /// 生成一个简单的四边形网格。
+        /// 用于全屏渲染。
+        /// </summary>
+        /// <returns></returns>
+        private Mesh GenerateQuadMesh()
+        {
+            var mesh = new Mesh();
+            mesh.vertices = new Vector3[] {
+                new Vector3(-0.5f, -0.5f, 0),
+                new Vector3(0.5f, -0.5f, 0),
+                new Vector3(0.5f, 0.5f, 0),
+                new Vector3(-0.5f, 0.5f, 0)
+            };
+            mesh.uv = new Vector2[] {
+                new Vector2(0, 0),
+                new Vector2(1, 0),
+                new Vector2(1, 1),
+                new Vector2(0, 1)
+            };
+            mesh.triangles = new int[] { 0, 1, 2, 2, 3, 0 };
+            return mesh;
         }
     }
 
-    [SerializeField] private Shader shaderMask;
-    [SerializeField] private Shader shaderBlur;
-    [SerializeField] private Shader shaderLiquid2DMask;
-    [SerializeField] private Liquid2dSettings settings;
+    [SerializeField, Tooltip("用于模糊流体粒子的 Shader。")] 
+    private Shader shaderBlur;
+    [SerializeField, Tooltip("用于渲染流体效果的 Shader。")] 
+    private Shader shaderEffect;
+    [SerializeField, Tooltip("流体效果设置。")] 
+    private Liquid2dFeatureSettings featureSettings;
     
     private Liquid2dPass _liquid2dPass;
-    private Material _materialSpriteMask;
     private Material _materialBlur;
-    private Material _materialLiquid2DMask;
+    private Material _materialEffect;
     
     /// <inheritdoc/>
     public override void Create()
     {
         // 检查 Shader 是否可用。
-        if (!shaderMask || !shaderMask.isSupported || 
-            !shaderBlur || !shaderBlur.isSupported || 
-            !shaderLiquid2DMask || !shaderLiquid2DMask.isSupported)
+        if (!shaderBlur || !shaderBlur.isSupported || 
+            !shaderEffect || !shaderEffect.isSupported)
         {
             Debug.LogWarning($"Liquid2dFeature: Missing or unsupported shader for {GetType().Name}. Liquid2dPass feature will not execute.");
             return;
         }
         
         // 使用 shader 创建材质，并创建 Pass。
-        _materialSpriteMask = new  Material(shaderMask);
         _materialBlur = new  Material(shaderBlur);
-        _materialLiquid2DMask = new Material(shaderLiquid2DMask);
-        _liquid2dPass = new Liquid2dPass(_materialSpriteMask, _materialBlur, _materialLiquid2DMask, settings);
+        _materialEffect = new Material(shaderEffect);
+        _liquid2dPass = new Liquid2dPass(_materialBlur, _materialEffect, featureSettings);
     }
 
     // Here you can inject one or multiple render passes in the renderer.
     // This method is called when setting up the renderer once per-camera.
     public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
     {
-        if (_materialSpriteMask == null || _materialBlur == null || _materialLiquid2DMask == null || _liquid2dPass == null)
+        if (_materialBlur == null || _materialEffect == null || _liquid2dPass == null)
         {
             // Debug.LogWarning($"Liquid2dFeature: Missing Liquid2d Pass. {GetType().Name} render pass will not execute.");
             return;
@@ -282,22 +327,49 @@ public class Liquid2dFeature : ScriptableRendererFeature
     }
 
     #region Liquid Particle 水粒子
-
-    private static readonly List<Liquid2dRenderer> _liquidParticles = new List<Liquid2dRenderer>();
+    // 所有注册的流体粒子，按设置分组。用于批量渲染。
+    private static readonly Dictionary<Liquid2dParticleRendererSettings, List<Liquid2dRenderer>> _particlesDic = new Dictionary<Liquid2dParticleRendererSettings, List<Liquid2dRenderer>>();
     
+    /// <summary>
+    /// 注册流体粒子。
+    /// 为了 Game Instancing 批量渲染，我们需要将相同设置的粒子进行分组。
+    /// </summary>
+    /// <param name="particle"></param>
     public static void RegisterLiquidParticle(Liquid2dRenderer particle)
     {
-        if (!_liquidParticles.Contains(particle))
+        if (particle == null || particle.Settings == null) return;
+        
+        if (!_particlesDic.TryGetValue(particle.Settings, out var list))
         {
-            _liquidParticles.Add(particle);
+            list = new List<Liquid2dRenderer>();
+            _particlesDic[particle.Settings] = list;
+        }
+        
+        if (!list.Contains(particle))
+        {
+            list.Add(particle);
         }
     }
     
+    /// <summary>
+    /// 注销流体粒子。
+    /// </summary>
+    /// <param name="particle"></param>
     public static void UnregisterLiquidParticle(Liquid2dRenderer particle)
     {
-        if (_liquidParticles.Contains(particle))
+        if (particle == null || particle.Settings == null) return;
+        
+        if (_particlesDic.TryGetValue(particle.Settings, out var list))
         {
-            _liquidParticles.Remove(particle);
+            if (list.Contains(particle))
+            {
+                list.Remove(particle);
+            }
+            
+            if (list.Count == 0)
+            {
+                _particlesDic.Remove(particle.Settings);
+            }
         }
     }
 
