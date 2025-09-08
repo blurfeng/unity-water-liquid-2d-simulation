@@ -1,9 +1,11 @@
-﻿using UnityEngine;
+﻿using System.ComponentModel;
+using UnityEngine;
 using UnityEngine.Rendering;
 
-namespace Volumes
+namespace Fs.Liquid2D.Volumes
 {
-    public class Liquid2d : VolumeComponent
+    [DisplayName("Liquid2D")]
+    public class Liquid2DVolume : VolumeComponent
     {
         public BoolParameter isActive = new BoolParameter(true, true);
         [Tooltip("迭代次数，越大越模糊。")]

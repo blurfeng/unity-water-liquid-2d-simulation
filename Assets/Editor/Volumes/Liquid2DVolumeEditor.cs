@@ -2,10 +2,10 @@
 using UnityEditor.Rendering;
 using UnityEngine;
 
-namespace Volumes
+namespace Fs.Liquid2D.Volumes
 {
-    [CustomEditor(typeof(Liquid2d))]
-    public class Liquid2dVolumeEditor : VolumeComponentEditor
+    [CustomEditor(typeof(Liquid2DVolume))]
+    public class Liquid2DVolumeEditor : VolumeComponentEditor
     {
         public override void OnEnable()
         {
@@ -19,7 +19,7 @@ namespace Volumes
         {
             base.OnInspectorGUI();
 
-            var comp = (Liquid2d)target;
+            var comp = (Liquid2DVolume)target;
         
             if (Liquid2DLayerUtil.IsHaveLayer)
             {
@@ -31,9 +31,9 @@ namespace Volumes
                     EditorGUILayout.Toggle(comp.renderingLayerMask.overrideState, GUILayout.Width(15f));
             
                 EditorGUI.BeginDisabledGroup(!comp.renderingLayerMask.overrideState);
-                // MaskField。
+                // 2D流体遮罩层。只会渲染选中层的2D流体。
                 int mask = (int)comp.renderingLayerMask.value;
-                mask = EditorGUILayout.MaskField("Rendering Layer Mask", mask, Liquid2DLayerUtil.Liquid2DLayerNames);
+                mask = EditorGUILayout.MaskField("Liquid2D Layer Mask", mask, Liquid2DLayerUtil.Liquid2DLayerNames);
                 comp.renderingLayerMask.value = unchecked((uint)mask);
                 EditorGUI.EndDisabledGroup();
             

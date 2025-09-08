@@ -1,5 +1,5 @@
 ﻿// 流体模糊着色器，用于将所有粒子进行多次模糊处理，让颜色连接在一起，然后供之后的处理。
-Shader "Custom/URP/2D/Liquid2dBlur"
+Shader "Custom/URP/2D/Liquid2DBlur"
 {
     SubShader
     {
