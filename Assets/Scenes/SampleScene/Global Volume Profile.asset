@@ -22,7 +22,7 @@ MonoBehaviour:
     - isActive: 1
       nameTag: Water
       iterations: 7
-      blurSpread: 0.3
+      blurSpread: 0.6
       liquid2DLayerMask: 2
 --- !u!114 &11400000
 MonoBehaviour:

@@ -17,6 +17,9 @@ namespace Fs.Liquid2D
     
         [SerializeField, ColorUsage(true, true), Tooltip("流体粒子颜色。")]
         public Color color = new Color(0f, 1f, 4f, 1f);
+        
+        [Tooltip("2D流体层遮罩。定义了这个流体粒子属于哪个层。")]
+        public ELiquid2DLayer liquid2DLayerMask = ELiquid2DLayer.Water;
     
         /// <summary>
         /// 检查渲染器设置是否有效。

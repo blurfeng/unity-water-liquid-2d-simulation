@@ -17,7 +17,8 @@ MonoBehaviour:
     hdrDebugViewPS: {fileID: 4800000, guid: 573620ae32aec764abd4d728906d2587, type: 3}
   m_RendererFeatures:
   - {fileID: 3198073713061572663}
-  m_RendererFeatureMap: 37b08c1019d7612c
+  - {fileID: 8240024800087982750}
+  m_RendererFeatureMap: 37b08c1019d7612c9e42a7ede5725a72
   m_UseNativeRenderPass: 0
   m_LayerMask:
     serializedVersion: 2
@@ -75,7 +76,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 58ccafab4e6e1e74fb8316d4c2cc72de, type: 3}
-  m_Name: Liquid2dFeature
+  m_Name: Liquid2dFeature Water
   m_EditorClassIdentifier: 
   m_Active: 1
   shaderBlur: {fileID: 4800000, guid: ba2a65ae22134d45b98c9bead0df1a34, type: 3}
@@ -85,3 +86,23 @@ MonoBehaviour:
     liquid2DLayerMask: 2
     iterations: 7
     blurSpread: 0.6
+--- !u!114 &8240024800087982750
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 58ccafab4e6e1e74fb8316d4c2cc72de, type: 3}
+  m_Name: Liquid2DFeature Magma
+  m_EditorClassIdentifier: 
+  m_Active: 1
+  shaderBlur: {fileID: 4800000, guid: ba2a65ae22134d45b98c9bead0df1a34, type: 3}
+  shaderEffect: {fileID: 4800000, guid: 22ec51fd89bf43c799b2934514998e2d, type: 3}
+  featureSettings:
+    nameTag: Magma
+    liquid2DLayerMask: 4
+    iterations: 4
+    blurSpread: 0.4

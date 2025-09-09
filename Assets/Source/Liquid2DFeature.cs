@@ -46,7 +46,9 @@ namespace Fs.Liquid2D
             private RTHandle _liquidDrawRT;
             private readonly List<RTHandle> _blurRTs = new List<RTHandle>();
             private static Mesh _quadMesh;
-            private FilteringSettings _filteringSettings;
+            
+            private Matrix4x4[] _matricesCache = new Matrix4x4[512];
+            private Vector4[] _colorArrayCache = new Vector4[512];
 
             public Liquid2dPass(Material materialBlur, Material materialEffect, Liquid2DFeatureSettings featureSettings)
             {
@@ -60,12 +62,6 @@ namespace Fs.Liquid2D
 
                 _propertyBlock = new MaterialPropertyBlock();
                 _quadMesh = GenerateQuadMesh();
-
-                // 只渲染指定 Rendering Layer 的物体。
-                _filteringSettings =
-                    new FilteringSettings(
-                        RenderQueueRange.all,
-                        renderingLayerMask: (uint)_defaultFeatureSettings.liquid2DLayerMask);
             }
 
             public void Dispose()
@@ -125,34 +121,39 @@ namespace Fs.Liquid2D
                 cmd.ClearRenderTarget(true, true, Color.clear);
 
                 // 绘制所有流体粒子到 流体绘制RT。这里使用 GPU Instancing 来批量绘制。
+                ELiquid2DLayer targetLayerMask = _featureSettings.liquid2DLayerMask;
+
                 foreach (var kvp in _particlesDic)
                 {
                     var settings = kvp.Key;
                     var list = kvp.Value;
                     if (list.Count == 0 || settings.sprite == null) continue;
 
-                    // 计算每个粒子的矩阵和颜色等属性。
-                    var matrices = new Matrix4x4[list.Count];
-                    var colorArray = new Vector4[list.Count];
+                    // 扩容渲染数据缓存数组。
+                    EnsureCacheSize(list.Count);
+
+                    // 填充数据。
+                    int count = 0; // 实际渲染的粒子数量。
                     for (int i = 0; i < list.Count; i++)
                     {
                         var item = list[i];
-                        // 计算每个粒子的矩阵。
-                        matrices[i] = Matrix4x4.TRS(item.transform.position, item.transform.rotation,
-                            item.transform.localScale);
-                        // 获取每个粒子的颜色。
-                        colorArray[i] = item.Settings.color;
+                        // 使用层遮罩过滤粒子。只渲染需要的粒子。
+                        if ((item.Settings.liquid2DLayerMask & targetLayerMask) == 0) continue;
+
+                        _matricesCache[count] = Matrix4x4.TRS(item.transform.position, item.transform.rotation, item.transform.localScale);
+                        _colorArrayCache[count] = item.Settings.color;
+                        count++;
                     }
 
-                    // 设置材质属性块，传入颜色数组和纹理。
-                    var mpb = new MaterialPropertyBlock();
-                    // 传入颜色数组。
-                    mpb.SetVectorArray(ShaderIDs.ColorId, colorArray);
-                    // 传入纹理。批量绘制要求材质和纹理相同。
-                    mpb.SetTexture(ShaderIDs.MainTexId, settings.sprite.texture);
+                    // GUP Instancing 一次批量渲染。
+                    if (count > 0)
+                    {
+                        var mpb = new MaterialPropertyBlock();
+                        mpb.SetVectorArray(ShaderIDs.ColorId, _colorArrayCache);
+                        mpb.SetTexture(ShaderIDs.MainTexId, settings.sprite.texture);
 
-                    // 批量绘制流体粒子。
-                    cmd.DrawMeshInstanced(_quadMesh, 0, settings.material, 0, matrices, list.Count, mpb);
+                        cmd.DrawMeshInstanced(_quadMesh, 0, settings.material, 0, _matricesCache, count, mpb);
+                    }
                 }
 
                 // ---- 对流体粒子进行模糊 ----//
@@ -257,6 +258,19 @@ namespace Fs.Liquid2D
                 };
                 mesh.triangles = new int[] { 0, 1, 2, 2, 3, 0 };
                 return mesh;
+            }
+            
+            /// <summary>
+            /// 确保渲染用缓存数组大小足够。
+            /// 缓存数组用于 GPU Instancing 批量渲染。
+            /// </summary>
+            /// <param name="size"></param>
+            private void EnsureCacheSize(int size)
+            {
+                if (_matricesCache == null || _matricesCache.Length < size)
+                    _matricesCache = new Matrix4x4[size];
+                if (_colorArrayCache == null || _colorArrayCache.Length < size)
+                    _colorArrayCache = new Vector4[size];
             }
             
             #region Volume
