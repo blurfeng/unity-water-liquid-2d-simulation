@@ -133,8 +133,8 @@ namespace Fs.Liquid2D
                         var item = list[i];
                         // 使用层遮罩过滤粒子。只渲染需要的粒子。
                         if ((item.Settings.liquid2DLayerMask & targetLayerMask) == 0) continue;
-
-                        _matricesCache[count] = Matrix4x4.TRS(item.transform.position, item.transform.rotation, item.transform.localScale);
+                        var ts = item.TransformGet;
+                        _matricesCache[count] = Matrix4x4.TRS(ts.position, ts.rotation, ts.localScale);
                         _colorArrayCache[count] = item.Settings.color;
                         count++;
                     }

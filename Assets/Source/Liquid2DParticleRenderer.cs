@@ -5,7 +5,9 @@ namespace Fs.Liquid2D
     /// <summary>
     /// 2d流体粒子渲染器。
     /// 挂载此组件到流体粒子对象上以管理流体粒子的渲染设置。
+    /// [ExecuteAlways] 宏标确保在编辑模式下也能注册到 Liquid2DFeature 来保证可见性。
     /// </summary>
+    [ExecuteAlways] 
     public class Liquid2DParticleRenderer : MonoBehaviour
     {
         [SerializeField, Tooltip("流体粒子渲染器设置。")]
@@ -15,6 +17,19 @@ namespace Fs.Liquid2D
         /// 流体粒子渲染器。
         /// </summary>
         public Liquid2dParticleRendererSettings Settings => settings;
+
+        public Transform TransformGet
+        {
+            get
+            {
+                if (_transform == null)
+                {
+                    _transform = transform;
+                }
+                return _transform;
+            }
+        }
+        private Transform _transform;
 
         private void OnEnable()
         {
