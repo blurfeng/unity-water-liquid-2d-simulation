@@ -89,18 +89,12 @@ namespace Fs.Liquid2D
             {
                 // 重置渲染目标。这会将之前的更改全部清除掉。
                 ResetTarget();
-
-                // 使用当前相机的渲染目标描述符来配置RT。
-                RenderTextureDescriptor desc = renderingData.cameraData.cameraTargetDescriptor;
-                // 不需要太高的抗锯齿。
-                desc.msaaSamples = 1;
-                // 不需要深度缓冲。
-                desc.depthBufferBits = 0;
-                // 选择有Alpha通道的颜色格式，后续处理需要。
-                desc.colorFormat = RenderTextureFormat.ARGB32;
-
+                
                 // 分配 流体绘制 RT。
-                RenderingUtils.ReAllocateIfNeeded(ref _liquidDrawRT, desc, name: "Liquid Draw RT");
+                RenderingUtils.ReAllocateIfNeeded(
+                    ref _liquidDrawRT, 
+                    CreateDescriptorForRT(renderingData.cameraData.cameraTargetDescriptor), 
+                    name: "Liquid Draw RT");
             }
 
             // Here you can implement the rendering logic.
@@ -162,10 +156,7 @@ namespace Fs.Liquid2D
                 if (_featureSettings.iterations + 1 > _blurRTs.Count)
                 {
                     // 使用当前相机的渲染目标描述符来配置 RT。
-                    RenderTextureDescriptor descBlur = renderingData.cameraData.cameraTargetDescriptor;
-                    descBlur.msaaSamples = 1;
-                    descBlur.depthBufferBits = 0;
-                    descBlur.colorFormat = RenderTextureFormat.ARGB32;
+                    RenderTextureDescriptor descBlur = CreateDescriptorForRT(renderingData.cameraData.cameraTargetDescriptor);
 
 #if UNITY_EDITOR
                     // 在编辑器模式下，使用全分辨率。
@@ -176,9 +167,9 @@ namespace Fs.Liquid2D
                         descBlur.height = Camera.main.pixelHeight / 4;
                     }
 #else
-                // 这里使用当前相机尺寸四分之一的尺寸来提升性能。// 注意。缩放尺寸也会影响模糊的效果。
-                _descBlur.width = renderingData.cameraData.cameraTargetDescriptor.width / 4;
-                _descBlur.height = renderingData.cameraData.cameraTargetDescriptor.height / 4;
+                    // 这里使用当前相机尺寸四分之一的尺寸来提升性能。// 注意。缩放尺寸也会影响模糊的效果。
+                    descBlur.width = renderingData.cameraData.cameraTargetDescriptor.width / 4;
+                    descBlur.height = renderingData.cameraData.cameraTargetDescriptor.height / 4;
 #endif
                     for (var i = _blurRTs.Count; i < _featureSettings.iterations + 1; ++i)
                     {
@@ -272,7 +263,28 @@ namespace Fs.Liquid2D
                 if (_colorArrayCache == null || _colorArrayCache.Length < size)
                     _colorArrayCache = new Vector4[size];
             }
-            
+
+            /// <summary>
+            /// 创建用于流体渲染的 RT 描述符。
+            /// </summary>
+            /// <param name="descriptor"></param>
+            /// <returns></returns>
+            private RenderTextureDescriptor CreateDescriptorForRT(RenderTextureDescriptor descriptor)
+            {
+                // 使用当前相机的渲染目标描述符来配置RT。
+                RenderTextureDescriptor desc = descriptor;
+                // 不需要太高的抗锯齿。
+                desc.msaaSamples = 1;
+                // 不需要深度缓冲。
+                desc.depthBufferBits = 0;
+                // 支持HDR的颜色格式。
+                desc.colorFormat = RenderTextureFormat.ARGBHalf;
+                desc.useMipMap = false;
+                desc.autoGenerateMips = false;
+
+                return desc;
+            }
+
             #region Volume
             
             private Liquid2DVolumeData VolumeData
