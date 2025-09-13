@@ -11,24 +11,6 @@ namespace Fs.Liquid2D
 {
     public class Liquid2dPass : ScriptableRenderPass
     {
-        private const string ShaderPath = "Custom/URP/2D/Clone";
-        private static Material _materialClone;
-        /// <summary>
-        /// 克隆材质。直接将源纹理拷贝到目标纹理。保留透明度信息。
-        /// 用于测试。
-        /// </summary>
-        private static Material MaterialClone
-        {
-            get
-            {
-                if (_materialClone == null)
-                {
-                    _materialClone = CoreUtils.CreateEngineMaterial(ShaderPath);
-                }
-                return _materialClone;
-            }
-        }
-        
         /// <summary>
         /// Shader 属性 ID。
         /// </summary>
@@ -108,13 +90,13 @@ namespace Fs.Liquid2D
             UniversalCameraData cameraData = frameData.Get<UniversalCameraData>();
             UniversalResourceData resourceData = frameData.Get<UniversalResourceData>();
             var sourceTextureHandle = resourceData.activeColorTexture;
-
+            
             #region 流体粒子绘制
 
             // ---- 创建纹理描述符 ---- //
             // 流体描述符。
             TextureDesc mainDesc = renderGraph.GetTextureDesc(sourceTextureHandle);
-            mainDesc.name = "liquid 2d Texture";
+            mainDesc.name = GetName("liquid 2d Particles");
             mainDesc.clearBuffer = false;
             mainDesc.msaaSamples = MSAASamples.None;
             mainDesc.depthBufferBits = 0;
@@ -127,7 +109,7 @@ namespace Fs.Liquid2D
             TextureHandle liquidParticleTh = renderGraph.CreateTexture(mainDesc);
 
             // ---- 添加绘制到 Pass ---- //
-            using (var builder = renderGraph.AddRasterRenderPass<PassData>("liquid 2d Particles", out var passData))
+            using (var builder = renderGraph.AddRasterRenderPass<PassData>(GetName("liquid 2d Particles"), out var passData))
             {
                 // 通道数据设置。
                 // passData.resourceData = resourceData;
@@ -149,6 +131,7 @@ namespace Fs.Liquid2D
             {
                 return;
             }
+            
             #endregion
             
             // TEST: 直接将流体粒子TH拷贝回当前源TH。
@@ -158,28 +141,32 @@ namespace Fs.Liquid2D
             #region 模糊处理
             
             // ---- 创建纹理描述符 ---- //
-            TextureDesc blueDesc = mainDesc;
+            TextureDesc blurDesc = mainDesc;
             // 这里使用当前相机尺寸四分之一的尺寸来提升性能。// 注意。缩放尺寸也会影响模糊的效果。
-            blueDesc.width = cameraData.cameraTargetDescriptor.width / 4;
-            blueDesc.height = cameraData.cameraTargetDescriptor.height / 4;
+            blurDesc.width = cameraData.cameraTargetDescriptor.width / 4;
+            blurDesc.height = cameraData.cameraTargetDescriptor.height / 4;
             
             // ----- 创建纹理句柄 ----- //
+            // 这里目前只使用两个模糊纹理句柄，交替使用。但任先保留 List 以便后续扩展或渲染机制调整。
             _blurTHs.Clear();
-            for (int i = 0; i < _settings.iterations + 1; ++i)
+            for (int i = 0; i < 2; ++i)
             {
-                var blurRT = renderGraph.CreateTexture(blueDesc);
+                blurDesc.name = GetName(i == 0 ? "liquid 2d Blur Left" : "liquid 2d Blur Right");
+                var blurRT = renderGraph.CreateTexture(blurDesc);
                 _blurTHs.Add(blurRT);
             }
             
             // 先将流体纹理句柄 Blit 到第一个模糊纹理句柄。
-            renderGraph.AddBlitPass(liquidParticleTh, _blurTHs[0], Vector2.one, Vector2.zero, passName: "Liquid 2d to Blur TH 0");
+            renderGraph.AddBlitPass(
+                liquidParticleTh, _blurTHs[0], 
+                Vector2.one, Vector2.zero, passName: GetName("Liquid 2d particles to Blur"));
             
             // ---- 添加绘制到 Pass ---- //
             // 进行多次迭代模糊。
             for (var i = 0; i < _settings.iterations; ++i)
             {
                 bool isLast = i == _settings.iterations - 1;
-                using (var builder = renderGraph.AddRasterRenderPass<PassData>($"liquid 2d Blur {i}", out var passData))
+                using (var builder = renderGraph.AddRasterRenderPass<PassData>(GetName($"liquid 2d Blur {i}"), out var passData))
                 {
                     // 通道数据设置。
                     // passData.resourceData = resourceData;
@@ -191,8 +178,8 @@ namespace Fs.Liquid2D
                     passData.blurCount = i;
                     
                     // 设置渲染目标纹理句柄和声明使用纹理句柄。
-                    builder.SetRenderAttachment(_blurTHs[i + 1], 0, AccessFlags.Write);
-                    builder.UseTexture(_blurTHs[i], AccessFlags.Read);  
+                    builder.SetRenderAttachment(i % 2 == 0 ? _blurTHs[1] : _blurTHs[0], 0, AccessFlags.Write);
+                    builder.UseTexture(i % 2 == 0 ? _blurTHs[0] : _blurTHs[1], AccessFlags.Read);
             
                     // 设置绘制方法。
                     builder.SetRenderFunc((PassData data, RasterGraphContext context) => ExecutePassBlur(data, context));
@@ -210,7 +197,7 @@ namespace Fs.Liquid2D
             // TextureHandle effectTh = renderGraph.CreateTexture(mainDesc);
             
             // ---- 添加绘制到 Pass ---- //
-            using (var builder = renderGraph.AddRasterRenderPass<PassData>("liquid 2d Effect", out var passData))
+            using (var builder = renderGraph.AddRasterRenderPass<PassData>(GetName("liquid 2d Effect"), out var passData))
             {
                 var finalTh = _blurTHs[^1];
                 
@@ -296,7 +283,7 @@ namespace Fs.Liquid2D
 
             // 设置模糊材质属性块，传入当前模糊 RT 和偏移强度。
             MaterialPropertyBlock mpb = new MaterialPropertyBlock();
-            mpb.SetTexture(ShaderIDs.MainTexId, data.blurThs[data.blurCount]);
+            mpb.SetTexture(ShaderIDs.MainTexId, data.blurCount % 2 == 0 ? data.blurThs[0] : data.blurThs[1]);
             mpb.SetFloat(ShaderIDs.BlurOffsetId, offset);
 
             // 绘制一个全屏三角形，使用模糊材质，并传入属性块。
@@ -320,81 +307,6 @@ namespace Fs.Liquid2D
             // 绘制一个全屏三角形，使用外描边材质，并传入属性块。
             cmd.DrawProcedural(Matrix4x4.identity, data.materialEffect, 0, MeshTopology.Triangles, 3, 1,
                 mpb);
-        }
-
-        /// <summary>
-        /// 复制 Pass。将源纹理拷贝到目标纹理。测试用。
-        /// </summary>
-        /// <param name="renderGraph"></param>
-        /// <param name="source"></param>
-        /// <param name="renderAttachment"></param>
-        private static void ClonePass(
-            RenderGraph renderGraph, 
-            TextureHandle source, TextureHandle renderAttachment)
-        {
-            using (var builder = renderGraph.AddRasterRenderPass<PassData>("liquid 2d Clone", out var passData))
-            {
-                passData.cloneMaterial = MaterialClone;
-                passData.cloneSourceTh = source;
-            
-                // 设置渲染目标纹理句柄和声明使用纹理句柄。
-                builder.SetRenderAttachment(renderAttachment, 0, AccessFlags.Write);
-                builder.UseTexture(source, AccessFlags.Read);  
-                
-                // builder.SetRenderAttachmentDepth(resourceData.activeDepthTexture, AccessFlags.Write);
-                // builder.AllowPassCulling(false);
-                // builder.AllowGlobalStateModification(true);
-            
-                // 设置绘制方法。
-                builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
-                {
-                    var cmd = context.cmd;
-                    var material = data.cloneMaterial;
-                    var sourceTh = data.cloneSourceTh;
-                    // Blitterの便利関数を使ってBlit実行
-                    Blitter.BlitTexture(cmd, sourceTh, Vector2.one, material, 0);
-                });
-            }
-        }
-        
-        /// <summary>
-        /// 确保渲染用缓存数组大小足够。
-        /// 缓存数组用于 GPU Instancing 批量渲染。
-        /// </summary>
-        /// <param name="data"></param>
-        /// <param name="size"></param>
-        private static void EnsureCacheSize(PassData data, int size)
-        {
-            if (data.matricesCache == null || data.matricesCache.Length < size)
-                data.matricesCache = new Matrix4x4[size];
-            if (data.colorArrayCache == null || data.colorArrayCache.Length < size)
-                data.colorArrayCache = new Vector4[size];
-        }
-    
-        /// <summary>
-        /// 生成一个简单的四边形网格。
-        /// 用于全屏渲染。
-        /// </summary>
-        /// <returns></returns>
-        private Mesh GenerateQuadMesh()
-        {
-            var mesh = new Mesh();
-            mesh.vertices = new Vector3[]
-            {
-                new Vector3(-0.5f, -0.5f, 0),
-                new Vector3(0.5f, -0.5f, 0),
-                new Vector3(0.5f, 0.5f, 0),
-                new Vector3(-0.5f, 0.5f, 0)
-            };
-            mesh.uv = new Vector2[]
-            {
-                new Vector2(0, 0),
-                new Vector2(1, 0),
-                new Vector2(1, 1),
-                new Vector2(0, 1)
-            };
-            mesh.triangles = new int[] { 0, 1, 2, 2, 3, 0 };
-            return mesh;
         }
         
         #region Volume
@@ -448,6 +360,108 @@ namespace Fs.Liquid2D
             _settings.liquid2DLayerMask = isActive && VolumeData.isActive
                 ? VolumeData.liquid2DLayerMask
                 : _settingsDefault.liquid2DLayerMask;
+        }
+
+        #endregion
+
+        #region Tools
+        
+        private const string ShaderPath = "Custom/URP/2D/Clone";
+        private static Material _materialClone;
+        /// <summary>
+        /// 克隆材质。直接将源纹理拷贝到目标纹理。保留透明度信息。
+        /// 用于测试。
+        /// </summary>
+        private static Material MaterialClone
+        {
+            get
+            {
+                if (_materialClone == null)
+                {
+                    _materialClone = CoreUtils.CreateEngineMaterial(ShaderPath);
+                }
+                return _materialClone;
+            }
+        }
+        
+        /// <summary>
+        /// 复制 Pass。将源纹理拷贝到目标纹理。测试用。
+        /// </summary>
+        /// <param name="renderGraph"></param>
+        /// <param name="source"></param>
+        /// <param name="renderAttachment"></param>
+        private static void ClonePass(
+            RenderGraph renderGraph, 
+            TextureHandle source, TextureHandle renderAttachment)
+        {
+            using (var builder = renderGraph.AddRasterRenderPass<PassData>("liquid 2d Clone", out var passData))
+            {
+                passData.cloneMaterial = MaterialClone;
+                passData.cloneSourceTh = source;
+            
+                // 设置渲染目标纹理句柄和声明使用纹理句柄。
+                builder.SetRenderAttachment(renderAttachment, 0, AccessFlags.Write);
+                builder.UseTexture(source, AccessFlags.Read);  
+                
+                // builder.SetRenderAttachmentDepth(resourceData.activeDepthTexture, AccessFlags.Write);
+                // builder.AllowPassCulling(false);
+                // builder.AllowGlobalStateModification(true);
+            
+                // 设置绘制方法。
+                builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
+                {
+                    var cmd = context.cmd;
+                    var material = data.cloneMaterial;
+                    var sourceTh = data.cloneSourceTh;
+                    // Blitterの便利関数を使ってBlit実行
+                    Blitter.BlitTexture(cmd, sourceTh, Vector2.one, material, 0);
+                });
+            }
+        }
+
+        /// <summary>
+        /// 确保渲染用缓存数组大小足够。
+        /// 缓存数组用于 GPU Instancing 批量渲染。
+        /// </summary>
+        /// <param name="data"></param>
+        /// <param name="size"></param>
+        private static void EnsureCacheSize(PassData data, int size)
+        {
+            if (data.matricesCache == null || data.matricesCache.Length < size)
+                data.matricesCache = new Matrix4x4[size];
+            if (data.colorArrayCache == null || data.colorArrayCache.Length < size)
+                data.colorArrayCache = new Vector4[size];
+        }
+    
+        /// <summary>
+        /// 生成一个简单的四边形网格。
+        /// 用于全屏渲染。
+        /// </summary>
+        /// <returns></returns>
+        private Mesh GenerateQuadMesh()
+        {
+            var mesh = new Mesh();
+            mesh.vertices = new Vector3[]
+            {
+                new Vector3(-0.5f, -0.5f, 0),
+                new Vector3(0.5f, -0.5f, 0),
+                new Vector3(0.5f, 0.5f, 0),
+                new Vector3(-0.5f, 0.5f, 0)
+            };
+            mesh.uv = new Vector2[]
+            {
+                new Vector2(0, 0),
+                new Vector2(1, 0),
+                new Vector2(1, 1),
+                new Vector2(0, 1)
+            };
+            mesh.triangles = new int[] { 0, 1, 2, 2, 3, 0 };
+            return mesh;
+        }
+
+        private string GetName(string name)
+        {
+            return $"[{_settings.nameTag}] {name}";
         }
 
         #endregion
