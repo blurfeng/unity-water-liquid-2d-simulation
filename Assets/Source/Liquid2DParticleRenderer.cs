@@ -22,14 +22,21 @@ namespace Fs.Liquid2D
         {
             get
             {
-                if (_transform == null)
-                {
-                    _transform = transform;
-                }
+                if (_transform == null) _transform = transform;
                 return _transform;
             }
         }
         private Transform _transform;
+        
+        public Collider2D Collider2DGet
+        {
+            get
+            {
+                if (_collider2D == null) _collider2D = GetComponent<Collider2D>();
+                return _collider2D;
+            }
+        }
+        private Collider2D _collider2D;
 
         private void OnEnable()
         {
@@ -60,5 +67,50 @@ namespace Fs.Liquid2D
 
             return true;
         }
+        
+#if UNITY_EDITOR
+        void OnDrawGizmos()
+        {
+            #region 绘制可在 Scene 中选中的形状
+
+            var cld = Collider2DGet;
+            if (cld == null) return;
+
+            Gizmos.color = Color.clear;
+
+            if (cld is CircleCollider2D circle)
+            {
+                float radius = circle.radius * circle.transform.lossyScale.x;
+                Gizmos.DrawSphere(circle.transform.position + (Vector3)circle.offset, radius);
+                // UnityEditor.Handles.Label(circle.transform.position, $"Circle r={circle.radius:F2}");
+            }
+            else if (cld is BoxCollider2D box)
+            {
+                var size = Vector3.Scale(box.size, box.transform.lossyScale);
+                Gizmos.DrawCube(box.transform.position + (Vector3)box.offset, size);
+            }
+            else if (cld is PolygonCollider2D poly)
+            {
+                var pos = poly.transform.position;
+                for (int i = 0; i < poly.pathCount; i++)
+                {
+                    var path = poly.GetPath(i);
+                    for (int j = 0; j < path.Length; j++)
+                    {
+                        var a = pos + (Vector3)path[j];
+                        var b = pos + (Vector3)path[(j + 1) % path.Length];
+                        Gizmos.DrawLine(a, b);
+                    }
+                }
+            }
+            else if (cld is CapsuleCollider2D capsule)
+            {
+                var size = Vector3.Scale(capsule.size, capsule.transform.lossyScale);
+                Gizmos.DrawCube(capsule.transform.position + (Vector3)capsule.offset, size);
+            }
+
+            #endregion
+        }
+#endif
     }
 }

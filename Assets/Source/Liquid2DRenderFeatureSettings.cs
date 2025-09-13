@@ -7,7 +7,7 @@ namespace Fs.Liquid2D
     /// 2D流体 Renderer Feature 设置。
     /// </summary>
     [Serializable]
-    public class Liquid2DFeatureSettings
+    public class Liquid2DRenderFeatureSettings
     {
         [Tooltip("2D流体 Renderer Feature 名称标签，用于区分不同的 Renderer Feature 配置。")]
         public string nameTag = "Liquid2D";
@@ -21,9 +21,9 @@ namespace Fs.Liquid2D
         [Range(0.01f, 1f), Tooltip("每次迭代的模糊扩散度，越大越模糊。")]
         public float blurSpread = 0.6f;
 
-        public Liquid2DFeatureSettings Clone()
+        public Liquid2DRenderFeatureSettings Clone()
         {
-            return new Liquid2DFeatureSettings
+            return new Liquid2DRenderFeatureSettings
             {
                 nameTag = nameTag,
                 liquid2DLayerMask = liquid2DLayerMask,

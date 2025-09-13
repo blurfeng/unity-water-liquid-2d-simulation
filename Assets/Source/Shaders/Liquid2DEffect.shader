@@ -12,9 +12,7 @@ Shader "Custom/URP/2D/Liquid2DEffect"
         
         _AlphaOffset ("Alpha cutoff", Range(0,1)) = 0
         
-        //_EdgeClip("Edge Clip", Range(0,1)) = 0.2
-        
-        
+//        _EdgeClip("Edge Clip", Range(0,1)) = 0.2
 //        _Color ("Main Color", Color) = (0.2, 0.6, 1, 1)
 //        _Stroke ("Stroke Alpha", Range(0,1)) = 0.4
 //        _StrokeColor ("Stroke Color", Color) = (0.6, 0.2, 1, 1)
@@ -58,20 +56,21 @@ Shader "Custom/URP/2D/Liquid2DEffect"
             TEXTURE2D_X(_MainTex);
             // https://docs.unity3d.com/Manual/SL-SamplerStates.html
             SAMPLER(sampler_linear_clamp_MainTex);
+            TEXTURE2D_X(_BlurTex);
+            SAMPLER(sampler_linear_clamp_BlurTex);
 
             half _Cutoff;
             half _AlphaOffset;
             half _HardEdges;
             
-            //half _EdgeClip;
-
-			// half4 _Color;
-			//
-			// half _Stroke;
-			// half4 _StrokeColor;
-			//
-			// half _Stroke2;
-			// half4 _StrokeColor2;
+            // half _EdgeClip;
+            // half4 _Color;
+            //
+            // half _Stroke;
+            // half4 _StrokeColor;
+            //
+            // half _Stroke2;
+            // half4 _StrokeColor2;
 
             Varying vert(Attribute IN)
             {
@@ -92,10 +91,23 @@ Shader "Custom/URP/2D/Liquid2DEffect"
 
             half4 frag(Varying IN) : SV_Target
             {
-				half4 col = SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv);
+                // half4 blurCol = SAMPLE_TEXTURE2D_X(_BlurTex, sampler_linear_clamp_BlurTex, IN.uv);
+                // half4 col = SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv);
+                //
+                // blurCol.a = saturate(blurCol.a);
+                //
+                // return lerp(col, blurCol, blurCol.a);
+
+                half4 col = SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv);
 				clip(col.a - _Cutoff);
 
                 col.a = saturate(col.a + _AlphaOffset);
+                return col;
+                
+				// half4 col = SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv);
+				// clip(col.a - _Cutoff);
+                //
+                //col.a = saturate(col.a + _AlphaOffset);
 
                 // if (col.a < _Stroke) col = _StrokeColor;
 				// else if (col.a < _Stroke2) col = _StrokeColor2;
@@ -116,7 +128,7 @@ Shader "Custom/URP/2D/Liquid2DEffect"
                 // // 增加饱和度，saturation > 1 表示增强
                 // col.rgb = Saturation(col.rgb, 10);
                 
-				return col;
+				// return col;
             }
             
             ENDHLSL

@@ -50,6 +50,7 @@ MonoBehaviour:
     sprite: {fileID: -2413806693520163455, guid: 343064a745fc23b4cabccb1d13822cff, type: 3}
     material: {fileID: 2100000, guid: 7453d47e894769e43b1338caed5ddfeb, type: 2}
     color: {r: 0, g: 1, b: 4, a: 1}
+    liquid2DLayerMask: 2
 --- !u!58 &5961824672208803902
 CircleCollider2D:
   m_ObjectHideFlags: 0
@@ -58,6 +59,7 @@ CircleCollider2D:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 6359955899863538535}
   m_Enabled: 1
+  serializedVersion: 3
   m_Density: 1
   m_Material: {fileID: 6200000, guid: 52c4bdbe45a24ca48a295c376ed3b8bc, type: 2}
   m_IncludeLayers:
@@ -81,13 +83,13 @@ CircleCollider2D:
     m_Bits: 4294967295
   m_IsTrigger: 0
   m_UsedByEffector: 0
-  m_UsedByComposite: 0
+  m_CompositeOperation: 0
+  m_CompositeOrder: 0
   m_Offset: {x: 0, y: 0}
-  serializedVersion: 2
   m_Radius: 0.5
 --- !u!50 &7884424366146339886
 Rigidbody2D:
-  serializedVersion: 4
+  serializedVersion: 5
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
@@ -97,9 +99,9 @@ Rigidbody2D:
   m_Simulated: 1
   m_UseFullKinematicContacts: 0
   m_UseAutoMass: 0
-  m_Mass: 1
-  m_LinearDrag: 0
-  m_AngularDrag: 0
+  m_Mass: 10
+  m_LinearDamping: 0
+  m_AngularDamping: 0
   m_GravityScale: 1
   m_Material: {fileID: 6200000, guid: 52c4bdbe45a24ca48a295c376ed3b8bc, type: 2}
   m_IncludeLayers:

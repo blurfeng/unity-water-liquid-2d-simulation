@@ -9,12 +9,12 @@ Shader "Custom/URP/2D/Liquid2DBlur"
             "RenderPipeline" = "UniversalPipeline"
         }
         
-        Cull Off
-        ZWrite Off
-        Blend One Zero
-        
         Pass
         {
+            Blend One Zero
+            Cull Off
+            ZWrite Off
+        
             HLSLPROGRAM
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
@@ -58,7 +58,11 @@ Shader "Custom/URP/2D/Liquid2DBlur"
                 col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(-_BlurOffset -0.5, _BlurOffset +0.5) * _MainTex_TexelSize);
                 col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(-_BlurOffset -0.5, -_BlurOffset -0.5) * _MainTex_TexelSize);
                 col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(_BlurOffset +0.5, -_BlurOffset -0.5) * _MainTex_TexelSize);
+                // 平均值，防止颜色过亮。
                 return col * 0.25;
+
+                // half4 col = SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv);
+                // return half4(col.a, 0, 0, 1);
             }
             
             ENDHLSL

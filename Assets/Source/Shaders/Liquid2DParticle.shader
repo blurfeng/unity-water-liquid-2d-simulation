@@ -66,7 +66,7 @@ Shader "Custom/URP/2D/Liquid2DParticle"
 
                 float4 color = UNITY_ACCESS_INSTANCED_PROP(UnityPerMaterial, _Color);
                 half4 texCol = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, IN.uv);
-                return texCol * color; // 应用实例颜色
+                return texCol * color;
             }
             ENDHLSL
         }
