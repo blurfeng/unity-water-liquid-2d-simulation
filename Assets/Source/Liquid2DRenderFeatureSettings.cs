@@ -37,6 +37,9 @@ namespace Fs.Liquid2D
         
         [Tooltip("液体遮挡层遮罩。指定哪些层的物体会遮挡液体效果。")]
         public LayerMask liquidOcclusionLayerMask;
+        
+        [SerializeField, ColorUsage(true, true), Tooltip("流体背景颜色。会影响模糊时的颜色混合，决定了流体的边缘效果（alpha值的设置是无效的）。")]
+        public Color backgroundColor = Color.clear;
 
         public Liquid2DRenderFeatureSettings Clone()
         {

@@ -68,7 +68,7 @@ namespace Fs.Liquid2D
 
         private class PassData
         {
-            // public UniversalCameraData cameraData;
+            public UniversalCameraData cameraData;
             // public UniversalResourceData resourceData;
             // 当前设置。数据来源为 Volume 或默认设置。
             public Liquid2DRenderFeatureSettings settings;
@@ -123,27 +123,28 @@ namespace Fs.Liquid2D
             // ----- 创建纹理句柄 ----- //
             // 流体绘制材质句柄。
             TextureHandle liquidParticleTh = renderGraph.CreateTexture(mainDesc);
+            bool isSceneView = cameraData.cameraType == CameraType.SceneView;
 
             // ---- 添加绘制到 Pass ---- //
             using (var builder = renderGraph.AddRasterRenderPass<PassData>(GetName("liquid 2d Particles"), out var passData))
             {
                 // 通道数据设置。
                 // passData.resourceData = resourceData;
-                // passData.cameraData = cameraData;
+                passData.cameraData = cameraData;
                 passData.settings = _settings;
                 
                 passData.quadMesh = _quadMesh;
 
                 builder.SetRenderAttachment(
                     // 设置渲染目标纹理句柄和声明使用纹理句柄。
-                    cameraData.cameraType == CameraType.SceneView ? sourceTextureHandle : liquidParticleTh, 
+                    isSceneView ? sourceTextureHandle : liquidParticleTh, 
                     0, AccessFlags.Write);
 
                 // 设置绘制方法。
                 builder.SetRenderFunc((PassData data, RasterGraphContext context) => ExecutePassParticle(data, context));
             }
 
-            if (cameraData.cameraType == CameraType.SceneView)
+            if (isSceneView)
             {
                 return;
             }
@@ -283,6 +284,18 @@ namespace Fs.Liquid2D
         private static void ExecutePassParticle(PassData data, RasterGraphContext context)
         {
             var cmd = context.cmd;
+
+            bool isSceneView = data.cameraData.cameraType == CameraType.SceneView;
+            if (!isSceneView)
+            {
+                // 在绘制 Scene View 时直接绘制到当前相机的渲染目标上用于编辑操作就结束了，所以不清理RT。
+                // 否则会导致当前相机的渲染目标的数据都被清理掉。
+                
+                // 清理流体绘制 RT。背景颜色会影响流体模糊时的混合颜色。
+                Color col = data.settings.backgroundColor;
+                cmd.ClearRenderTarget(true, true, 
+                    new Color(col.r, col.g, col.b, 0));
+            }
              
             // 绘制所有流体粒子到 流体绘制RT。这里使用 GPU Instancing 来批量绘制。
             ELiquid2DLayer targetLayerMask = data.settings.liquid2DLayerMask;
@@ -410,12 +423,12 @@ namespace Fs.Liquid2D
             _settings.scaleFactor = isActive ? VolumeData.scaleFactor : _settingsDefault.scaleFactor;
             _settings.cutoff = isActive ? VolumeData.cutoff : _settingsDefault.cutoff;
             _settings.liquidOcclusionLayerMask = isActive ? VolumeData.liquidOcclusionLayerMask : _settingsDefault.liquidOcclusionLayerMask;
-            
             // 更新遮罩过滤设置。
             if (_liquidOcclusionFilteringSettings.layerMask != _settings.liquidOcclusionLayerMask)
             {
                 _liquidOcclusionFilteringSettings = new FilteringSettings(RenderQueueRange.all, _settings.liquidOcclusionLayerMask);
             }
+            _settings.backgroundColor = isActive ? VolumeData.backgroundColor : _settingsDefault.backgroundColor;
         }
 
         #endregion
