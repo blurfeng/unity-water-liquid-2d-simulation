@@ -80,6 +80,9 @@ MonoBehaviour:
     blurSpread: 0.5
     scaleFactor: 4
     cutoff: 0.2
+    liquidOcclusionLayerMask:
+      serializedVersion: 2
+      m_Bits: 64
 --- !u!114 &8380843845757841626
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -102,3 +105,6 @@ MonoBehaviour:
     blurSpread: 0.6
     scaleFactor: 4
     cutoff: 0.2
+    liquidOcclusionLayerMask:
+      serializedVersion: 2
+      m_Bits: 64

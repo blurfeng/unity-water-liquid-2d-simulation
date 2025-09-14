@@ -40,6 +40,8 @@ namespace Fs.Liquid2D
             // 使用 shader 创建材质，并创建 Pass。
             _materialBlur = new Material(shaderBlur);
             _materialEffect = new Material(shaderEffect);
+            _materialBlur.renderQueue = 3000;
+            _materialEffect.renderQueue = 3000;
             _liquid2dPass = new Liquid2dPass(_materialBlur, _materialEffect, renderFeatureSettings);
         }
 

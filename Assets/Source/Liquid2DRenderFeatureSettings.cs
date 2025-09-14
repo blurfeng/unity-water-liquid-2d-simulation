@@ -34,6 +34,9 @@ namespace Fs.Liquid2D
 
         [Range(0f, 1f), Tooltip("流体透明边缘的裁剪阈值，越大边缘越锐利，水体范围膨胀越少。")]
         public float cutoff = 0.2f;
+        
+        [Tooltip("液体遮挡层遮罩。指定哪些层的物体会遮挡液体效果。")]
+        public LayerMask liquidOcclusionLayerMask;
 
         public Liquid2DRenderFeatureSettings Clone()
         {

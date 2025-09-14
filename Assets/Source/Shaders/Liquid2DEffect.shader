@@ -55,8 +55,8 @@ Shader "Custom/URP/2D/Liquid2DEffect"
             TEXTURE2D_X(_MainTex);
             // https://docs.unity3d.com/Manual/SL-SamplerStates.html
             SAMPLER(sampler_linear_clamp_MainTex);
-            TEXTURE2D_X(_BlurTex);
-            SAMPLER(sampler_linear_clamp_BlurTex);
+            TEXTURE2D_X(_OcclusionTex);
+            SAMPLER(sampler_linear_clamp_OcclusionTex);
 
             half _Cutoff;
             half _AlphaOffset;
@@ -90,15 +90,13 @@ Shader "Custom/URP/2D/Liquid2DEffect"
 
             half4 frag(Varying IN) : SV_Target
             {
-                // half4 blurCol = SAMPLE_TEXTURE2D_X(_BlurTex, sampler_linear_clamp_BlurTex, IN.uv);
-                // half4 col = SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv);
-                //
-                // blurCol.a = saturate(blurCol.a);
-                //
-                // return lerp(col, blurCol, blurCol.a);
-
                 half4 col = SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv);
-				clip(col.a - _Cutoff);
+                clip(col.a - _Cutoff);
+                half4 colOcclusionTex = SAMPLE_TEXTURE2D_X(_OcclusionTex, sampler_linear_clamp_OcclusionTex, IN.uv);
+                clip(1 - colOcclusionTex.a);
+
+                // 按照遮挡纹理 alpha 混合
+                col = lerp(col, colOcclusionTex, colOcclusionTex.a);
 
                 col.a = saturate(col.a + _AlphaOffset);
                 return col;

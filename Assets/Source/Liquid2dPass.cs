@@ -20,7 +20,10 @@ namespace Fs.Liquid2D
             internal static readonly int ColorId = Shader.PropertyToID("_Color");
             internal static readonly int BlurOffsetId = Shader.PropertyToID("_BlurOffset");
             internal static readonly int Cutoff = Shader.PropertyToID("_Cutoff");
+            internal static readonly int OcclusionTex = Shader.PropertyToID("_OcclusionTex");
         }
+        
+        private static readonly ShaderTagId _shaderTagId = new ShaderTagId("UniversalForward");
         
         // 流体模糊材质。
         private Material _materialBlur;
@@ -36,6 +39,8 @@ namespace Fs.Liquid2D
         
         private readonly List<TextureHandle> _blurTHs = new List<TextureHandle>();
         
+        private FilteringSettings _liquidOcclusionFilteringSettings;
+        
         public Liquid2dPass(Material materialBlur, Material materialEffect, Liquid2DRenderFeatureSettings settings)
         {
             _materialBlur = materialBlur;
@@ -45,9 +50,10 @@ namespace Fs.Liquid2D
             _settings = settings.Clone();
 
             _quadMesh = GenerateQuadMesh();
+            _liquidOcclusionFilteringSettings = new FilteringSettings(RenderQueueRange.all, settings.liquidOcclusionLayerMask);
             
             // 设置 Pass 执行时机。
-            renderPassEvent = RenderPassEvent.BeforeRenderingPostProcessing;
+            renderPassEvent = RenderPassEvent.AfterRenderingTransparents;
         }
         
         public void Dispose()
@@ -80,6 +86,10 @@ namespace Fs.Liquid2D
             public List<TextureHandle> blurThs = new List<TextureHandle>();
             public int blurIndex;
             
+            // 流体遮挡 Pass 相关。
+            public RendererListHandle liquidOcclusionRendererListHandle;
+            public TextureHandle liquidOcclusionTh;
+            
             // 水体效果 Pass 相关。
             public Material materialEffect;
             public TextureHandle blurFinalTh;
@@ -93,6 +103,8 @@ namespace Fs.Liquid2D
             // ---- 获取基础数据 ---- //
             UniversalCameraData cameraData = frameData.Get<UniversalCameraData>();
             UniversalResourceData resourceData = frameData.Get<UniversalResourceData>();
+            UniversalRenderingData renderingData = frameData.Get<UniversalRenderingData>();
+            UniversalLightData lightData = frameData.Get<UniversalLightData>();
             var sourceTextureHandle = resourceData.activeColorTexture;
             
             #region 流体粒子绘制
@@ -170,7 +182,6 @@ namespace Fs.Liquid2D
             int blurCount = 0;
             for (var i = 0; i < _settings.iterations; ++i)
             {
-                bool isLast = i == _settings.iterations - 1;
                 using (var builder = renderGraph.AddRasterRenderPass<PassData>(GetName($"liquid 2d Blur {i}"), out var passData))
                 {
                     // 通道数据设置。
@@ -197,9 +208,44 @@ namespace Fs.Liquid2D
             // TEST: 直接将最后一个模糊 RT 拷贝回当前源纹理句柄。
             // ClonePass(renderGraph, blurCount % 2 == 0 ? _blurTHs[1] : _blurTHs[0], sourceTextureHandle);
             // return;
+
+            #region 流体阻挡
+
+            // ---- 创建流体遮挡纹理 ---- //
+            TextureDesc liquidOcclusionDesc = mainDesc;
+            liquidOcclusionDesc.name = GetName("liquid 2d Occlusion");
+            TextureHandle liquidOcclusionTh = renderGraph.CreateTexture(liquidOcclusionDesc);
+
+            using (var builder = renderGraph.AddRasterRenderPass<PassData>(GetName("liquid 2d Occlusion"), out PassData passData))
+            {
+                // 设置渲染目标纹理为流体遮挡纹理。
+                builder.SetRenderAttachment(liquidOcclusionTh, 0, AccessFlags.Write);
+                
+                // 获取所有 Liquid Occlusion Layer Mask层的 Renderer 列表。
+                var drawSettings = RenderingUtils.CreateDrawingSettings(_shaderTagId, renderingData, cameraData, lightData, cameraData.defaultOpaqueSortFlags);
+                var param = new RendererListParams(renderingData.cullResults, drawSettings, _liquidOcclusionFilteringSettings);
+                passData.liquidOcclusionRendererListHandle = renderGraph.CreateRendererList(param);
+                builder.UseRendererList(passData.liquidOcclusionRendererListHandle);
+                
+                builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
+                    {
+                        // context.cmd.ClearRenderTarget(RTClearFlags.Color, Color.clear, 1, 0);
+                        context.cmd.DrawRendererList(data.liquidOcclusionRendererListHandle);
+                    }
+                );
+            }
+
+            #endregion
+            
+            // TEST: 直接将最后一个 RT 拷贝回当前源纹理句柄。
+            // ClonePass(renderGraph, liquidOcclusionTh, sourceTextureHandle);
+            // renderGraph.AddBlitPass(
+            //     liquidOcclusionTh, sourceTextureHandle, 
+            //     Vector2.one, Vector2.zero, passName: GetName("liquidOcclusionTh to sourceTextureHandle"));
+            // return;
             
             #region 水体效果处理
-            
+
             // ---- 添加绘制到 Pass ---- //
             using (var builder = renderGraph.AddRasterRenderPass<PassData>(GetName("liquid 2d Effect"), out var passData))
             {
@@ -213,10 +259,12 @@ namespace Fs.Liquid2D
                 
                 passData.blurFinalTh = finalTh;
                 passData.materialEffect = _materialEffect;
+                passData.liquidOcclusionTh = liquidOcclusionTh;
             
                 // 设置渲染目标纹理句柄和声明使用纹理句柄。
                 builder.SetRenderAttachment(sourceTextureHandle, 0, AccessFlags.Write);
-                builder.UseTexture(finalTh, AccessFlags.Read);  
+                builder.UseTexture(finalTh, AccessFlags.Read);
+                builder.UseTexture(liquidOcclusionTh, AccessFlags.Read);
             
                 // 设置绘制方法。
                 builder.SetRenderFunc((PassData data, RasterGraphContext context) => ExecutePassEffect(data, context));
@@ -309,6 +357,7 @@ namespace Fs.Liquid2D
             // 设置外描边材质属性块，传入绘制RT。
             MaterialPropertyBlock mpb = new MaterialPropertyBlock();
             mpb.SetTexture(ShaderIds.MainTexId, data.blurFinalTh);
+            mpb.SetTexture(ShaderIds.OcclusionTex, data.liquidOcclusionTh);
             mpb.SetFloat(ShaderIds.Cutoff, data.settings.cutoff);
             // 绘制一个全屏三角形，使用外描边材质，并传入属性块。
             cmd.DrawProcedural(Matrix4x4.identity, data.materialEffect, 0, MeshTopology.Triangles, 3, 1,
@@ -356,14 +405,17 @@ namespace Fs.Liquid2D
              
             // ---- 重载设置。 ---- //
             _settings.iterations = isActive ? VolumeData.iterations : _settingsDefault.iterations;
-             
             _settings.blurSpread = isActive ? VolumeData.blurSpread : _settingsDefault.blurSpread;
-             
             _settings.liquid2DLayerMask = isActive ? VolumeData.liquid2DLayerMask : _settingsDefault.liquid2DLayerMask;
-            
             _settings.scaleFactor = isActive ? VolumeData.scaleFactor : _settingsDefault.scaleFactor;
-            
             _settings.cutoff = isActive ? VolumeData.cutoff : _settingsDefault.cutoff;
+            _settings.liquidOcclusionLayerMask = isActive ? VolumeData.liquidOcclusionLayerMask : _settingsDefault.liquidOcclusionLayerMask;
+            
+            // 更新遮罩过滤设置。
+            if (_liquidOcclusionFilteringSettings.layerMask != _settings.liquidOcclusionLayerMask)
+            {
+                _liquidOcclusionFilteringSettings = new FilteringSettings(RenderQueueRange.all, _settings.liquidOcclusionLayerMask);
+            }
         }
 
         #endregion
@@ -442,22 +494,24 @@ namespace Fs.Liquid2D
         /// <returns></returns>
         private Mesh GenerateQuadMesh()
         {
-            var mesh = new Mesh();
-            mesh.vertices = new Vector3[]
+            var mesh = new Mesh
             {
-                new Vector3(-0.5f, -0.5f, 0),
-                new Vector3(0.5f, -0.5f, 0),
-                new Vector3(0.5f, 0.5f, 0),
-                new Vector3(-0.5f, 0.5f, 0)
+                vertices = new Vector3[]
+                {
+                    new Vector3(-0.5f, -0.5f, 0),
+                    new Vector3(0.5f, -0.5f, 0),
+                    new Vector3(0.5f, 0.5f, 0),
+                    new Vector3(-0.5f, 0.5f, 0)
+                },
+                uv = new Vector2[]
+                {
+                    new Vector2(0, 0),
+                    new Vector2(1, 0),
+                    new Vector2(1, 1),
+                    new Vector2(0, 1)
+                },
+                triangles = new int[] { 0, 1, 2, 2, 3, 0 }
             };
-            mesh.uv = new Vector2[]
-            {
-                new Vector2(0, 0),
-                new Vector2(1, 0),
-                new Vector2(1, 1),
-                new Vector2(0, 1)
-            };
-            mesh.triangles = new int[] { 0, 1, 2, 2, 3, 0 };
             return mesh;
         }
 
