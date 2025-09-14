@@ -8,8 +8,7 @@ Shader "Custom/URP/2D/Liquid2DEffect"
     Properties
     {
         _MainTex ("Texture", 2D) = "white" {}
-        _Cutoff ("Alpha cutoff", Range(0,1)) = 0.1
-        
+        _Cutoff ("Alpha cutoff", Range(0,1)) = 0.2
         _AlphaOffset ("Alpha cutoff", Range(0,1)) = 0
         
 //        _EdgeClip("Edge Clip", Range(0,1)) = 0.2
@@ -130,7 +129,6 @@ Shader "Custom/URP/2D/Liquid2DEffect"
                 
 				// return col;
             }
-            
             ENDHLSL
         }
     }

@@ -14,11 +14,12 @@ namespace Fs.Liquid2D
         /// <summary>
         /// Shader 属性 ID。
         /// </summary>
-        private static class ShaderIDs
+        private static class ShaderIds
         {
             internal static readonly int MainTexId = Shader.PropertyToID("_MainTex");
             internal static readonly int ColorId = Shader.PropertyToID("_Color");
             internal static readonly int BlurOffsetId = Shader.PropertyToID("_BlurOffset");
+            internal static readonly int Cutoff = Shader.PropertyToID("_Cutoff");
         }
         
         // 流体模糊材质。
@@ -69,14 +70,17 @@ namespace Fs.Liquid2D
             public Material cloneMaterial;
             public TextureHandle cloneSourceTh;
             
+            // 流体粒子绘制 Pass 相关。
             public Matrix4x4[] matricesCache = new Matrix4x4[512];
             public Vector4[] colorArrayCache = new Vector4[512];
             public Mesh quadMesh;
             
+            // 模糊 Pass 相关。
             public Material materialBlur;
             public List<TextureHandle> blurThs = new List<TextureHandle>();
-            public int blurCount;
+            public int blurIndex;
             
+            // 水体效果 Pass 相关。
             public Material materialEffect;
             public TextureHandle blurFinalTh;
         }
@@ -140,13 +144,13 @@ namespace Fs.Liquid2D
             
             #region 模糊处理
             
-            // ---- 创建纹理描述符 ---- //
+            // ----- 创建纹理句柄 ----- //
+            // 模糊纹理描述。
             TextureDesc blurDesc = mainDesc;
             // 这里使用当前相机尺寸四分之一的尺寸来提升性能。// 注意。缩放尺寸也会影响模糊的效果。
-            blurDesc.width = cameraData.cameraTargetDescriptor.width / 4;
-            blurDesc.height = cameraData.cameraTargetDescriptor.height / 4;
+            blurDesc.width = cameraData.cameraTargetDescriptor.width / (int)_settings.scaleFactor;
+            blurDesc.height = cameraData.cameraTargetDescriptor.height / (int)_settings.scaleFactor;
             
-            // ----- 创建纹理句柄 ----- //
             // 这里目前只使用两个模糊纹理句柄，交替使用。但任先保留 List 以便后续扩展或渲染机制调整。
             _blurTHs.Clear();
             for (int i = 0; i < 2; ++i)
@@ -156,13 +160,14 @@ namespace Fs.Liquid2D
                 _blurTHs.Add(blurRT);
             }
             
-            // 先将流体纹理句柄 Blit 到第一个模糊纹理句柄。
+            // 复制流体粒子纹理到第一个模糊纹理和源颜色纹理。
             renderGraph.AddBlitPass(
                 liquidParticleTh, _blurTHs[0], 
                 Vector2.one, Vector2.zero, passName: GetName("Liquid 2d particles to Blur"));
             
             // ---- 添加绘制到 Pass ---- //
             // 进行多次迭代模糊。
+            int blurCount = 0;
             for (var i = 0; i < _settings.iterations; ++i)
             {
                 bool isLast = i == _settings.iterations - 1;
@@ -175,10 +180,11 @@ namespace Fs.Liquid2D
                     
                     passData.materialBlur = _materialBlur;
                     passData.blurThs = _blurTHs;
-                    passData.blurCount = i;
+                    passData.blurIndex = blurCount = i;
                     
                     // 设置渲染目标纹理句柄和声明使用纹理句柄。
                     builder.SetRenderAttachment(i % 2 == 0 ? _blurTHs[1] : _blurTHs[0], 0, AccessFlags.Write);
+                    // 用于记录每个模糊片元的原有颜色。
                     builder.UseTexture(i % 2 == 0 ? _blurTHs[0] : _blurTHs[1], AccessFlags.Read);
             
                     // 设置绘制方法。
@@ -189,17 +195,15 @@ namespace Fs.Liquid2D
             #endregion
 
             // TEST: 直接将最后一个模糊 RT 拷贝回当前源纹理句柄。
-            // ClonePass(renderGraph, _blurTHs[_blurTHs.Count - 1], sourceTextureHandle);
+            // ClonePass(renderGraph, blurCount % 2 == 0 ? _blurTHs[1] : _blurTHs[0], sourceTextureHandle);
             // return;
             
             #region 水体效果处理
             
-            // TextureHandle effectTh = renderGraph.CreateTexture(mainDesc);
-            
             // ---- 添加绘制到 Pass ---- //
             using (var builder = renderGraph.AddRasterRenderPass<PassData>(GetName("liquid 2d Effect"), out var passData))
             {
-                var finalTh = _blurTHs[^1];
+                var finalTh = blurCount % 2 == 0 ? _blurTHs[1] : _blurTHs[0];
                 
                 // 通道数据设置。
                 // passData.resourceData = resourceData;
@@ -261,8 +265,8 @@ namespace Fs.Liquid2D
                 if (count > 0)
                 {
                     var mpb = new MaterialPropertyBlock();
-                    mpb.SetTexture(ShaderIDs.MainTexId, settings.sprite.texture);
-                    mpb.SetVectorArray(ShaderIDs.ColorId, data.colorArrayCache);
+                    mpb.SetTexture(ShaderIds.MainTexId, settings.sprite.texture);
+                    mpb.SetVectorArray(ShaderIds.ColorId, data.colorArrayCache);
              
                     cmd.DrawMeshInstanced(data.quadMesh, 0, settings.material, 0, data.matricesCache, count, mpb);
                 }
@@ -278,17 +282,18 @@ namespace Fs.Liquid2D
         {
             var cmd = context.cmd;
             
-            // 模糊偏移强度递增。
-            float offset = 0.5f + data.blurCount * data.settings.blurSpread;
+            // 模糊偏移强度递增，并乘以缩放比例。
+            float offset = (0.5f + data.blurIndex * data.settings.blurSpread) * 3f / (int)data.settings.scaleFactor;
 
-            // 设置模糊材质属性块，传入当前模糊 RT 和偏移强度。
+            // 设置模糊材质属性块，传入当前模糊材质和偏移强度。
             MaterialPropertyBlock mpb = new MaterialPropertyBlock();
-            mpb.SetTexture(ShaderIDs.MainTexId, data.blurCount % 2 == 0 ? data.blurThs[0] : data.blurThs[1]);
-            mpb.SetFloat(ShaderIDs.BlurOffsetId, offset);
+            mpb.SetTexture(ShaderIds.MainTexId, data.blurIndex % 2 == 0 ? data.blurThs[0] : data.blurThs[1]);
+            mpb.SetFloat(ShaderIds.BlurOffsetId, offset);
 
             // 绘制一个全屏三角形，使用模糊材质，并传入属性块。
-            cmd.DrawProcedural(Matrix4x4.identity, data.materialBlur, 0, MeshTopology.Triangles, 3, 1,
-                mpb);
+            cmd.DrawProcedural(
+                Matrix4x4.identity, data.materialBlur, 0, 
+                MeshTopology.Triangles, 3, 1, mpb);
         }
 
         /// <summary>
@@ -303,7 +308,8 @@ namespace Fs.Liquid2D
             // 设置绘制目标为当前相机的渲染目标。
             // 设置外描边材质属性块，传入绘制RT。
             MaterialPropertyBlock mpb = new MaterialPropertyBlock();
-            mpb.SetTexture(ShaderIDs.MainTexId, data.blurFinalTh);
+            mpb.SetTexture(ShaderIds.MainTexId, data.blurFinalTh);
+            mpb.SetFloat(ShaderIds.Cutoff, data.settings.cutoff);
             // 绘制一个全屏三角形，使用外描边材质，并传入属性块。
             cmd.DrawProcedural(Matrix4x4.identity, data.materialEffect, 0, MeshTopology.Triangles, 3, 1,
                 mpb);
@@ -349,17 +355,15 @@ namespace Fs.Liquid2D
                 && VolumeData != null && VolumeData.isActive;
              
             // ---- 重载设置。 ---- //
-            _settings.iterations = isActive && VolumeData.isActive
-                ? VolumeData.iterations
-                : _settingsDefault.iterations;
+            _settings.iterations = isActive ? VolumeData.iterations : _settingsDefault.iterations;
              
-            _settings.blurSpread = isActive && VolumeData.isActive
-                ? VolumeData.blurSpread
-                : _settingsDefault.blurSpread;
+            _settings.blurSpread = isActive ? VolumeData.blurSpread : _settingsDefault.blurSpread;
              
-            _settings.liquid2DLayerMask = isActive && VolumeData.isActive
-                ? VolumeData.liquid2DLayerMask
-                : _settingsDefault.liquid2DLayerMask;
+            _settings.liquid2DLayerMask = isActive ? VolumeData.liquid2DLayerMask : _settingsDefault.liquid2DLayerMask;
+            
+            _settings.scaleFactor = isActive ? VolumeData.scaleFactor : _settingsDefault.scaleFactor;
+            
+            _settings.cutoff = isActive ? VolumeData.cutoff : _settingsDefault.cutoff;
         }
 
         #endregion
@@ -368,9 +372,9 @@ namespace Fs.Liquid2D
         
         private const string ShaderPath = "Custom/URP/2D/Clone";
         private static Material _materialClone;
+        
         /// <summary>
-        /// 克隆材质。直接将源纹理拷贝到目标纹理。保留透明度信息。
-        /// 用于测试。
+        /// 克隆材质。直接将源纹理拷贝到目标纹理。
         /// </summary>
         private static Material MaterialClone
         {
@@ -383,9 +387,10 @@ namespace Fs.Liquid2D
                 return _materialClone;
             }
         }
-        
+
         /// <summary>
-        /// 复制 Pass。将源纹理拷贝到目标纹理。测试用。
+        /// 复制 Pass。将源纹理拷贝到目标纹理。
+        /// Blend SrcAlpha OneMinusSrcAlpha
         /// </summary>
         /// <param name="renderGraph"></param>
         /// <param name="source"></param>
@@ -401,11 +406,8 @@ namespace Fs.Liquid2D
             
                 // 设置渲染目标纹理句柄和声明使用纹理句柄。
                 builder.SetRenderAttachment(renderAttachment, 0, AccessFlags.Write);
-                builder.UseTexture(source, AccessFlags.Read);  
                 
-                // builder.SetRenderAttachmentDepth(resourceData.activeDepthTexture, AccessFlags.Write);
-                // builder.AllowPassCulling(false);
-                // builder.AllowGlobalStateModification(true);
+                builder.UseTexture(source, AccessFlags.Read);
             
                 // 设置绘制方法。
                 builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
@@ -413,7 +415,7 @@ namespace Fs.Liquid2D
                     var cmd = context.cmd;
                     var material = data.cloneMaterial;
                     var sourceTh = data.cloneSourceTh;
-                    // Blitterの便利関数を使ってBlit実行
+                    
                     Blitter.BlitTexture(cmd, sourceTh, Vector2.one, material, 0);
                 });
             }

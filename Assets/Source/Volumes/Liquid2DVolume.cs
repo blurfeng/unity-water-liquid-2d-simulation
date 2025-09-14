@@ -46,31 +46,14 @@ namespace Fs.Liquid2D.Volumes
     }
 
     [Serializable]
-    public class Liquid2DVolumeData
+    public class Liquid2DVolumeData : Liquid2DRenderFeatureSettings
     {
         public Liquid2DVolumeData(string nameTag)
         {
             this.nameTag = nameTag;
-            
-            isActive = true;
-            iterations = 7;
-            blurSpread = 0.6f;
-            liquid2DLayerMask = ELiquid2DLayer.Water;
         }
         
         [Tooltip("是否启用该配置。")]
         public bool isActive;
-        
-        [Tooltip("2D流体 Renderer Feature 名称标签，用于区分不同的 Renderer Feature 配置。")]
-        public string nameTag;
-        
-        [Range(3, 16), Tooltip("迭代次数，越大越模糊。")]
-        public int iterations;
-        
-        [Range(0.01f, 1f), Tooltip("每次迭代的模糊扩散度，越大越模糊。")]
-        public float blurSpread;
-        
-        [Tooltip("2D流体层遮罩。只会渲染设定的流体层的粒子。")]
-        public ELiquid2DLayer liquid2DLayerMask;
     }
 }

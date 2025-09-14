@@ -15,15 +15,17 @@ MonoBehaviour:
   active: 1
   isActive:
     m_OverrideState: 1
-    m_Value: 1
+    m_Value: 0
   liquid2DVolumeDataList:
     m_OverrideState: 1
     m_Value:
-    - isActive: 1
-      nameTag: Water
-      iterations: 7
-      blurSpread: 0.6
+    - nameTag: Water
       liquid2DLayerMask: 2
+      iterations: 8
+      blurSpread: 0.6
+      scaleFactor: 4
+      cutoff: 0.2
+      isActive: 1
 --- !u!114 &11400000
 MonoBehaviour:
   m_ObjectHideFlags: 0
