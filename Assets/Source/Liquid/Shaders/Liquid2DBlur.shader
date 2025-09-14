@@ -16,6 +16,11 @@ Shader "Custom/URP/2D/Liquid2DBlur"
             ZWrite Off
         
             HLSLPROGRAM
+            // ---- Keywords ------------------------------------- Start
+            // GPU Instancing
+            #pragma shader_feature_local EIGHT_SAMPLINGS
+            
+            // ---- Keywords ------------------------------------- End
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
@@ -60,14 +65,46 @@ Shader "Custom/URP/2D/Liquid2DBlur"
 
                 // https://zhuanlan.zhihu.com/p/632957274
                 // Kawase Blur 进行简单的模糊处理，采样周围像素并平均。
-                half4 col = SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv);
-                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(_BlurOffset + 0.5, _BlurOffset + 0.5) * _MainTex_TexelSize);
-                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(-_BlurOffset - 0.5, _BlurOffset + 0.5) * _MainTex_TexelSize);
-                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(-_BlurOffset - 0.5, -_BlurOffset - 0.5) * _MainTex_TexelSize);
-                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(_BlurOffset + 0.5, -_BlurOffset - 0.5) * _MainTex_TexelSize);
 
-                // 平均值，防止颜色过亮。
-                return col * 0.2;
+                #if defined(EIGHT_SAMPLINGS)
+                
+                half centerWeight = 0.2;
+                half neighborWeight = 0.1;
+
+                half4 col = SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv) * centerWeight;
+
+                // 四个斜角
+                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(_BlurOffset + 0.5, _BlurOffset + 0.5) * _MainTex_TexelSize) * neighborWeight;
+                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(-_BlurOffset - 0.5, _BlurOffset + 0.5) * _MainTex_TexelSize) * neighborWeight;
+                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(-_BlurOffset - 0.5, -_BlurOffset - 0.5) * _MainTex_TexelSize) * neighborWeight;
+                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(_BlurOffset + 0.5, -_BlurOffset - 0.5) * _MainTex_TexelSize) * neighborWeight;
+
+                // 上下左右
+                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(_BlurOffset, 0) * _MainTex_TexelSize) * neighborWeight;
+                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(-_BlurOffset, 0) * _MainTex_TexelSize) * neighborWeight;
+                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(0, _BlurOffset) * _MainTex_TexelSize) * neighborWeight;
+                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(0, -_BlurOffset) * _MainTex_TexelSize) * neighborWeight;
+
+                // 权重归一化，防止亮度丢失
+                return col / (centerWeight + neighborWeight * 8);
+                
+                #else
+                
+                half centerWeight = 0.4;
+                half neighborWeight = 0.15;
+
+                half4 col = SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv) * centerWeight;
+
+                // 四个斜角
+                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(_BlurOffset + 0.5, _BlurOffset + 0.5) * _MainTex_TexelSize) * neighborWeight;
+                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(-_BlurOffset - 0.5, _BlurOffset + 0.5) * _MainTex_TexelSize) * neighborWeight;
+                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(-_BlurOffset - 0.5, -_BlurOffset - 0.5) * _MainTex_TexelSize) * neighborWeight;
+                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(_BlurOffset + 0.5, -_BlurOffset - 0.5) * _MainTex_TexelSize) * neighborWeight;
+
+                // 权重归一化
+                return col / (centerWeight + neighborWeight * 4);
+                
+                #endif
             }
             
             ENDHLSL

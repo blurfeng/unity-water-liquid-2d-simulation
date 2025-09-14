@@ -11,6 +11,19 @@ namespace Fs.Liquid2D
         X8 = 8
     }
     
+    public enum EBlurSamplingMode
+    {
+        /// <summary>
+        /// 4次采样，性能较好，模糊效果一般。会有斜向纹理。
+        /// </summary>
+        Four,
+        
+        /// <summary>
+        /// 8次采样，性能较差，模糊效果较好。
+        /// </summary>
+        Eight
+    }
+    
     /// <summary>
     /// 2D流体 Renderer Feature 设置。
     /// </summary>
@@ -40,6 +53,9 @@ namespace Fs.Liquid2D
         
         [SerializeField, ColorUsage(true, true), Tooltip("流体背景颜色。会影响模糊时的颜色混合，决定了流体的边缘效果（alpha值的设置是无效的）。")]
         public Color backgroundColor = Color.clear;
+        
+        [Tooltip("模糊采样模式。Four为4次采样，性能较好，模糊效果一般。Eight为8次采样，性能较差，模糊效果较好。")]
+        public EBlurSamplingMode blurSamplingMode = EBlurSamplingMode.Eight;
 
         public Liquid2DRenderFeatureSettings Clone()
         {

@@ -350,6 +350,16 @@ namespace Fs.Liquid2D
             MaterialPropertyBlock mpb = new MaterialPropertyBlock();
             mpb.SetTexture(ShaderIds.MainTexId, data.blurIndex % 2 == 0 ? data.blurThs[0] : data.blurThs[1]);
             mpb.SetFloat(ShaderIds.BlurOffsetId, offset);
+            if (data.settings.blurSamplingMode == EBlurSamplingMode.Four)
+            {
+                // 4次采样。
+                data.materialBlur.DisableKeyword("EIGHT_SAMPLINGS");
+            }
+            else
+            {
+                // 8次采样。
+                data.materialBlur.EnableKeyword("EIGHT_SAMPLINGS");
+            }
 
             // 绘制一个全屏三角形，使用模糊材质，并传入属性块。
             cmd.DrawProcedural(
@@ -429,6 +439,7 @@ namespace Fs.Liquid2D
                 _liquidOcclusionFilteringSettings = new FilteringSettings(RenderQueueRange.all, _settings.liquidOcclusionLayerMask);
             }
             _settings.backgroundColor = isActive ? VolumeData.backgroundColor : _settingsDefault.backgroundColor;
+            _settings.blurSamplingMode = isActive ? VolumeData.blurSamplingMode : _settingsDefault.blurSamplingMode;
         }
 
         #endregion
