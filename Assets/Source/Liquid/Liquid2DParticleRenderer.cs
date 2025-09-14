@@ -13,6 +13,9 @@ namespace Fs.Liquid2D
         [SerializeField, Tooltip("流体粒子渲染器设置。")]
         private Liquid2dParticleRendererSettings settings = new Liquid2dParticleRendererSettings();
     
+        [SerializeField, Tooltip("粒子生命时间（秒），到时间后自动销毁。")]
+        private float lifetime = 0f;
+        
         /// <summary>
         /// 流体粒子渲染器。
         /// </summary>
@@ -37,6 +40,14 @@ namespace Fs.Liquid2D
             }
         }
         private Collider2D _collider2D;
+        
+        private void Start()
+        {
+            if (lifetime > 0f)
+            {
+                SetLifetime(lifetime);
+            }
+        }
 
         private void OnEnable()
         {
@@ -66,6 +77,19 @@ namespace Fs.Liquid2D
                 return false;
 
             return true;
+        }
+
+        /// <summary>
+        /// 设置粒子生命时间（秒），到时间后自动销毁。
+        /// 每次调用会重置计时。
+        /// </summary>
+        /// <param name="setLifetime"></param>
+        public void SetLifetime(float setLifetime)
+        {
+            if (!Application.isPlaying) return;
+            if (setLifetime <= 0f) return;
+            
+            Destroy(gameObject, setLifetime);
         }
         
 #if UNITY_EDITOR

@@ -21,10 +21,14 @@ MonoBehaviour:
     m_Value:
     - nameTag: Water
       liquid2DLayerMask: 2
-      iterations: 8
+      iterations: 7
       blurSpread: 0.6
       scaleFactor: 4
       cutoff: 0.2
+      liquidOcclusionLayerMask:
+        serializedVersion: 2
+        m_Bits: 64
+      backgroundColor: {r: 0, g: 0.025248341, b: 0.24528301, a: 0}
       isActive: 1
 --- !u!114 &11400000
 MonoBehaviour:

@@ -51,6 +51,7 @@ MonoBehaviour:
     material: {fileID: 2100000, guid: 7453d47e894769e43b1338caed5ddfeb, type: 2}
     color: {r: 0, g: 1, b: 4, a: 1}
     liquid2DLayerMask: 2
+  lifetime: 0
 --- !u!58 &5961824672208803902
 CircleCollider2D:
   m_ObjectHideFlags: 0
