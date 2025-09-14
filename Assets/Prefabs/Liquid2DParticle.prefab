@@ -29,7 +29,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 1.4, y: 1.4, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
@@ -49,7 +49,7 @@ MonoBehaviour:
   settings:
     sprite: {fileID: -2413806693520163455, guid: 343064a745fc23b4cabccb1d13822cff, type: 3}
     material: {fileID: 2100000, guid: 7453d47e894769e43b1338caed5ddfeb, type: 2}
-    color: {r: 0, g: 1, b: 4, a: 1}
+    color: {r: 0, g: 0.44190174, b: 4.584609, a: 1}
     liquid2DLayerMask: 2
   lifetime: 0
 --- !u!58 &5961824672208803902
@@ -87,7 +87,7 @@ CircleCollider2D:
   m_CompositeOperation: 0
   m_CompositeOrder: 0
   m_Offset: {x: 0, y: 0}
-  m_Radius: 0.5
+  m_Radius: 0.25
 --- !u!50 &7884424366146339886
 Rigidbody2D:
   serializedVersion: 5
