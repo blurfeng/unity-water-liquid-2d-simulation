@@ -37,8 +37,6 @@ namespace Fs.Liquid2D
         private readonly Liquid2DRenderFeatureSettings _settings;
         private readonly Mesh _quadMesh;
         
-        private readonly List<TextureHandle> _blurTHs = new List<TextureHandle>();
-        
         private FilteringSettings _liquidOcclusionFilteringSettings;
         
         public Liquid2dPass(Material materialBlur, Material materialEffect, Liquid2DRenderFeatureSettings settings)
@@ -83,7 +81,8 @@ namespace Fs.Liquid2D
             
             // 模糊 Pass 相关。
             public Material materialBlur;
-            public List<TextureHandle> blurThs = new List<TextureHandle>();
+            public TextureHandle blurThLeft;
+            public TextureHandle blurThRight;
             public int blurIndex;
             
             // 流体遮挡 Pass 相关。
@@ -164,18 +163,14 @@ namespace Fs.Liquid2D
             blurDesc.width = cameraData.cameraTargetDescriptor.width / (int)_settings.scaleFactor;
             blurDesc.height = cameraData.cameraTargetDescriptor.height / (int)_settings.scaleFactor;
             
-            // 这里目前只使用两个模糊纹理句柄，交替使用。但任先保留 List 以便后续扩展或渲染机制调整。
-            _blurTHs.Clear();
-            for (int i = 0; i < 2; ++i)
-            {
-                blurDesc.name = GetName(i == 0 ? "liquid 2d Blur Left" : "liquid 2d Blur Right");
-                var blurRT = renderGraph.CreateTexture(blurDesc);
-                _blurTHs.Add(blurRT);
-            }
+            blurDesc.name = GetName("liquid 2d Blur Left");
+            TextureHandle blurThLeft = renderGraph.CreateTexture(blurDesc);
+            blurDesc.name = GetName("liquid 2d Blur Right");
+            TextureHandle blurThRight = renderGraph.CreateTexture(blurDesc);
             
             // 复制流体粒子纹理到第一个模糊纹理和源颜色纹理。
             renderGraph.AddBlitPass(
-                liquidParticleTh, _blurTHs[0], 
+                liquidParticleTh, blurThLeft, 
                 Vector2.one, Vector2.zero, passName: GetName("Liquid 2d particles to Blur"));
             
             // ---- 添加绘制到 Pass ---- //
@@ -183,7 +178,7 @@ namespace Fs.Liquid2D
             int blurCount = 0;
             for (var i = 0; i < _settings.iterations; ++i)
             {
-                using (var builder = renderGraph.AddRasterRenderPass<PassData>(GetName($"liquid 2d Blur {i}"), out var passData))
+                using (var builder = renderGraph.AddRasterRenderPass<PassData>(GetName($"liquid 2d Blur {i}"), out PassData passData))
                 {
                     // 通道数据设置。
                     // passData.resourceData = resourceData;
@@ -191,13 +186,14 @@ namespace Fs.Liquid2D
                     passData.settings = _settings;
                     
                     passData.materialBlur = _materialBlur;
-                    passData.blurThs = _blurTHs;
+                    passData.blurThLeft = blurThLeft;
+                    passData.blurThRight = blurThRight;
                     passData.blurIndex = blurCount = i;
                     
                     // 设置渲染目标纹理句柄和声明使用纹理句柄。
-                    builder.SetRenderAttachment(i % 2 == 0 ? _blurTHs[1] : _blurTHs[0], 0, AccessFlags.Write);
+                    builder.SetRenderAttachment(i % 2 == 0 ? blurThRight : blurThLeft, 0, AccessFlags.Write);
                     // 用于记录每个模糊片元的原有颜色。
-                    builder.UseTexture(i % 2 == 0 ? _blurTHs[0] : _blurTHs[1], AccessFlags.Read);
+                    builder.UseTexture(i % 2 == 0 ? blurThLeft : blurThRight, AccessFlags.Read);
             
                     // 设置绘制方法。
                     builder.SetRenderFunc((PassData data, RasterGraphContext context) => ExecutePassBlur(data, context));
@@ -250,7 +246,7 @@ namespace Fs.Liquid2D
             // ---- 添加绘制到 Pass ---- //
             using (var builder = renderGraph.AddRasterRenderPass<PassData>(GetName("liquid 2d Effect"), out var passData))
             {
-                var finalTh = blurCount % 2 == 0 ? _blurTHs[1] : _blurTHs[0];
+                var finalTh = blurCount % 2 == 0 ? blurThRight : blurThLeft;
                 
                 // 通道数据设置。
                 // passData.resourceData = resourceData;
@@ -348,7 +344,7 @@ namespace Fs.Liquid2D
 
             // 设置模糊材质属性块，传入当前模糊材质和偏移强度。
             MaterialPropertyBlock mpb = new MaterialPropertyBlock();
-            mpb.SetTexture(ShaderIds.MainTexId, data.blurIndex % 2 == 0 ? data.blurThs[0] : data.blurThs[1]);
+            mpb.SetTexture(ShaderIds.MainTexId, data.blurIndex % 2 == 0 ? data.blurThLeft : data.blurThRight);
             mpb.SetFloat(ShaderIds.BlurOffsetId, offset);
             if (data.settings.blurSamplingMode == EBlurSamplingMode.Four)
             {
