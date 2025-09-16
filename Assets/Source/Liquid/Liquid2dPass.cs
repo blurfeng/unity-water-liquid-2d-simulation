@@ -17,6 +17,7 @@ namespace Fs.Liquid2D
         private static class ShaderIds
         {
             internal static readonly int MainTexId = Shader.PropertyToID("_MainTex");
+            internal static readonly int SecondTex = Shader.PropertyToID("_SecondTex");
             internal static readonly int ColorId = Shader.PropertyToID("_Color");
             internal static readonly int BlurOffsetId = Shader.PropertyToID("_BlurOffset");
             internal static readonly int Cutoff = Shader.PropertyToID("_Cutoff");
@@ -24,6 +25,24 @@ namespace Fs.Liquid2D
         }
         
         private static readonly ShaderTagId _shaderTagId = new ShaderTagId("UniversalForward");
+        
+        private const string ShaderPathBlurCombineTwo = "Custom/URP/2D/CombineTwo";
+        private static Material _materialBlurCombineTwo;
+        
+        /// <summary>
+        /// 克隆材质。直接将源纹理拷贝到目标纹理。
+        /// </summary>
+        private static Material MaterialBlurCombineTwo
+        {
+            get
+            {
+                if (_materialBlurCombineTwo == null)
+                {
+                    _materialBlurCombineTwo = CoreUtils.CreateEngineMaterial(ShaderPathBlurCombineTwo);
+                }
+                return _materialBlurCombineTwo;
+            }
+        }
         
         // 流体模糊材质。
         private Material _materialBlur;
@@ -62,6 +81,8 @@ namespace Fs.Liquid2D
             _materialEffect = null;
             CoreUtils.Destroy(_materialClone);
             _materialClone = null;
+            CoreUtils.Destroy(_materialBlurCombineTwo);
+            _materialBlurCombineTwo = null;
         }
 
         private class PassData
@@ -151,7 +172,7 @@ namespace Fs.Liquid2D
             #endregion
             
             // TEST: 直接将流体粒子TH拷贝回当前源TH。
-            // ClonePass(liquidParticleTh, _blurTHs[_blurTHs.Count - 1], sourceTextureHandle);
+            // ClonePass(renderGraph, liquidParticleTh, sourceTextureHandle);
             // return;
             
             #region 模糊处理
@@ -163,10 +184,12 @@ namespace Fs.Liquid2D
             blurDesc.width = cameraData.cameraTargetDescriptor.width / (int)_settings.scaleFactor;
             blurDesc.height = cameraData.cameraTargetDescriptor.height / (int)_settings.scaleFactor;
             
-            blurDesc.name = GetName("liquid 2d Blur Left");
+            blurDesc.name = GetName("Blur Left");
             TextureHandle blurThLeft = renderGraph.CreateTexture(blurDesc);
-            blurDesc.name = GetName("liquid 2d Blur Right");
+            blurDesc.name = GetName("Blur Right");
             TextureHandle blurThRight = renderGraph.CreateTexture(blurDesc);
+            blurDesc.name = GetName("Blur First");
+            TextureHandle blurThCore = renderGraph.CreateTexture(blurDesc);
             
             // 复制流体粒子纹理到第一个模糊纹理和源颜色纹理。
             renderGraph.AddBlitPass(
@@ -198,15 +221,49 @@ namespace Fs.Liquid2D
                     // 设置绘制方法。
                     builder.SetRenderFunc((PassData data, RasterGraphContext context) => ExecutePassBlur(data, context));
                 }
+                
+                // 选择一次前期迭代的结果作为流体核保持用TH，最后叠加到模糊的最终结果上。
+                if (i == 2)
+                {
+                    renderGraph.AddBlitPass(
+                        blurThRight, blurThCore, 
+                        Vector2.one, Vector2.zero, passName: GetName("Blur Core"));
+                }
+            }
+            
+            blurDesc.name = GetName("Blur Final");
+            TextureHandle blurThFinal = renderGraph.CreateTexture(blurDesc);
+            var blurThSource = blurCount % 2 == 0 ? blurThRight : blurThLeft;
+            using (var builder = renderGraph.AddRasterRenderPass<PassData>("Blur CombineTwo ", out var passData))
+            {
+                // 设置渲染目标纹理句柄和声明使用纹理句柄。
+                builder.SetRenderAttachment(blurThFinal, 0, AccessFlags.Write);
+                builder.UseTexture(blurThSource, AccessFlags.Read);
+                builder.UseTexture(blurThCore, AccessFlags.Read);
+            
+                // 设置绘制方法。
+                builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
+                {
+                    var cmd = context.cmd;
+                    
+                    MaterialPropertyBlock mpb = new MaterialPropertyBlock();
+                    mpb.SetTexture(ShaderIds.MainTexId, blurThSource);
+                    mpb.SetTexture(ShaderIds.SecondTex, blurThCore);
+                    cmd.DrawProcedural(
+                        Matrix4x4.identity, MaterialBlurCombineTwo, 0, 
+                        MeshTopology.Triangles, 3, 1, mpb);
+                    //Blitter.BlitTexture(cmd, sourceTh, Vector2.one, material, 0);
+                });
             }
             
             #endregion
 
             // TEST: 直接将最后一个模糊 RT 拷贝回当前源纹理句柄。
-            // ClonePass(renderGraph, blurCount % 2 == 0 ? _blurTHs[1] : _blurTHs[0], sourceTextureHandle);
+            // ClonePass(renderGraph, blurThFinal, sourceTextureHandle);
             // return;
 
             #region 流体阻挡
+            // 创建阻挡纹理，用于遮挡流体。一般是容器，平台等。
 
             // ---- 创建流体遮挡纹理 ---- //
             TextureDesc liquidOcclusionDesc = mainDesc;
@@ -246,21 +303,19 @@ namespace Fs.Liquid2D
             // ---- 添加绘制到 Pass ---- //
             using (var builder = renderGraph.AddRasterRenderPass<PassData>(GetName("liquid 2d Effect"), out var passData))
             {
-                var finalTh = blurCount % 2 == 0 ? blurThRight : blurThLeft;
-                
                 // 通道数据设置。
                 // passData.resourceData = resourceData;
                 // passData.cameraData = cameraData;
                 passData.quadMesh = _quadMesh;
                 passData.settings = _settings;
                 
-                passData.blurFinalTh = finalTh;
+                passData.blurFinalTh = blurThFinal;
                 passData.materialEffect = _materialEffect;
                 passData.liquidOcclusionTh = liquidOcclusionTh;
             
                 // 设置渲染目标纹理句柄和声明使用纹理句柄。
                 builder.SetRenderAttachment(sourceTextureHandle, 0, AccessFlags.Write);
-                builder.UseTexture(finalTh, AccessFlags.Read);
+                builder.UseTexture(blurThFinal, AccessFlags.Read);
                 builder.UseTexture(liquidOcclusionTh, AccessFlags.Read);
             
                 // 设置绘制方法。
@@ -442,7 +497,7 @@ namespace Fs.Liquid2D
 
         #region Tools
         
-        private const string ShaderPath = "Custom/URP/2D/Clone";
+        private const string ShaderPathClone = "Custom/URP/2D/Clone";
         private static Material _materialClone;
         
         /// <summary>
@@ -454,7 +509,7 @@ namespace Fs.Liquid2D
             {
                 if (_materialClone == null)
                 {
-                    _materialClone = CoreUtils.CreateEngineMaterial(ShaderPath);
+                    _materialClone = CoreUtils.CreateEngineMaterial(ShaderPathClone);
                 }
                 return _materialClone;
             }
