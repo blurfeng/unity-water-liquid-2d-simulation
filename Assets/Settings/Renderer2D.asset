@@ -80,7 +80,7 @@ MonoBehaviour:
     blurSpread: 0.45
     scaleFactor: 4
     cutoff: 0.2
-    liquidOcclusionLayerMask:
+    obstructionLayerMask:
       serializedVersion: 2
       m_Bits: 64
     blurEdgeColor: {r: 0.3301887, g: 0, b: 0, a: 0}
@@ -107,7 +107,7 @@ MonoBehaviour:
     blurSpread: 0.6
     scaleFactor: 4
     cutoff: 0.2
-    liquidOcclusionLayerMask:
+    obstructionLayerMask:
       serializedVersion: 2
       m_Bits: 64
     blurEdgeColor: {r: 0, g: 0.009350888, b: 0.16981131, a: 0}

@@ -49,7 +49,7 @@ namespace Fs.Liquid2D
         public float cutoff = 0.2f;
         
         [Tooltip("液体遮挡层遮罩。指定哪些层的物体会遮挡液体效果。")]
-        public LayerMask liquidOcclusionLayerMask;
+        public LayerMask obstructionLayerMask;
         
         [SerializeField, ColorUsage(true, true), Tooltip("流体模糊边缘色。作为模糊时底图的颜色，最终影响整体水体的边缘色（默认为当前相机场景纹理颜色）。")]
         public Color blurEdgeColor = Color.clear;

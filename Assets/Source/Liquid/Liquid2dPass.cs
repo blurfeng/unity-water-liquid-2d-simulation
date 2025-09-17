@@ -22,7 +22,7 @@ namespace Fs.Liquid2D
             internal static readonly int ColorIntensityId = Shader.PropertyToID("_ColorIntensity");
             internal static readonly int BlurOffsetId = Shader.PropertyToID("_BlurOffset");
             internal static readonly int Cutoff = Shader.PropertyToID("_Cutoff");
-            internal static readonly int OcclusionTex = Shader.PropertyToID("_OcclusionTex");
+            internal static readonly int ObstructionTex = Shader.PropertyToID("_ObstructionTex");
         }
         
         private static readonly ShaderTagId _shaderTagId = new ShaderTagId("UniversalForward");
@@ -57,7 +57,7 @@ namespace Fs.Liquid2D
         private readonly Liquid2DRenderFeatureSettings _settings;
         private readonly Mesh _quadMesh;
         
-        private FilteringSettings _liquidOcclusionFilteringSettings;
+        private FilteringSettings _obstructionFilteringSettings;
         
         public Liquid2dPass(Material materialBlur, Material materialEffect, Liquid2DRenderFeatureSettings settings)
         {
@@ -68,7 +68,7 @@ namespace Fs.Liquid2D
             _settings = settings.Clone();
 
             _quadMesh = GenerateQuadMesh();
-            _liquidOcclusionFilteringSettings = new FilteringSettings(RenderQueueRange.all, settings.liquidOcclusionLayerMask);
+            _obstructionFilteringSettings = new FilteringSettings(RenderQueueRange.all, settings.obstructionLayerMask);
             
             // 设置 Pass 执行时机。
             renderPassEvent = RenderPassEvent.AfterRenderingTransparents;
@@ -113,8 +113,8 @@ namespace Fs.Liquid2D
             public int blurIteration;
             
             // 流体遮挡 Pass 相关。
-            public RendererListHandle liquidOcclusionRendererListHandle;
-            public TextureHandle liquidOcclusionTh;
+            public RendererListHandle obstructionRendererListHandle;
+            public TextureHandle obstructionTh;
             
             // 水体效果 Pass 相关。
             public Material materialEffect;
@@ -274,25 +274,25 @@ namespace Fs.Liquid2D
             // 创建阻挡纹理，用于遮挡流体。一般是容器，平台等。
 
             // ---- 创建流体遮挡纹理 ---- //
-            TextureDesc liquidOcclusionDesc = mainDesc;
-            liquidOcclusionDesc.name = GetName("liquid 2d Occlusion");
-            TextureHandle liquidOcclusionTh = renderGraph.CreateTexture(liquidOcclusionDesc);
+            TextureDesc liquidObstructionDesc = mainDesc;
+            liquidObstructionDesc.name = GetName("liquid 2d Obstruction");
+            TextureHandle liquidObstructionTh = renderGraph.CreateTexture(liquidObstructionDesc);
 
-            using (var builder = renderGraph.AddRasterRenderPass<PassData>(GetName("liquid 2d Occlusion"), out PassData passData))
+            using (var builder = renderGraph.AddRasterRenderPass<PassData>(GetName("liquid 2d Obstruction"), out PassData passData))
             {
                 // 设置渲染目标纹理为流体遮挡纹理。
-                builder.SetRenderAttachment(liquidOcclusionTh, 0, AccessFlags.Write);
+                builder.SetRenderAttachment(liquidObstructionTh, 0, AccessFlags.Write);
                 
-                // 获取所有 Liquid Occlusion Layer Mask层的 Renderer 列表。
+                // 获取所有 Liquid Obstruction Layer Mask层的 Renderer 列表。
                 var drawSettings = RenderingUtils.CreateDrawingSettings(_shaderTagId, renderingData, cameraData, lightData, cameraData.defaultOpaqueSortFlags);
-                var param = new RendererListParams(renderingData.cullResults, drawSettings, _liquidOcclusionFilteringSettings);
-                passData.liquidOcclusionRendererListHandle = renderGraph.CreateRendererList(param);
-                builder.UseRendererList(passData.liquidOcclusionRendererListHandle);
+                var param = new RendererListParams(renderingData.cullResults, drawSettings, _obstructionFilteringSettings);
+                passData.obstructionRendererListHandle = renderGraph.CreateRendererList(param);
+                builder.UseRendererList(passData.obstructionRendererListHandle);
                 
                 builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
                     {
                         // context.cmd.ClearRenderTarget(RTClearFlags.Color, Color.clear, 1, 0);
-                        context.cmd.DrawRendererList(data.liquidOcclusionRendererListHandle);
+                        context.cmd.DrawRendererList(data.obstructionRendererListHandle);
                     }
                 );
             }
@@ -300,10 +300,10 @@ namespace Fs.Liquid2D
             #endregion
             
             // TEST: 直接将最后一个 RT 拷贝回当前源纹理句柄。
-            // ClonePass(renderGraph, liquidOcclusionTh, sourceTextureHandle);
+            // ClonePass(renderGraph, obstructionTh, sourceTextureHandle);
             // renderGraph.AddBlitPass(
-            //     liquidOcclusionTh, sourceTextureHandle, 
-            //     Vector2.one, Vector2.zero, passName: GetName("liquidOcclusionTh to sourceTextureHandle"));
+            //     obstructionTh, sourceTextureHandle, 
+            //     Vector2.one, Vector2.zero, passName: GetName("obstructionTh to sourceTextureHandle"));
             // return;
             
             #region 水体效果处理
@@ -319,12 +319,12 @@ namespace Fs.Liquid2D
                 
                 passData.blurFinalTh = blurThFinal;
                 passData.materialEffect = _materialEffect;
-                passData.liquidOcclusionTh = liquidOcclusionTh;
+                passData.obstructionTh = liquidObstructionTh;
             
                 // 设置渲染目标纹理句柄和声明使用纹理句柄。
                 builder.SetRenderAttachment(sourceTextureHandle, 0, AccessFlags.Write);
                 builder.UseTexture(blurThFinal, AccessFlags.Read);
-                builder.UseTexture(liquidOcclusionTh, AccessFlags.Read);
+                builder.UseTexture(liquidObstructionTh, AccessFlags.Read);
             
                 // 设置绘制方法。
                 builder.SetRenderFunc((PassData data, RasterGraphContext context) => ExecutePassEffect(data, context));
@@ -446,7 +446,7 @@ namespace Fs.Liquid2D
             // 设置外描边材质属性块，传入绘制RT。
             MaterialPropertyBlock mpb = new MaterialPropertyBlock();
             mpb.SetTexture(ShaderIds.MainTexId, data.blurFinalTh);
-            mpb.SetTexture(ShaderIds.OcclusionTex, data.liquidOcclusionTh);
+            mpb.SetTexture(ShaderIds.ObstructionTex, data.obstructionTh);
             mpb.SetFloat(ShaderIds.Cutoff, data.settings.cutoff);
             // 绘制一个全屏三角形，使用外描边材质，并传入属性块。
             cmd.DrawProcedural(Matrix4x4.identity, data.materialEffect, 0, MeshTopology.Triangles, 3, 1,
@@ -498,11 +498,11 @@ namespace Fs.Liquid2D
             _settings.liquid2DLayerMask = isActive ? VolumeData.liquid2DLayerMask : _settingsDefault.liquid2DLayerMask;
             _settings.scaleFactor = isActive ? VolumeData.scaleFactor : _settingsDefault.scaleFactor;
             _settings.cutoff = isActive ? VolumeData.cutoff : _settingsDefault.cutoff;
-            _settings.liquidOcclusionLayerMask = isActive ? VolumeData.liquidOcclusionLayerMask : _settingsDefault.liquidOcclusionLayerMask;
+            _settings.obstructionLayerMask = isActive ? VolumeData.obstructionLayerMask : _settingsDefault.obstructionLayerMask;
             // 更新遮罩过滤设置。
-            if (_liquidOcclusionFilteringSettings.layerMask != _settings.liquidOcclusionLayerMask)
+            if (_obstructionFilteringSettings.layerMask != _settings.obstructionLayerMask)
             {
-                _liquidOcclusionFilteringSettings = new FilteringSettings(RenderQueueRange.all, _settings.liquidOcclusionLayerMask);
+                _obstructionFilteringSettings = new FilteringSettings(RenderQueueRange.all, _settings.obstructionLayerMask);
             }
             
             // 边缘色和强度。实际上在 Blur 前作为底图进行混合。默认的底图是当前相机的场景纹理（alpha为0）。
