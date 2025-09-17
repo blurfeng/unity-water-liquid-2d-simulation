@@ -1,13 +1,6 @@
 ﻿// 流体模糊着色器，用于将所有粒子进行多次模糊处理，让颜色连接在一起，然后供之后的处理。
 Shader "Custom/URP/2D/Liquid2DBlur"
 {
-    Properties
-    {
-        _BlurOffset ("Blur Size", Float) = 1.0
-        _AlphaThresholdMin("Alpha Threshold Min", Float) = 0.7
-        _AlphaThresholdMax("Alpha Threshold Max", Float) = 0.95
-    }
-
     SubShader
     {
         Tags
@@ -40,7 +33,9 @@ Shader "Custom/URP/2D/Liquid2DBlur"
             struct Varying
             {
                 float4 positionCS : SV_POSITION;
-                float2 uv : TEXCOORD0;
+                half4 uv01 : TEXCOORD0; // xy: uv0, zw: uv1
+                half4 uv23 : TEXCOORD1; // xy: uv2, zw: uv3
+                half2 uv4  : TEXCOORD2; // uv4
             };
 
             TEXTURE2D_X(_MainTex);
@@ -48,16 +43,19 @@ Shader "Custom/URP/2D/Liquid2DBlur"
             half2 _MainTex_TexelSize;
             
             half _BlurOffset;
-            float _AlphaThresholdMin;
-            float _AlphaThresholdMax;
 
             Varying Vert(Attribute IN)
             {
                 Varying OUT;
+                half2 uv = GetFullScreenTriangleTexCoord(IN.vertexID);
                 
                 // 使用方法库函数生成全屏三角形顶点位置和UV坐标。
                 OUT.positionCS = GetFullScreenTriangleVertexPosition(IN.vertexID);
-                OUT.uv = GetFullScreenTriangleTexCoord(IN.vertexID);
+                OUT.uv01.xy = uv;
+                OUT.uv01.zw = uv + half2(_BlurOffset + 0.5, _BlurOffset + 0.5) * _MainTex_TexelSize;   // 右上
+                OUT.uv23.xy = uv + half2(-_BlurOffset - 0.5, _BlurOffset + 0.5) * _MainTex_TexelSize;  // 左上
+                OUT.uv23.zw = uv + half2(-_BlurOffset - 0.5, -_BlurOffset - 0.5) * _MainTex_TexelSize; // 左下
+                OUT.uv4     = uv + half2(_BlurOffset + 0.5, -_BlurOffset - 0.5) * _MainTex_TexelSize;  // 右下
                 
                 return OUT;
             }
@@ -71,15 +69,14 @@ Shader "Custom/URP/2D/Liquid2DBlur"
 
                 // https://zhuanlan.zhihu.com/p/632957274
                 // Kawase Blur 进行简单的模糊处理，采样周围像素并平均。
-
-                // 采样中心。将自身颜色也加入混合，更好的保持自身颜色。
-                half4 col = SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv) * 4;
-                // 四个斜角。
-                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(_BlurOffset + 0.5, _BlurOffset + 0.5) * _MainTex_TexelSize);
-                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(-_BlurOffset - 0.5, _BlurOffset + 0.5) * _MainTex_TexelSize);
-                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(-_BlurOffset - 0.5, -_BlurOffset - 0.5) * _MainTex_TexelSize);
-                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(_BlurOffset + 0.5, -_BlurOffset - 0.5) * _MainTex_TexelSize);
                 
+                // 采样中心。将自身颜色也加入混合，更好的保持自身颜色。中心权重更高。
+                half4 col = SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv01.xy) * 4;
+                // 四个斜角。
+                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv01.zw);
+                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv23.xy);
+                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv23.zw);
+                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv4);
                 // 权重归一化。
                 return col * 0.125;
             }
