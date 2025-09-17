@@ -27,19 +27,21 @@ Shader "Custom/URP/2D/Liquid2DEffect"
             "RenderPipeline" = "UniversalPipeline"
         }
         
-        Cull Off
-        ZWrite Off
-        Blend SrcAlpha OneMinusSrcAlpha
-        
         Pass
         {
+            Name "Liquid2DEffect"
+            
+            Blend SrcAlpha OneMinusSrcAlpha
+            Cull Off
+            ZWrite Off
+            
             HLSLPROGRAM
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
 
-            #pragma vertex vert
-            #pragma fragment frag
+            #pragma vertex Vert
+            #pragma fragment Frag
 
             struct  Attribute
             {
@@ -71,7 +73,7 @@ Shader "Custom/URP/2D/Liquid2DEffect"
             // half _Stroke2;
             // half4 _StrokeColor2;
 
-            Varying vert(Attribute IN)
+            Varying Vert(Attribute IN)
             {
                 Varying OUT;
                 
@@ -88,18 +90,17 @@ Shader "Custom/URP/2D/Liquid2DEffect"
                 return lerp(half3(gray, gray, gray), color, saturation);
             }
 
-            half4 frag(Varying IN) : SV_Target
+            half4 Frag(Varying IN) : SV_Target
             {
                 half4 col = SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv);
                 clip(col.a - _Cutoff);
                 half4 colOcclusionTex = SAMPLE_TEXTURE2D_X(_OcclusionTex, sampler_linear_clamp_OcclusionTex, IN.uv);
                 clip(1 - colOcclusionTex.a);
 
-                // 按照遮挡纹理 alpha 混合
+                // 按照遮挡纹理 alpha 混合。
                 col = lerp(col, colOcclusionTex, colOcclusionTex.a);
 
                 col.a = saturate(col.a + _AlphaOffset);
-                // TODO: 允许添加一个颜色并设置混合权重。
                 return col;
                 
 				// half4 col = SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv);

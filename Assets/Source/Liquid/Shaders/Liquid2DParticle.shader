@@ -13,13 +13,15 @@ Shader "Custom/URP/2D/Liquid2DParticle"
 
         Pass
         {
+            Name "Liquid2DParticle"
+            
             Blend SrcAlpha OneMinusSrcAlpha
             Cull Off
             ZWrite Off
 
             HLSLPROGRAM
-            #pragma vertex vert
-            #pragma fragment frag
+            #pragma vertex Vert
+            #pragma fragment Frag
             #pragma multi_compile_instancing
             #pragma instancing_options assumeuniformscaling
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
@@ -28,7 +30,7 @@ Shader "Custom/URP/2D/Liquid2DParticle"
                 UNITY_DEFINE_INSTANCED_PROP(float4, _Color)
             UNITY_INSTANCING_BUFFER_END(UnityPerMaterial)
             
-            struct Attributes
+            struct Attribute
             {
                 float4 positionOS : POSITION;
                 float2 uv : TEXCOORD0;
@@ -36,7 +38,7 @@ Shader "Custom/URP/2D/Liquid2DParticle"
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
-            struct Varyings
+            struct Varying
             {
                 float2 uv : TEXCOORD0;
                 float4 positionCS : SV_POSITION;
@@ -48,19 +50,19 @@ Shader "Custom/URP/2D/Liquid2DParticle"
             TEXTURE2D(_MainTex);
             SAMPLER(sampler_MainTex);
 
-            Varyings vert(Attributes IN)
+            Varying Vert(Attribute IN)
             {
-                Varyings OUT = (Varyings)0;
+                Varying OUT = (Varying)0;
 
                 UNITY_SETUP_INSTANCE_ID(IN);
                 UNITY_TRANSFER_INSTANCE_ID(IN, OUT);
 
                 OUT.uv = IN.uv;
-                OUT.positionCS = TransformObjectToHClip(IN.positionOS); // 关键：设置顶点位置
+                OUT.positionCS = TransformObjectToHClip(IN.positionOS);
                 return OUT;
             }
 
-            half4 frag(Varyings IN) : SV_Target
+            half4 Frag(Varying IN) : SV_Target
             {
                 UNITY_SETUP_INSTANCE_ID(IN);
 

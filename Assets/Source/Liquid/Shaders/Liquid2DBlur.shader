@@ -18,6 +18,8 @@ Shader "Custom/URP/2D/Liquid2DBlur"
         
         Pass
         {
+            Name "Liquid2DBlur"
+            
             Blend One Zero
             Cull Off
             ZWrite Off
@@ -27,8 +29,8 @@ Shader "Custom/URP/2D/Liquid2DBlur"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
 
-            #pragma vertex vert
-            #pragma fragment frag
+            #pragma vertex Vert
+            #pragma fragment Frag
 
             struct  Attribute
             {
@@ -49,7 +51,7 @@ Shader "Custom/URP/2D/Liquid2DBlur"
             float _AlphaThresholdMin;
             float _AlphaThresholdMax;
 
-            Varying vert(Attribute IN)
+            Varying Vert(Attribute IN)
             {
                 Varying OUT;
                 
@@ -60,7 +62,7 @@ Shader "Custom/URP/2D/Liquid2DBlur"
                 return OUT;
             }
 
-            half4 frag(Varying IN) : SV_Target
+            half4 Frag(Varying IN) : SV_Target
             {
                 // ---- Describe ---- //
                 // 1. 采样根据当前像素，向四个斜方向偏移 _BlurOffset 个像素进行采样，然后取平均值作为模糊后的颜色。
@@ -78,7 +80,7 @@ Shader "Custom/URP/2D/Liquid2DBlur"
                 col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(-_BlurOffset - 0.5, -_BlurOffset - 0.5) * _MainTex_TexelSize);
                 col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(_BlurOffset + 0.5, -_BlurOffset - 0.5) * _MainTex_TexelSize);
                 
-                // 权重归一化
+                // 权重归一化。
                 return col * 0.125;
             }
             
