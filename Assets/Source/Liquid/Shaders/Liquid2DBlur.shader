@@ -23,11 +23,6 @@ Shader "Custom/URP/2D/Liquid2DBlur"
             ZWrite Off
         
             HLSLPROGRAM
-            // ---- Keywords ------------------------------------- Start
-            // GPU Instancing
-            #pragma shader_feature_local EIGHT_SAMPLINGS
-            
-            // ---- Keywords ------------------------------------- End
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
@@ -75,37 +70,16 @@ Shader "Custom/URP/2D/Liquid2DBlur"
                 // https://zhuanlan.zhihu.com/p/632957274
                 // Kawase Blur 进行简单的模糊处理，采样周围像素并平均。
 
-                #if defined(EIGHT_SAMPLINGS)
-                half4 col = SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv);
-                
-                // 四个斜角
-                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(_BlurOffset + 0.5, _BlurOffset + 0.5) * _MainTex_TexelSize);
-                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(-_BlurOffset - 0.5, _BlurOffset + 0.5) * _MainTex_TexelSize);
-                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(-_BlurOffset - 0.5, -_BlurOffset - 0.5) * _MainTex_TexelSize);
-                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(_BlurOffset + 0.5, -_BlurOffset - 0.5) * _MainTex_TexelSize);
-                
-                // 上下左右
-                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(_BlurOffset, 0) * _MainTex_TexelSize);
-                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(-_BlurOffset, 0) * _MainTex_TexelSize);
-                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(0, _BlurOffset) * _MainTex_TexelSize);
-                col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(0, -_BlurOffset) * _MainTex_TexelSize);
-                
-                // 权重归一化，防止亮度丢失
-                return col * 0.111111111;
-                
-                #else
-                
-                half4 col = SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv);
-                // 四个斜角
+                // 采样中心。将自身颜色也加入混合，更好的保持自身颜色。
+                half4 col = SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv) * 4;
+                // 四个斜角。
                 col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(_BlurOffset + 0.5, _BlurOffset + 0.5) * _MainTex_TexelSize);
                 col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(-_BlurOffset - 0.5, _BlurOffset + 0.5) * _MainTex_TexelSize);
                 col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(-_BlurOffset - 0.5, -_BlurOffset - 0.5) * _MainTex_TexelSize);
                 col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv + float2(_BlurOffset + 0.5, -_BlurOffset - 0.5) * _MainTex_TexelSize);
                 
                 // 权重归一化
-                return col * 0.2;
-                
-                #endif
+                return col * 0.125;
             }
             
             ENDHLSL

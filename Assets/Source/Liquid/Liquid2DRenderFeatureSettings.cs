@@ -51,11 +51,11 @@ namespace Fs.Liquid2D
         [Tooltip("液体遮挡层遮罩。指定哪些层的物体会遮挡液体效果。")]
         public LayerMask liquidOcclusionLayerMask;
         
-        [SerializeField, ColorUsage(true, true), Tooltip("流体背景颜色。会影响模糊时的颜色混合，决定了流体的边缘效果（alpha值的设置是无效的）。")]
-        public Color backgroundColor = Color.clear;
+        [SerializeField, ColorUsage(true, true), Tooltip("流体模糊边缘色。作为模糊时底图的颜色，最终影响整体水体的边缘色（默认为当前相机场景纹理颜色）。")]
+        public Color blurEdgeColor = Color.clear;
         
-        [Tooltip("模糊采样模式。Four为4次采样，性能较好，模糊效果一般。Eight为8次采样，性能较差，模糊效果较好。")]
-        public EBlurSamplingMode blurSamplingMode = EBlurSamplingMode.Eight;
+        [Range(0f, 1f), Tooltip("流体模糊边缘色强度。0时不显示边缘色（默认为当前相机场景纹理颜色），1为完全显示边缘色。")]
+        public float blurEdgeColorIntensity = 0f;
 
         public Liquid2DRenderFeatureSettings Clone()
         {

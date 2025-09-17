@@ -2,15 +2,20 @@
 {
     SubShader
     {
-        Tags { "RenderType"="Opaque" "RenderPipeline" = "UniversalPipeline"}
+        Tags
+        {
+            "RenderType"="Opaque"
+            "RenderPipeline" = "UniversalPipeline"
+        }
+        
         ZTest Off ZWrite Off Cull Off
         Pass
         {
+            Name "Clone"
+            
             Blend SrcAlpha OneMinusSrcAlpha
             Cull Off
             ZWrite Off
-
-            Name "Clone"
 
             HLSLPROGRAM
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"

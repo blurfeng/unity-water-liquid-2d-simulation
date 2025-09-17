@@ -83,8 +83,8 @@ MonoBehaviour:
     liquidOcclusionLayerMask:
       serializedVersion: 2
       m_Bits: 64
-    backgroundColor: {r: 0.0754717, g: 0, b: 0, a: 0}
-    blurSamplingMode: 0
+    blurEdgeColor: {r: 0.3301887, g: 0, b: 0, a: 0}
+    blurEdgeColorIntensity: 0
 --- !u!114 &8380843845757841626
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -110,5 +110,5 @@ MonoBehaviour:
     liquidOcclusionLayerMask:
       serializedVersion: 2
       m_Bits: 64
-    backgroundColor: {r: 0, g: 0.025248341, b: 0.24528301, a: 0}
-    blurSamplingMode: 0
+    blurEdgeColor: {r: 0, g: 0.009350888, b: 0.16981131, a: 0}
+    blurEdgeColorIntensity: 0.5
