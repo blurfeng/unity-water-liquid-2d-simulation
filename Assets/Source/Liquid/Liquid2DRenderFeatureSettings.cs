@@ -41,6 +41,9 @@ namespace Fs.Liquid2D
         
         [Range(0.01f, 3f), Tooltip("每次迭代的模糊扩散度，越大越模糊。")]
         public float blurSpread = 0.8f;
+        
+        [Range(0, 1), Tooltip("核心保持强度，越大流体核心部分越清晰。")]
+        public float coreKeepIntensity = 0.4f;
 
         [Tooltip("渲染缩放比例，越大性能越好，但边界越不清晰。")]
         public EScaleFactor scaleFactor = EScaleFactor.X4;

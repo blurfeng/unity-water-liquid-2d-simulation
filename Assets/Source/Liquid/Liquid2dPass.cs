@@ -222,7 +222,8 @@ namespace Fs.Liquid2D
                     i, GetName($"Blur: {i}"));
                 
                 // ---- 选择前期的Blur为粒子核心保持图 ---- //
-                if (i == 2)
+                int coreKeepIteration = Mathf.Clamp((int)(_settings.iterations *  (1 - _settings.coreKeepIntensity)), 1, _settings.iterations - 1);
+                if (i == coreKeepIteration)
                 {
                     renderGraph.AddBlitPass(
                         blurThRight, blurThCore, 
@@ -493,10 +494,13 @@ namespace Fs.Liquid2D
                 && VolumeData != null && VolumeData.isActive;
              
             // ---- 重载设置。 ---- //
+            _settings.liquid2DLayerMask = isActive ? VolumeData.liquid2DLayerMask : _settingsDefault.liquid2DLayerMask;
+            
             _settings.iterations = isActive ? VolumeData.iterations : _settingsDefault.iterations;
             _settings.blurSpread = isActive ? VolumeData.blurSpread : _settingsDefault.blurSpread;
-            _settings.liquid2DLayerMask = isActive ? VolumeData.liquid2DLayerMask : _settingsDefault.liquid2DLayerMask;
+            _settings.coreKeepIntensity = isActive ? VolumeData.coreKeepIntensity : _settingsDefault.coreKeepIntensity;
             _settings.scaleFactor = isActive ? VolumeData.scaleFactor : _settingsDefault.scaleFactor;
+            
             _settings.cutoff = isActive ? VolumeData.cutoff : _settingsDefault.cutoff;
             _settings.obstructionLayerMask = isActive ? VolumeData.obstructionLayerMask : _settingsDefault.obstructionLayerMask;
             // 更新遮罩过滤设置。

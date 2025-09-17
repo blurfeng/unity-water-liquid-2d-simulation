@@ -78,6 +78,7 @@ MonoBehaviour:
     liquid2DLayerMask: 4
     iterations: 4
     blurSpread: 0.45
+    coreKeepIntensity: 0.5
     scaleFactor: 4
     cutoff: 0.2
     obstructionLayerMask:
@@ -105,6 +106,7 @@ MonoBehaviour:
     liquid2DLayerMask: 2
     iterations: 7
     blurSpread: 0.6
+    coreKeepIntensity: 0.4
     scaleFactor: 4
     cutoff: 0.2
     obstructionLayerMask:
