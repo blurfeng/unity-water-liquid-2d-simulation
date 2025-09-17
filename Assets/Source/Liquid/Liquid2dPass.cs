@@ -102,9 +102,9 @@ namespace Fs.Liquid2D
             
             // 模糊 Pass 相关。
             public Material materialBlur;
-            public TextureHandle blurThLeft;
-            public TextureHandle blurThRight;
-            public int blurIndex;
+            public TextureHandle blurSource;
+            public TextureHandle blurDestination;
+            public int blurIteration;
             
             // 流体遮挡 Pass 相关。
             public RendererListHandle liquidOcclusionRendererListHandle;
@@ -146,7 +146,7 @@ namespace Fs.Liquid2D
             bool isSceneView = cameraData.cameraType == CameraType.SceneView;
 
             // ---- 添加绘制到 Pass ---- //
-            using (var builder = renderGraph.AddRasterRenderPass<PassData>(GetName("liquid 2d Particles"), out var passData))
+            using (var builder = renderGraph.AddRasterRenderPass<PassData>(GetName("Particles"), out var passData))
             {
                 // 通道数据设置。
                 // passData.resourceData = resourceData;
@@ -194,50 +194,41 @@ namespace Fs.Liquid2D
             // 复制流体粒子纹理到第一个模糊纹理和源颜色纹理。
             renderGraph.AddBlitPass(
                 liquidParticleTh, blurThLeft, 
-                Vector2.one, Vector2.zero, passName: GetName("Liquid 2d particles to Blur"));
+                Vector2.one, Vector2.zero, passName: GetName("Particles to Blur"));
             
             // ---- 添加绘制到 Pass ---- //
             // 进行多次迭代模糊。
             int blurCount = 0;
             for (var i = 0; i < _settings.iterations; ++i)
             {
-                using (var builder = renderGraph.AddRasterRenderPass<PassData>(GetName($"liquid 2d Blur {i}"), out PassData passData))
-                {
-                    // 通道数据设置。
-                    // passData.resourceData = resourceData;
-                    // passData.cameraData = cameraData;
-                    passData.settings = _settings;
-                    
-                    passData.materialBlur = _materialBlur;
-                    passData.blurThLeft = blurThLeft;
-                    passData.blurThRight = blurThRight;
-                    passData.blurIndex = blurCount = i;
-                    
-                    // 设置渲染目标纹理句柄和声明使用纹理句柄。
-                    builder.SetRenderAttachment(i % 2 == 0 ? blurThRight : blurThLeft, 0, AccessFlags.Write);
-                    // 用于记录每个模糊片元的原有颜色。
-                    builder.UseTexture(i % 2 == 0 ? blurThLeft : blurThRight, AccessFlags.Read);
-            
-                    // 设置绘制方法。
-                    builder.SetRenderFunc((PassData data, RasterGraphContext context) => ExecutePassBlur(data, context));
-                }
+                blurCount = i;
                 
-                // 选择一次前期迭代的结果作为流体核保持用TH，最后叠加到模糊的最终结果上。
+                // 交替使用两个模糊纹理句柄进行模糊。
+                PassBlur(
+                    renderGraph, 
+                    i % 2 == 0 ? blurThLeft : blurThRight, i % 2 == 0 ? blurThRight : blurThLeft, 
+                    i, GetName($"Blur: {i}"));
+                
+                // ---- 选择前期的Blur为粒子核心保持图 ---- //
                 if (i == 2)
                 {
                     renderGraph.AddBlitPass(
                         blurThRight, blurThCore, 
-                        Vector2.one, Vector2.zero, passName: GetName("Blur Core"));
+                        Vector2.one, Vector2.zero, passName: GetName("Blur: Get Blur Core"));
                 }
             }
             
-            blurDesc.name = GetName("Blur Final");
-            TextureHandle blurThFinal = renderGraph.CreateTexture(blurDesc);
-            var blurThSource = blurCount % 2 == 0 ? blurThRight : blurThLeft;
-            using (var builder = renderGraph.AddRasterRenderPass<PassData>("Blur CombineTwo ", out var passData))
+            // ---- 核心保持图叠加 ---- //
+            // 将前期模糊的一张图作为核心保持图，和最后一张模糊图进行叠加，得到最终的模糊图。
+            // 这样在模糊迭代多且强度大时，也能保持粒子核心的形状，防止孤立粒子被过度模糊透明度过低而被裁剪掉。
+            // 更接近 SDF 的效果。
+            blurDesc.name = GetName("Blur Combine Core");
+            TextureHandle blurThCombineCore = renderGraph.CreateTexture(blurDesc);
+            var blurThSource = blurCount % 2 == 0 ? blurThRight : blurThLeft; // 最后一张模糊图。
+            using (var builder = renderGraph.AddRasterRenderPass<PassData>("Blur: Combine Core ", out var passData))
             {
                 // 设置渲染目标纹理句柄和声明使用纹理句柄。
-                builder.SetRenderAttachment(blurThFinal, 0, AccessFlags.Write);
+                builder.SetRenderAttachment(blurThCombineCore, 0, AccessFlags.Write);
                 builder.UseTexture(blurThSource, AccessFlags.Read);
                 builder.UseTexture(blurThCore, AccessFlags.Read);
             
@@ -252,9 +243,14 @@ namespace Fs.Liquid2D
                     cmd.DrawProcedural(
                         Matrix4x4.identity, MaterialBlurCombineTwo, 0, 
                         MeshTopology.Triangles, 3, 1, mpb);
-                    //Blitter.BlitTexture(cmd, sourceTh, Vector2.one, material, 0);
                 });
             }
+            
+            // ---- 叠加后的图再做一次模糊 ---- //
+            // 这一步使得核心保持图和最后的模糊图更好的融合在一起。
+            blurDesc.name = GetName("Blur Final");
+            TextureHandle blurThFinal = renderGraph.CreateTexture(blurDesc);
+            PassBlur(renderGraph, blurThCombineCore, blurThFinal, 0, GetName($"Blur Final"));
             
             #endregion
 
@@ -385,6 +381,34 @@ namespace Fs.Liquid2D
             }
         }
 
+        #region 模糊 Pass
+
+        private void PassBlur(RenderGraph renderGraph, TextureHandle source, TextureHandle destination, int iteration, string passName)
+        {
+            using (var builder = renderGraph.AddRasterRenderPass<PassData>(passName, out PassData passData))
+            {
+                // 通道数据设置。
+                // passData.resourceData = resourceData;
+                // passData.cameraData = cameraData;
+                passData.settings = _settings;
+                    
+                passData.materialBlur = _materialBlur;
+                passData.blurSource = source;
+                passData.blurDestination = destination;
+                passData.blurIteration = iteration;
+                    
+                // 设置渲染目标纹理句柄和声明使用纹理句柄。
+                builder.SetRenderAttachment(destination, 0, AccessFlags.Write);
+                // 用于记录每个模糊片元的原有颜色。
+                builder.UseTexture(source, AccessFlags.Read);
+            
+                // 设置绘制方法。
+                builder.SetRenderFunc((PassData data, RasterGraphContext context) => ExecutePassBlur(data, context));
+            }
+        }
+
+        #endregion
+
         /// <summary>
         /// 模糊 Pass。对输入的流体纹理进行模糊处理，并输出到下一个模糊纹理。
         /// </summary>
@@ -395,21 +419,22 @@ namespace Fs.Liquid2D
             var cmd = context.cmd;
             
             // 模糊偏移强度递增，并乘以缩放比例。
-            float offset = (0.5f + data.blurIndex * data.settings.blurSpread) * 3f / (int)data.settings.scaleFactor;
+            float offset = (0.5f + data.blurIteration * data.settings.blurSpread) * 3f / (int)data.settings.scaleFactor;
 
             // 设置模糊材质属性块，传入当前模糊材质和偏移强度。
             MaterialPropertyBlock mpb = new MaterialPropertyBlock();
-            mpb.SetTexture(ShaderIds.MainTexId, data.blurIndex % 2 == 0 ? data.blurThLeft : data.blurThRight);
+            // 传入当前模糊纹理。
+            mpb.SetTexture(ShaderIds.MainTexId,data.blurSource);
+            // 设置模糊偏移强度。
             mpb.SetFloat(ShaderIds.BlurOffsetId, offset);
+            // 设置模糊采样模式。
             if (data.settings.blurSamplingMode == EBlurSamplingMode.Four)
             {
-                // 4次采样。
-                data.materialBlur.DisableKeyword("EIGHT_SAMPLINGS");
+                data.materialBlur.DisableKeyword("EIGHT_SAMPLINGS"); // 4次采样。
             }
             else
             {
-                // 8次采样。
-                data.materialBlur.EnableKeyword("EIGHT_SAMPLINGS");
+                data.materialBlur.EnableKeyword("EIGHT_SAMPLINGS"); // 8次采样。
             }
 
             // 绘制一个全屏三角形，使用模糊材质，并传入属性块。
@@ -522,9 +547,7 @@ namespace Fs.Liquid2D
         /// <param name="renderGraph"></param>
         /// <param name="source"></param>
         /// <param name="renderAttachment"></param>
-        private static void ClonePass(
-            RenderGraph renderGraph, 
-            TextureHandle source, TextureHandle renderAttachment)
+        private static void ClonePass(RenderGraph renderGraph, TextureHandle source, TextureHandle renderAttachment)
         {
             using (var builder = renderGraph.AddRasterRenderPass<PassData>("liquid 2d Clone", out var passData))
             {
@@ -592,7 +615,7 @@ namespace Fs.Liquid2D
 
         private string GetName(string name)
         {
-            return $"[{_settings.nameTag}] {name}";
+            return $"[Liquid 2D] [{_settings.nameTag}] {name}";
         }
 
         #endregion

@@ -99,6 +99,7 @@ Shader "Custom/URP/2D/Liquid2DEffect"
                 col = lerp(col, colOcclusionTex, colOcclusionTex.a);
 
                 col.a = saturate(col.a + _AlphaOffset);
+                // TODO: 允许添加一个颜色并设置混合权重。
                 return col;
                 
 				// half4 col = SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv);
