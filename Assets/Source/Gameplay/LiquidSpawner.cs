@@ -11,6 +11,9 @@ namespace Fs.Liquid2D
     public class LiquidSpawner : MonoBehaviour
     {
         [Header("Common")]
+        [Tooltip("是否在启动时自动开始喷射")]
+        public bool startOnAwake = true;
+        
         [Tooltip("启动时的延迟时间")]
         public float startDelay = 2f;
         
@@ -18,89 +21,151 @@ namespace Fs.Liquid2D
         [Tooltip("流体粒子预制体（需挂载Liquid2DParticleRenderer）")]
         public List<LiquidParticle> liquidParticles = new List<LiquidParticle>();
 
-        [Tooltip("每秒生成水量（粒子数量）")]
-        public int spawnRate = 10;
-
-        [Range(0, 360), Tooltip("喷射方向（角度，0为下，逆时针）")]
-        public float ejectAngle = 0f;
+        [Range(1, 100), Tooltip("喷嘴宽度。")]
+        public float nozzleWidth = 1f;
+        
+        [Tooltip("流量。每秒喷射的粒子数量。")]
+        public float flowRate = 26f;
+        
+        [Tooltip("尺寸随机范围（最小值，最大值）")]
+        public Vector2 sizeRandomRange = new Vector2(0.9f, 1.2f);
 
         [Tooltip("喷射力大小")]
-        public float ejectForce = 5f;
+        public float ejectForce = 16f;
         
-        [Header("摆动设置")]
+        [Tooltip("喷射力随机范围（最小值，最大值）")]
+        public Vector2 ejectForceRandomRange = new Vector2(0.9f, 1.2f);
+        
+        [Header("Swing")]
         [Tooltip("摆动角度范围（最大偏移，单位度）")]
-        public float swingAngleRange = 90f;
+        public float swingAngleRange = 0f;
 
         [Tooltip("摆动速度（周期/秒）")]
         public float swingSpeed = 0.2f;
 
-        private Coroutine _spawnRoutine;
-        private float _swingTime;
-
-        public void OnEnable()
+        public Transform TransformGet
         {
-            if (_spawnRoutine == null)
-                _spawnRoutine = StartCoroutine(DelayedStart());
-        }
-
-        public void OnDisable()
-        {
-            if (_spawnRoutine != null)
+            get
             {
-                StopCoroutine(_spawnRoutine);
-                _spawnRoutine = null;
+                if (_transform == null) _transform = transform;
+                return _transform;
+            }
+        }
+        private Transform _transform;
+
+        private bool _isDelayedStarted = false;
+        private float _timer = 0f;
+        private float _swingTime;
+        
+        // 是否正在喷射中。
+        private bool _isSpawning = false;
+        
+        private void Start()
+        {
+            if (startOnAwake)
+            {
+                StartSpawn();
             }
         }
         
         private void Update()
         {
+            if (!_isSpawning) return;
+            
+            // 延迟启动。
+            if (!_isDelayedStarted)
+            {
+                if (startDelay > 0f)
+                {
+                    _timer += Time.deltaTime;
+                    if (_timer >= startDelay)
+                    {
+                        _isDelayedStarted = true;
+                        _timer = 0f;
+                    }
+                }
+                else
+                {
+                    _isDelayedStarted = true;
+                }
+                return;
+            }
+            
+            // 摆动。
             if (swingAngleRange > 0f && swingSpeed > 0f)
             {
                 _swingTime += Time.deltaTime;
             }
+            
+            // 喷射粒子。
+            if (flowRate > 0f)
+            {
+                _timer += Time.deltaTime;
+                float intetval = 1f / flowRate;
+                while (_timer >= intetval)
+                {
+                    _timer -= intetval;
+                    SpawnOne();
+                }
+            }
+        }
+
+        public void StartSpawn()
+        {
+            if (_isSpawning) return;
+            _isSpawning = true;
         }
         
+        public void StopSpawn()
+        {
+            if (!_isSpawning) return;
+            _isSpawning = false;
+        }
+        
+        /// <summary>
+        /// 获取当前喷射角度，包含摆动偏移。
+        /// </summary>
+        /// <returns></returns>
         private float GetCurrentEjectAngle()
         {
             if (swingAngleRange > 0f && swingSpeed > 0f)
             {
                 float offset = Mathf.Sin(_swingTime * swingSpeed * Mathf.PI * 2f) * swingAngleRange;
-                return ejectAngle + offset;
+                return offset;
             }
-            return ejectAngle;
+            return 0f;
         }
         
-        private IEnumerator DelayedStart()
+        private Vector2 GetCurrentEjectDirection()
         {
-            if (startDelay > 0f)
-                yield return new WaitForSeconds(startDelay);
-
-            _spawnRoutine = StartCoroutine(SpawnCoroutine());
+            Vector2 forward = -TransformGet.up; // 默认朝下
+            Vector2 dir = Quaternion.Euler(0, 0, GetCurrentEjectAngle()) * forward;
+            return dir;
         }
 
-        private IEnumerator SpawnCoroutine()
-        {
-            while (true)
-            {
-                float interval = 1f / Mathf.Max(1, spawnRate);
-                for (int i = 0; i < spawnRate; i++)
-                {
-                    SpawnOne();
-                    yield return new WaitForSeconds(interval);
-                }
-            }
-        }
-
+        /// <summary>
+        /// 生成一个流体粒子。
+        /// </summary>
         private void SpawnOne()
         {
+            // 随机选择一个流体粒子预制体。
             if (liquidParticles.Count == 0) return;
-
             LiquidParticle liquidParticle = liquidParticles.RandomWeight();
             
-            float angle = GetCurrentEjectAngle();
-            Vector2 dir = Quaternion.Euler(0, 0, angle) * Vector2.down;
-            var go = Instantiate(liquidParticle.liquidPrefab, transform.position, Quaternion.identity);
+            // 获取当前喷射方向。
+            Vector2 dir = GetCurrentEjectDirection();
+            Transform ts = TransformGet;
             
+            // 随机获取生成位置。
+            Vector2 normal = new Vector2(-dir.y, dir.x); // 计算法线
+            float offset = UnityEngine.Random.Range(-nozzleWidth * 0.5f, nozzleWidth * 0.5f);
+            Vector3 spawnPos = ts.position + (Vector3)(normal * offset);
+            
+            // 生成预制体。
+            var go = Instantiate(liquidParticle.liquidPrefab, spawnPos, Quaternion.identity);
+            go.transform.SetParent(ts);
+            
+            // 检查是否挂载 Liquid2DParticleRenderer。
             var lRenderer = go.GetComponent<Liquid2DParticleRenderer>();
             if (lRenderer == null)
             {
@@ -108,11 +173,24 @@ namespace Fs.Liquid2D
                 Destroy(go);
                 return;
             }
-
+            
+            // 随机设置尺寸。
+            if (sizeRandomRange.y > sizeRandomRange.x && sizeRandomRange.x > 0f)
+            {
+                float size = UnityEngine.Random.Range(sizeRandomRange.x, sizeRandomRange.y);
+                go.transform.localScale *= size;
+            }
+            
             var rb = go.GetComponent<Rigidbody2D>();
             if (rb != null)
             {
-                rb.linearVelocity = dir * ejectForce;
+                // 随机设置喷射力。
+                float force = ejectForce;
+                if (ejectForceRandomRange.y > ejectForceRandomRange.x && ejectForceRandomRange.x >= 0f)
+                {
+                    force *= UnityEngine.Random.Range(ejectForceRandomRange.x, ejectForceRandomRange.y);
+                }
+                rb.AddForce(dir * force, ForceMode2D.Impulse);
             }
             
             lRenderer.SetLifetime(liquidParticle.lifetime);
@@ -122,8 +200,8 @@ namespace Fs.Liquid2D
         private void OnDrawGizmos()
         {
             Gizmos.color = Color.cyan;
-            Vector3 start = transform.position;
-            Vector2 dir = Quaternion.Euler(0, 0, GetCurrentEjectAngle()) * Vector2.down;
+            Vector3 start = TransformGet.position;
+            Vector2 dir = GetCurrentEjectDirection();
             Vector3 end = start + (Vector3)dir * 3.5f;
 
             Gizmos.DrawLine(start, end);
