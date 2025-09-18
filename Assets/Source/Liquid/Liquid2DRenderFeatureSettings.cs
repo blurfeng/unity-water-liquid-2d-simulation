@@ -59,7 +59,10 @@ namespace Fs.Liquid2D
         public ELiquid2DLayer liquid2DLayerMask = ELiquid2DLayer.Water;
         
         [Range(0f, 1f), Tooltip("流体透明边缘的裁剪阈值，越大边缘越锐利，水体范围膨胀越少。")]
-        public float cutoff = 0.2f;
+        public float cutoff = 0.45f;
+        
+        [Range(0f, 1f), Tooltip("整体透明度倍率，越大越不透明。")]
+        public float opacityRate = 1f;
         
         [Tooltip("液体遮挡层遮罩。指定哪些层的物体会遮挡液体效果。")]
         public LayerMask obstructionLayerMask;

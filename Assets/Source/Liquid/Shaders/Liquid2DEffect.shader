@@ -60,6 +60,7 @@ Shader "Custom/URP/2D/Liquid2DEffect"
             SAMPLER(sampler_linear_clamp_ObstructionTex);
 
             half _Cutoff;
+            half _OpacityRate; // 透明度倍率
             
             // half _EdgeClip;
             // half4 _Color;
@@ -100,7 +101,7 @@ Shader "Custom/URP/2D/Liquid2DEffect"
 
                 // TODO: 可以正面遮挡流体的颜色处理，比如玻璃瓶的正面，给流体盖上一层透明颜色。Occluder层。
 
-                col.a = saturate(col.a);
+                col.a = col.a * _OpacityRate;
                 return col;
                 
 				// half4 col = SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv);

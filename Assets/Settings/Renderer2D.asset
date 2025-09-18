@@ -77,6 +77,7 @@ MonoBehaviour:
     nameTag: Magma
     liquid2DLayerMask: 4
     cutoff: 0.2
+    opacityRate: 1
     obstructionLayerMask:
       serializedVersion: 2
       m_Bits: 64
@@ -106,6 +107,7 @@ MonoBehaviour:
     nameTag: Water
     liquid2DLayerMask: 2
     cutoff: 0.5
+    opacityRate: 0.6
     obstructionLayerMask:
       serializedVersion: 2
       m_Bits: 64

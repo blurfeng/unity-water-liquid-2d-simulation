@@ -23,6 +23,7 @@ namespace Fs.Liquid2D
             internal static readonly int BlurOffsetId = Shader.PropertyToID("_BlurOffset");
             internal static readonly int Cutoff = Shader.PropertyToID("_Cutoff");
             internal static readonly int ObstructionTex = Shader.PropertyToID("_ObstructionTex");
+            internal static readonly int OpacityRate = Shader.PropertyToID("_OpacityRate");
         }
         
         private static readonly ShaderTagId _shaderTagId = new ShaderTagId("UniversalForward");
@@ -489,6 +490,7 @@ namespace Fs.Liquid2D
             mpb.SetTexture(ShaderIds.MainTexId, data.blurFinalTh);
             mpb.SetTexture(ShaderIds.ObstructionTex, data.obstructionTh);
             mpb.SetFloat(ShaderIds.Cutoff, data.settings.cutoff);
+            mpb.SetFloat(ShaderIds.OpacityRate, data.settings.opacityRate);
             // 绘制一个全屏三角形，使用外描边材质，并传入属性块。
             cmd.DrawProcedural(Matrix4x4.identity, data.materialEffect, 0, MeshTopology.Triangles, 3, 1,
                 mpb);
@@ -542,8 +544,10 @@ namespace Fs.Liquid2D
             _settings.blur.scaleFactor = isActive ? VolumeData.blur.scaleFactor : _settingsDefault.blur.scaleFactor;
             
             _settings.cutoff = isActive ? VolumeData.cutoff : _settingsDefault.cutoff;
+            _settings.opacityRate = isActive ? VolumeData.opacityRate : _settingsDefault.opacityRate;
+            
+            // 阻挡层遮罩。
             _settings.obstructionLayerMask = isActive ? VolumeData.obstructionLayerMask : _settingsDefault.obstructionLayerMask;
-            // 更新遮罩过滤设置。
             if (_obstructionFilteringSettings.layerMask != _settings.obstructionLayerMask)
             {
                 _obstructionFilteringSettings = new FilteringSettings(RenderQueueRange.all, _settings.obstructionLayerMask);
