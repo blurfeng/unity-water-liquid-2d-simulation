@@ -30,44 +30,60 @@ namespace Fs.Liquid2D
     [Serializable]
     public class Liquid2DRenderFeatureSettings
     {
+        [Serializable]
+        public class Blur
+        {
+            [Range(0, 16), Tooltip("迭代次数，越大越模糊。")]
+            public int iterations = 7;
+        
+            [Range(0.01f, 3f), Tooltip("每次迭代的模糊扩散度，越大越模糊。")]
+            public float blurSpread = 0.8f;
+        
+            [Range(0, 1), Tooltip("核心保持强度，越大流体核心部分越清晰。迭代次数增加时，建议适当调大此值以保持流体核心清晰。")]
+            public float coreKeepIntensity = 0.4f;
+
+            [Tooltip("渲染缩放比例，越大性能越好，但边界越不清晰。")]
+            public EScaleFactor scaleFactor = EScaleFactor.X4;
+            
+            [SerializeField, ColorUsage(true, true), Tooltip("流体模糊边缘色。作为模糊时底图的颜色，最终影响整体水体的边缘色（默认为当前相机场景纹理颜色）。")]
+            public Color blurEdgeColor = Color.clear;
+        
+            [Range(0f, 1f), Tooltip("流体模糊边缘色强度。0时不显示边缘色（默认为当前相机场景纹理颜色），1为完全显示边缘色。")]
+            public float blurEdgeColorIntensity = 0f;
+        }
+        
         [Tooltip("2D流体 Renderer Feature 名称标签，用于区分不同的 Renderer Feature 配置。")]
         public string nameTag = "Liquid2D";
         
         [Tooltip("2D流体层遮罩。只会渲染设定的流体层的粒子。")]
         public ELiquid2DLayer liquid2DLayerMask = ELiquid2DLayer.Water;
         
-        [Range(0, 16), Tooltip("迭代次数，越大越模糊。")]
-        public int iterations = 7;
-        
-        [Range(0.01f, 3f), Tooltip("每次迭代的模糊扩散度，越大越模糊。")]
-        public float blurSpread = 0.8f;
-        
-        [Range(0, 1), Tooltip("核心保持强度，越大流体核心部分越清晰。迭代次数增加时，建议适当调大此值以保持流体核心清晰。")]
-        public float coreKeepIntensity = 0.4f;
-
-        [Tooltip("渲染缩放比例，越大性能越好，但边界越不清晰。")]
-        public EScaleFactor scaleFactor = EScaleFactor.X4;
-
         [Range(0f, 1f), Tooltip("流体透明边缘的裁剪阈值，越大边缘越锐利，水体范围膨胀越少。")]
         public float cutoff = 0.2f;
         
         [Tooltip("液体遮挡层遮罩。指定哪些层的物体会遮挡液体效果。")]
         public LayerMask obstructionLayerMask;
-        
-        [SerializeField, ColorUsage(true, true), Tooltip("流体模糊边缘色。作为模糊时底图的颜色，最终影响整体水体的边缘色（默认为当前相机场景纹理颜色）。")]
-        public Color blurEdgeColor = Color.clear;
-        
-        [Range(0f, 1f), Tooltip("流体模糊边缘色强度。0时不显示边缘色（默认为当前相机场景纹理颜色），1为完全显示边缘色。")]
-        public float blurEdgeColorIntensity = 0f;
 
+        [Tooltip("流体模糊设置。")]
+        public Blur blur;
+        
         public Liquid2DRenderFeatureSettings Clone()
         {
             return new Liquid2DRenderFeatureSettings
             {
                 nameTag = nameTag,
                 liquid2DLayerMask = liquid2DLayerMask,
-                iterations = iterations,
-                blurSpread = blurSpread
+                cutoff = cutoff,
+                obstructionLayerMask = obstructionLayerMask,
+                blur = new Blur
+                {
+                    iterations = blur.iterations,
+                    blurSpread = blur.blurSpread,
+                    coreKeepIntensity = blur.coreKeepIntensity,
+                    scaleFactor = blur.scaleFactor,
+                    blurEdgeColor = blur.blurEdgeColor,
+                    blurEdgeColorIntensity = blur.blurEdgeColorIntensity
+                }
             };
         }
     }

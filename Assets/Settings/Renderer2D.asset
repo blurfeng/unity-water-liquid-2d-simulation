@@ -76,16 +76,17 @@ MonoBehaviour:
   renderFeatureSettings:
     nameTag: Magma
     liquid2DLayerMask: 4
-    iterations: 4
-    blurSpread: 0.45
-    coreKeepIntensity: 0.5
-    scaleFactor: 4
     cutoff: 0.2
     obstructionLayerMask:
       serializedVersion: 2
       m_Bits: 64
-    blurEdgeColor: {r: 0.3301887, g: 0, b: 0, a: 0}
-    blurEdgeColorIntensity: 0
+    blur:
+      iterations: 4
+      blurSpread: 0.6
+      coreKeepIntensity: 0.4
+      scaleFactor: 4
+      blurEdgeColor: {r: 0.16037738, g: 0, b: 0, a: 1}
+      blurEdgeColorIntensity: 0.4
 --- !u!114 &8380843845757841626
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -104,13 +105,14 @@ MonoBehaviour:
   renderFeatureSettings:
     nameTag: Water
     liquid2DLayerMask: 2
-    iterations: 0
-    blurSpread: 0.6
-    coreKeepIntensity: 0.761
-    scaleFactor: 4
     cutoff: 0.35
     obstructionLayerMask:
       serializedVersion: 2
       m_Bits: 64
-    blurEdgeColor: {r: 0, g: 0.009350888, b: 0.16981131, a: 0}
-    blurEdgeColorIntensity: 0.5
+    blur:
+      iterations: 0
+      blurSpread: 0.8
+      coreKeepIntensity: 0.4
+      scaleFactor: 4
+      blurEdgeColor: {r: 0, g: 0, b: 0, a: 0}
+      blurEdgeColorIntensity: 0

@@ -193,14 +193,14 @@ namespace Fs.Liquid2D
             TextureHandle blurThFinal;
             
             // 多次迭代模糊。
-            if (_settings.iterations > 0)
+            if (_settings.blur.iterations > 0)
             {
                 // ----- 创建纹理句柄 ----- //
                 // 模糊纹理描述。
                 TextureDesc blurDesc = mainDesc;
                 // 这里使用当前相机尺寸四分之一的尺寸来提升性能。// 注意。缩放尺寸也会影响模糊的效果。
-                blurDesc.width = cameraData.cameraTargetDescriptor.width / (int)_settings.scaleFactor;
-                blurDesc.height = cameraData.cameraTargetDescriptor.height / (int)_settings.scaleFactor;
+                blurDesc.width = cameraData.cameraTargetDescriptor.width / (int)_settings.blur.scaleFactor;
+                blurDesc.height = cameraData.cameraTargetDescriptor.height / (int)_settings.blur.scaleFactor;
                 
                 blurDesc.name = GetName("Blur Left");
                 TextureHandle blurThLeft = renderGraph.CreateTexture(blurDesc);
@@ -216,11 +216,11 @@ namespace Fs.Liquid2D
                 
                 // ---- 添加绘制到 Pass ---- //
                 // 计算核心保持使用哪次迭代的模糊纹理。
-                int coreKeepIteration = Mathf.Clamp((int)(_settings.iterations *  (1 - _settings.coreKeepIntensity)), 1, _settings.iterations - 1);
-                bool coreKeep = coreKeepIteration < _settings.iterations;
+                int coreKeepIteration = Mathf.Clamp((int)(_settings.blur.iterations *  (1 - _settings.blur.coreKeepIntensity)), 1, _settings.blur.iterations - 1);
+                bool coreKeep = coreKeepIteration < _settings.blur.iterations;
                 
                 TextureHandle blurThTarget = blurThLeft; // 渲染目标纹理句柄。
-                for (var i = 0; i < _settings.iterations; ++i)
+                for (var i = 0; i < _settings.blur.iterations; ++i)
                 {
                     // 交替使用两个模糊纹理句柄进行模糊。
                     PassBlur(
@@ -237,7 +237,7 @@ namespace Fs.Liquid2D
                     }
                     
                     // 记录最后一张模糊图作为最终模糊图。
-                    if (i == _settings.iterations - 1)
+                    if (i == _settings.blur.iterations - 1)
                     {
                         blurThTarget = i % 2 == 0 ? blurThRight : blurThLeft;
                     }
@@ -457,7 +457,7 @@ namespace Fs.Liquid2D
             var cmd = context.cmd;
             
             // 模糊偏移强度递增，并乘以缩放比例。
-            float offset = (0.5f + data.blurIteration * data.settings.blurSpread) * 3f / (int)data.settings.scaleFactor;
+            float offset = (0.5f + data.blurIteration * data.settings.blur.blurSpread) * 3f / (int)data.settings.blur.scaleFactor;
 
             // 设置模糊材质属性块，传入当前模糊材质和偏移强度。
             MaterialPropertyBlock mpb = new MaterialPropertyBlock();
@@ -536,10 +536,10 @@ namespace Fs.Liquid2D
             // ---- 重载设置。 ---- //
             _settings.liquid2DLayerMask = isActive ? VolumeData.liquid2DLayerMask : _settingsDefault.liquid2DLayerMask;
             
-            _settings.iterations = isActive ? VolumeData.iterations : _settingsDefault.iterations;
-            _settings.blurSpread = isActive ? VolumeData.blurSpread : _settingsDefault.blurSpread;
-            _settings.coreKeepIntensity = isActive ? VolumeData.coreKeepIntensity : _settingsDefault.coreKeepIntensity;
-            _settings.scaleFactor = isActive ? VolumeData.scaleFactor : _settingsDefault.scaleFactor;
+            _settings.blur.iterations = isActive ? VolumeData.blur.iterations : _settingsDefault.blur.iterations;
+            _settings.blur.blurSpread = isActive ? VolumeData.blur.blurSpread : _settingsDefault.blur.blurSpread;
+            _settings.blur.coreKeepIntensity = isActive ? VolumeData.blur.coreKeepIntensity : _settingsDefault.blur.coreKeepIntensity;
+            _settings.blur.scaleFactor = isActive ? VolumeData.blur.scaleFactor : _settingsDefault.blur.scaleFactor;
             
             _settings.cutoff = isActive ? VolumeData.cutoff : _settingsDefault.cutoff;
             _settings.obstructionLayerMask = isActive ? VolumeData.obstructionLayerMask : _settingsDefault.obstructionLayerMask;
@@ -550,8 +550,8 @@ namespace Fs.Liquid2D
             }
             
             // 边缘色和强度。实际上在 Blur 前作为底图进行混合。默认的底图是当前相机的场景纹理（alpha为0）。
-            _settings.blurEdgeColor = isActive ? VolumeData.blurEdgeColor : _settingsDefault.blurEdgeColor;
-            _settings.blurEdgeColorIntensity = isActive ? VolumeData.blurEdgeColorIntensity : _settingsDefault.blurEdgeColorIntensity;
+            _settings.blur.blurEdgeColor = isActive ? VolumeData.blur.blurEdgeColor : _settingsDefault.blur.blurEdgeColor;
+            _settings.blur.blurEdgeColorIntensity = isActive ? VolumeData.blur.blurEdgeColorIntensity : _settingsDefault.blur.blurEdgeColorIntensity;
         }
 
         #endregion
@@ -641,8 +641,8 @@ namespace Fs.Liquid2D
             {
                 passData.grabAsBgMaterial = MaterialGrabAsBg;
                 passData.grabAsBgSourceTh = source;
-                passData.grabAsBgEdgeColor = _settings.blurEdgeColor;
-                passData.grabAsBgEdgeColorIntensity = _settings.blurEdgeColorIntensity;
+                passData.grabAsBgEdgeColor = _settings.blur.blurEdgeColor;
+                passData.grabAsBgEdgeColorIntensity = _settings.blur.blurEdgeColorIntensity;
             
                 // 设置渲染目标纹理句柄和声明使用纹理句柄。
                 builder.SetRenderAttachment(renderAttachment, 0, AccessFlags.Write);
