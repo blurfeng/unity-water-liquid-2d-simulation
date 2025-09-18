@@ -9,6 +9,14 @@ PrefabInstance:
     m_TransformParent: {fileID: 0}
     m_Modifications:
     - target: {fileID: 4903677369886707364, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 3
+      objectReference: {fileID: 0}
+    - target: {fileID: 4903677369886707364, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 3
+      objectReference: {fileID: 0}
+    - target: {fileID: 4903677369886707364, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
       objectReference: {fileID: 0}
@@ -49,12 +57,24 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 5143337698038929875, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
+      propertyPath: settings.sprite
+      value: 
+      objectReference: {fileID: -7094705989716520066, guid: 474aa5d06b976c5449aa374d5c77d9aa, type: 3}
+    - target: {fileID: 5143337698038929875, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
+      propertyPath: settings.color.a
+      value: 0.43137255
+      objectReference: {fileID: 0}
+    - target: {fileID: 5143337698038929875, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
       propertyPath: settings.color.b
       value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 5143337698038929875, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
       propertyPath: settings.color.g
       value: 0.26586103
+      objectReference: {fileID: 0}
+    - target: {fileID: 5961824672208803902, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
+      propertyPath: m_Radius
+      value: 0.1
       objectReference: {fileID: 0}
     - target: {fileID: 6359955899863538535, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
       propertyPath: m_Name

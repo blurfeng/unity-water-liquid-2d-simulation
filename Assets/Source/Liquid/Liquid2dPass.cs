@@ -189,81 +189,108 @@ namespace Fs.Liquid2D
             
             #region 模糊处理
             
-            // ----- 创建纹理句柄 ----- //
-            // 模糊纹理描述。
-            TextureDesc blurDesc = mainDesc;
-            // 这里使用当前相机尺寸四分之一的尺寸来提升性能。// 注意。缩放尺寸也会影响模糊的效果。
-            blurDesc.width = cameraData.cameraTargetDescriptor.width / (int)_settings.scaleFactor;
-            blurDesc.height = cameraData.cameraTargetDescriptor.height / (int)_settings.scaleFactor;
+            // 最终模糊纹理句柄，给到之后的处理步骤。
+            TextureHandle blurThFinal;
             
-            blurDesc.name = GetName("Blur Left");
-            TextureHandle blurThLeft = renderGraph.CreateTexture(blurDesc);
-            blurDesc.name = GetName("Blur Right");
-            TextureHandle blurThRight = renderGraph.CreateTexture(blurDesc);
-            blurDesc.name = GetName("Blur First");
-            TextureHandle blurThCore = renderGraph.CreateTexture(blurDesc);
-            
-            // 复制流体粒子纹理到第一个模糊纹理和源颜色纹理。
-            renderGraph.AddBlitPass(
-                liquidParticleTh, blurThLeft, 
-                Vector2.one, Vector2.zero, passName: GetName("Particles to Blur"));
-            
-            // ---- 添加绘制到 Pass ---- //
-            // 进行多次迭代模糊。
-            int blurCount = 0;
-            for (var i = 0; i < _settings.iterations; ++i)
+            // 多次迭代模糊。
+            if (_settings.iterations > 0)
             {
-                blurCount = i;
+                // ----- 创建纹理句柄 ----- //
+                // 模糊纹理描述。
+                TextureDesc blurDesc = mainDesc;
+                // 这里使用当前相机尺寸四分之一的尺寸来提升性能。// 注意。缩放尺寸也会影响模糊的效果。
+                blurDesc.width = cameraData.cameraTargetDescriptor.width / (int)_settings.scaleFactor;
+                blurDesc.height = cameraData.cameraTargetDescriptor.height / (int)_settings.scaleFactor;
                 
-                // 交替使用两个模糊纹理句柄进行模糊。
-                PassBlur(
-                    renderGraph, 
-                    i % 2 == 0 ? blurThLeft : blurThRight, i % 2 == 0 ? blurThRight : blurThLeft, 
-                    i, GetName($"Blur: {i}"));
+                blurDesc.name = GetName("Blur Left");
+                TextureHandle blurThLeft = renderGraph.CreateTexture(blurDesc);
+                blurDesc.name = GetName("Blur Right");
+                TextureHandle blurThRight = renderGraph.CreateTexture(blurDesc);
+                blurDesc.name = GetName("Blur First");
+                TextureHandle blurThCore = renderGraph.CreateTexture(blurDesc);
                 
-                // ---- 选择前期的Blur为粒子核心保持图 ---- //
+                // 复制流体粒子纹理到第一个模糊纹理和源颜色纹理。
+                renderGraph.AddBlitPass(
+                    liquidParticleTh, blurThLeft, 
+                    Vector2.one, Vector2.zero, passName: GetName("Particles to Blur"));
+                
+                // ---- 添加绘制到 Pass ---- //
+                // 计算核心保持使用哪次迭代的模糊纹理。
                 int coreKeepIteration = Mathf.Clamp((int)(_settings.iterations *  (1 - _settings.coreKeepIntensity)), 1, _settings.iterations - 1);
-                if (i == coreKeepIteration)
+                bool coreKeep = coreKeepIteration < _settings.iterations;
+                
+                TextureHandle blurThTarget = blurThLeft; // 渲染目标纹理句柄。
+                for (var i = 0; i < _settings.iterations; ++i)
                 {
-                    renderGraph.AddBlitPass(
-                        blurThRight, blurThCore, 
-                        Vector2.one, Vector2.zero, passName: GetName("Blur: Get Blur Core"));
+                    // 交替使用两个模糊纹理句柄进行模糊。
+                    PassBlur(
+                        renderGraph, 
+                        i % 2 == 0 ? blurThLeft : blurThRight, i % 2 == 0 ? blurThRight : blurThLeft, 
+                        i, GetName($"Blur: {i}"));
+                    
+                    // 选择某次迭代的模糊图作为核心保持图。
+                    if (coreKeep && i == coreKeepIteration)
+                    {
+                        renderGraph.AddBlitPass(
+                            blurThRight, blurThCore, 
+                            Vector2.one, Vector2.zero, passName: GetName("Blur: Get Blur Core"));
+                    }
+                    
+                    // 记录最后一张模糊图作为最终模糊图。
+                    if (i == _settings.iterations - 1)
+                    {
+                        blurThTarget = i % 2 == 0 ? blurThRight : blurThLeft;
+                    }
+                }
+
+                // ---- 核心保持图叠加 ---- //
+                if (coreKeep)
+                {
+                    // 将前期模糊的一张图作为核心保持图，和最后一张模糊图进行叠加，得到最终的模糊图。
+                    // 这样在模糊迭代多且强度大时，也能保持粒子核心的形状，防止孤立粒子被过度模糊透明度过低而被裁剪掉。
+                    // 更接近 SDF 的效果。
+                    
+                    blurDesc.name = GetName("Blur Combine Core");
+                    TextureHandle blurThCombineCore = renderGraph.CreateTexture(blurDesc);
+                    var blurThSource = blurThTarget; // 最后一张模糊图。
+                    using (var builder = renderGraph.AddRasterRenderPass<PassData>("Blur: Combine Core ", out var passData))
+                    {
+                        // 设置渲染目标纹理句柄和声明使用纹理句柄。
+                        builder.SetRenderAttachment(blurThCombineCore, 0, AccessFlags.Write);
+                        builder.UseTexture(blurThSource, AccessFlags.Read);
+                        builder.UseTexture(blurThCore, AccessFlags.Read);
+                
+                        // 设置绘制方法。
+                        builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
+                        {
+                            var cmd = context.cmd;
+                        
+                            MaterialPropertyBlock mpb = new MaterialPropertyBlock();
+                            mpb.SetTexture(ShaderIds.MainTexId, blurThSource);
+                            mpb.SetTexture(ShaderIds.SecondTex, blurThCore);
+                            cmd.DrawProcedural(
+                                Matrix4x4.identity, MaterialBlurCombineTwo, 0, 
+                                MeshTopology.Triangles, 3, 1, mpb);
+                        });
+                    }
+                
+                    // ---- 叠加后的图再做一次模糊 ---- //
+                    // 这一步使得核心保持图和最后的模糊图更好的融合在一起。
+                    blurDesc.name = GetName("Blur Final");
+                    blurThFinal = renderGraph.CreateTexture(blurDesc);
+                    PassBlur(renderGraph, blurThCombineCore, blurThFinal, 0, GetName($"Blur Final"));
+                }
+                else
+                {
+                    // 不进行核心保持时，直接使用最后一张模糊图作为最终模糊图。
+                    blurThFinal = blurThTarget;
                 }
             }
-            
-            // ---- 核心保持图叠加 ---- //
-            // 将前期模糊的一张图作为核心保持图，和最后一张模糊图进行叠加，得到最终的模糊图。
-            // 这样在模糊迭代多且强度大时，也能保持粒子核心的形状，防止孤立粒子被过度模糊透明度过低而被裁剪掉。
-            // 更接近 SDF 的效果。
-            blurDesc.name = GetName("Blur Combine Core");
-            TextureHandle blurThCombineCore = renderGraph.CreateTexture(blurDesc);
-            var blurThSource = blurCount % 2 == 0 ? blurThRight : blurThLeft; // 最后一张模糊图。
-            using (var builder = renderGraph.AddRasterRenderPass<PassData>("Blur: Combine Core ", out var passData))
+            else
             {
-                // 设置渲染目标纹理句柄和声明使用纹理句柄。
-                builder.SetRenderAttachment(blurThCombineCore, 0, AccessFlags.Write);
-                builder.UseTexture(blurThSource, AccessFlags.Read);
-                builder.UseTexture(blurThCore, AccessFlags.Read);
-            
-                // 设置绘制方法。
-                builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
-                {
-                    var cmd = context.cmd;
-                    
-                    MaterialPropertyBlock mpb = new MaterialPropertyBlock();
-                    mpb.SetTexture(ShaderIds.MainTexId, blurThSource);
-                    mpb.SetTexture(ShaderIds.SecondTex, blurThCore);
-                    cmd.DrawProcedural(
-                        Matrix4x4.identity, MaterialBlurCombineTwo, 0, 
-                        MeshTopology.Triangles, 3, 1, mpb);
-                });
+                // 不进行模糊时，直接使用流体粒子纹理作为最终模糊纹理。
+                blurThFinal = liquidParticleTh;
             }
-            
-            // ---- 叠加后的图再做一次模糊 ---- //
-            // 这一步使得核心保持图和最后的模糊图更好的融合在一起。
-            blurDesc.name = GetName("Blur Final");
-            TextureHandle blurThFinal = renderGraph.CreateTexture(blurDesc);
-            PassBlur(renderGraph, blurThCombineCore, blurThFinal, 0, GetName($"Blur Final"));
             
             #endregion
 
@@ -272,7 +299,8 @@ namespace Fs.Liquid2D
             // return;
 
             #region 流体阻挡
-            // 创建阻挡纹理，用于遮挡流体。一般是容器，平台等。
+            
+            // 创建阻挡纹理。用于之后的水体效果处理Shader。一般是挡板、管道、地形、容器等。
 
             // ---- 创建流体遮挡纹理 ---- //
             TextureDesc liquidObstructionDesc = mainDesc;
@@ -290,7 +318,8 @@ namespace Fs.Liquid2D
                 passData.obstructionRendererListHandle = renderGraph.CreateRendererList(param);
                 builder.UseRendererList(passData.obstructionRendererListHandle);
                 
-                builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
+                builder.SetRenderFunc(
+                    (PassData data, RasterGraphContext context) => 
                     {
                         // context.cmd.ClearRenderTarget(RTClearFlags.Color, Color.clear, 1, 0);
                         context.cmd.DrawRendererList(data.obstructionRendererListHandle);
@@ -361,6 +390,9 @@ namespace Fs.Liquid2D
                 for (int i = 0; i < list.Count; i++)
                 {
                     var item = list[i];
+                    
+                    if (item == null || !item.isActiveAndEnabled) continue;
+                    
                     // 使用层遮罩过滤粒子。只渲染需要的粒子。
                     if ((item.Settings.liquid2DLayerMask & targetLayerMask) == 0) continue;
                     var ts = item.TransformGet;

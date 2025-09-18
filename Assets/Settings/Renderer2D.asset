@@ -104,11 +104,11 @@ MonoBehaviour:
   renderFeatureSettings:
     nameTag: Water
     liquid2DLayerMask: 2
-    iterations: 7
+    iterations: 0
     blurSpread: 0.6
-    coreKeepIntensity: 0.4
+    coreKeepIntensity: 0.761
     scaleFactor: 4
-    cutoff: 0.2
+    cutoff: 0.35
     obstructionLayerMask:
       serializedVersion: 2
       m_Bits: 64

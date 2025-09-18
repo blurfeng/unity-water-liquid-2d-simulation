@@ -9,13 +9,15 @@ Shader "Custom/URP/2D/Liquid2DParticle"
             "Queue"="Transparent"
             "RenderPipeline" = "UniversalPipeline"
         }
-        LOD 100
 
         Pass
         {
             Name "Liquid2DParticle"
             
-            Blend SrcAlpha OneMinusSrcAlpha
+            // alpha 使用此混合方式能使粒子在更远就开始融合。虽然 alpha 可能会超过1，但视觉上没问题。
+            // 并且防止 SrcAlpha OneMinusSrcAlpha 混合方式在 alpha 过低时反而 alpha 降低。
+            // 关于配置的 sprite: 如果你想使粒子在更远时黏连，可以使用更大的甚至超出尺寸范围的圆形扩散图形。
+            Blend SrcAlpha OneMinusSrcAlpha, One OneMinusSrcAlpha
             Cull Off
             ZWrite Off
 
@@ -68,7 +70,8 @@ Shader "Custom/URP/2D/Liquid2DParticle"
 
                 float4 color = UNITY_ACCESS_INSTANCED_PROP(UnityPerMaterial, _Color);
                 half4 texCol = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, IN.uv);
-                return texCol * color;
+                half4 col = texCol * color;
+                return col;
             }
             ENDHLSL
         }

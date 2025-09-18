@@ -9,7 +9,6 @@ Shader "Custom/URP/2D/Liquid2DEffect"
     {
         _MainTex ("Texture", 2D) = "white" {}
         _Cutoff ("Alpha cutoff", Range(0,1)) = 0.2
-        _AlphaOffset ("Alpha cutoff", Range(0,1)) = 0
         
 //        _EdgeClip("Edge Clip", Range(0,1)) = 0.2
 //        _Color ("Main Color", Color) = (0.2, 0.6, 1, 1)
@@ -61,7 +60,6 @@ Shader "Custom/URP/2D/Liquid2DEffect"
             SAMPLER(sampler_linear_clamp_ObstructionTex);
 
             half _Cutoff;
-            half _AlphaOffset;
             
             // half _EdgeClip;
             // half4 _Color;
@@ -93,16 +91,16 @@ Shader "Custom/URP/2D/Liquid2DEffect"
             {
                 half4 col = SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv);
                 clip(col.a - _Cutoff);
-                
+
+                // 阻挡纹理完全阻挡流体颜色。一般是挡板、管道、瓶子等。
                 half4 colObstructionTex = SAMPLE_TEXTURE2D_X(_ObstructionTex, sampler_linear_clamp_ObstructionTex, IN.uv);
                 clip(1 - colObstructionTex.a);
 
-                // 阻挡纹理完全阻挡流体颜色。一般是挡板、管道、瓶子等。
                 col = lerp(col, colObstructionTex, step(0.001, colObstructionTex.a));
 
                 // TODO: 可以正面遮挡流体的颜色处理，比如玻璃瓶的正面，给流体盖上一层透明颜色。Occluder层。
 
-                col.a = saturate(col.a + _AlphaOffset);
+                col.a = saturate(col.a);
                 return col;
                 
 				// half4 col = SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv);

@@ -36,13 +36,13 @@ namespace Fs.Liquid2D
         [Tooltip("2D流体层遮罩。只会渲染设定的流体层的粒子。")]
         public ELiquid2DLayer liquid2DLayerMask = ELiquid2DLayer.Water;
         
-        [Range(3, 16), Tooltip("迭代次数，越大越模糊。")]
+        [Range(0, 16), Tooltip("迭代次数，越大越模糊。")]
         public int iterations = 7;
         
         [Range(0.01f, 3f), Tooltip("每次迭代的模糊扩散度，越大越模糊。")]
         public float blurSpread = 0.8f;
         
-        [Range(0, 1), Tooltip("核心保持强度，越大流体核心部分越清晰。")]
+        [Range(0, 1), Tooltip("核心保持强度，越大流体核心部分越清晰。迭代次数增加时，建议适当调大此值以保持流体核心清晰。")]
         public float coreKeepIntensity = 0.4f;
 
         [Tooltip("渲染缩放比例，越大性能越好，但边界越不清晰。")]
