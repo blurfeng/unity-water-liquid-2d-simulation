@@ -373,6 +373,8 @@ namespace Fs.Liquid2D
         private static void ExecutePassParticle(PassData data, RasterGraphContext context)
         {
             var cmd = context.cmd;
+            Camera cam = data.cameraData.camera;
+            var planes = GeometryUtility.CalculateFrustumPlanes(cam);
              
             // 绘制所有流体粒子到 流体绘制RT。这里使用 GPU Instancing 来批量绘制。
             ELiquid2DLayer targetLayerMask = data.settings.liquid2DLayerMask;
@@ -384,18 +386,24 @@ namespace Fs.Liquid2D
              
                 // 扩容渲染数据缓存数组。
                 EnsureCacheSize(data, list.Count);
-             
+                
                 // 填充数据。
                 int count = 0; // 实际渲染的粒子数量。
                 for (int i = 0; i < list.Count; i++)
                 {
                     var item = list[i];
-                    
                     if (item == null || !item.isActiveAndEnabled) continue;
                     
                     // 使用层遮罩过滤粒子。只渲染需要的粒子。
                     if ((item.Settings.liquid2DLayerMask & targetLayerMask) == 0) continue;
+                    
                     var ts = item.TransformGet;
+                    
+                    // 计算粒子的包围盒，不在相机视锥体内的不渲染。
+                    var bounds = new Bounds(ts.position, ts.localScale);
+                    if (!GeometryUtility.TestPlanesAABB(planes, bounds)) continue; 
+                    
+                    // 填充矩阵和颜色数据。
                     data.matricesCache[count] = Matrix4x4.TRS(ts.position, ts.rotation, ts.localScale);
                     data.colorArrayCache[count] = item.Settings.color;
                     count++;
