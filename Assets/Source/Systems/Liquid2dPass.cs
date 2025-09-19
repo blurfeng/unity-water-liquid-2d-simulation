@@ -23,7 +23,10 @@ namespace Fs.Liquid2D
             internal static readonly int BlurOffsetId = Shader.PropertyToID("_BlurOffset");
             internal static readonly int Cutoff = Shader.PropertyToID("_Cutoff");
             internal static readonly int ObstructionTex = Shader.PropertyToID("_ObstructionTex");
-            internal static readonly int OpacityRate = Shader.PropertyToID("_OpacityRate");
+            internal static readonly int OpacityValue = Shader.PropertyToID("_OpacityValue");
+            internal static readonly int CoverColorId = Shader.PropertyToID("_CoverColor");
+            internal static readonly int EdgeIntensity = Shader.PropertyToID("_EdgeIntensity");
+            internal static readonly int EdgeColor = Shader.PropertyToID("_EdgeColor");
         }
         
         private static readonly ShaderTagId _shaderTagId = new ShaderTagId("UniversalForward");
@@ -422,8 +425,6 @@ namespace Fs.Liquid2D
             }
         }
 
-        #region 模糊 Pass
-
         private void PassBlur(RenderGraph renderGraph, TextureHandle source, TextureHandle destination, int iteration, string passName)
         {
             using (var builder = renderGraph.AddRasterRenderPass<PassData>(passName, out PassData passData))
@@ -473,8 +474,6 @@ namespace Fs.Liquid2D
                 MeshTopology.Triangles, 3, 1, mpb);
         }
 
-        #endregion
-
         /// <summary>
         /// 水体效果 Pass。将模糊后的流体纹理处理并绘制到当前相机的渲染目标上。
         /// </summary>
@@ -490,7 +489,22 @@ namespace Fs.Liquid2D
             mpb.SetTexture(ShaderIds.MainTexId, data.blurFinalTh);
             mpb.SetTexture(ShaderIds.ObstructionTex, data.obstructionTh);
             mpb.SetFloat(ShaderIds.Cutoff, data.settings.cutoff);
-            mpb.SetFloat(ShaderIds.OpacityRate, data.settings.opacityRate);
+
+            // 透明度调整参数。
+            if (data.settings.opacityMode == EOpacityMode.Replace)
+            {
+                data.materialEffect.EnableKeyword("_OPACITY_REPLACE");
+            }
+            else
+            {
+                data.materialEffect.DisableKeyword("_OPACITY_REPLACE");
+            }
+            mpb.SetFloat(ShaderIds.OpacityValue, data.settings.opacityValue);
+            
+            mpb.SetColor(ShaderIds.CoverColorId, data.settings.coverColor);
+            mpb.SetFloat(ShaderIds.EdgeIntensity, data.settings.edgeIntensity);
+            mpb.SetColor(ShaderIds.EdgeColor, data.settings.edgeColor);
+            
             // 绘制一个全屏三角形，使用外描边材质，并传入属性块。
             cmd.DrawProcedural(Matrix4x4.identity, data.materialEffect, 0, MeshTopology.Triangles, 3, 1,
                 mpb);
@@ -536,15 +550,8 @@ namespace Fs.Liquid2D
                 && VolumeData != null && VolumeData.isActive;
              
             // ---- 重载设置。 ---- //
+            // 2D流体层遮罩。只会渲染设定的流体层的粒子。
             _settings.liquid2DLayerMask = isActive ? VolumeData.liquid2DLayerMask : _settingsDefault.liquid2DLayerMask;
-            
-            _settings.blur.iterations = isActive ? VolumeData.blur.iterations : _settingsDefault.blur.iterations;
-            _settings.blur.blurSpread = isActive ? VolumeData.blur.blurSpread : _settingsDefault.blur.blurSpread;
-            _settings.blur.coreKeepIntensity = isActive ? VolumeData.blur.coreKeepIntensity : _settingsDefault.blur.coreKeepIntensity;
-            _settings.blur.scaleFactor = isActive ? VolumeData.blur.scaleFactor : _settingsDefault.blur.scaleFactor;
-            
-            _settings.cutoff = isActive ? VolumeData.cutoff : _settingsDefault.cutoff;
-            _settings.opacityRate = isActive ? VolumeData.opacityRate : _settingsDefault.opacityRate;
             
             // 阻挡层遮罩。
             _settings.obstructionLayerMask = isActive ? VolumeData.obstructionLayerMask : _settingsDefault.obstructionLayerMask;
@@ -553,7 +560,20 @@ namespace Fs.Liquid2D
                 _obstructionFilteringSettings = new FilteringSettings(RenderQueueRange.all, _settings.obstructionLayerMask);
             }
             
-            // 边缘色和强度。实际上在 Blur 前作为底图进行混合。默认的底图是当前相机的场景纹理（alpha为0）。
+            _settings.cutoff = isActive ? VolumeData.cutoff : _settingsDefault.cutoff;
+            _settings.opacityMode = isActive ? VolumeData.opacityMode : _settingsDefault.opacityMode;
+            _settings.opacityValue = isActive ? VolumeData.opacityValue : _settingsDefault.opacityValue;
+            _settings.coverColor = isActive ? VolumeData.coverColor : _settingsDefault.coverColor;
+            _settings.edgeIntensity = isActive ? VolumeData.edgeIntensity : _settingsDefault.edgeIntensity;
+            _settings.edgeColor = isActive ? VolumeData.edgeColor : _settingsDefault.edgeColor;
+
+            // ---- 模糊设置 ---- //
+            _settings.blur.iterations = isActive ? VolumeData.blur.iterations : _settingsDefault.blur.iterations;
+            _settings.blur.blurSpread = isActive ? VolumeData.blur.blurSpread : _settingsDefault.blur.blurSpread;
+            _settings.blur.coreKeepIntensity = isActive ? VolumeData.blur.coreKeepIntensity : _settingsDefault.blur.coreKeepIntensity;
+            _settings.blur.scaleFactor = isActive ? VolumeData.blur.scaleFactor : _settingsDefault.blur.scaleFactor;
+            
+            // 模糊边缘色和强度。实际上在 Blur 前作为底图进行混合。默认的底图是当前相机的场景纹理（alpha为0）。
             _settings.blur.blurEdgeColor = isActive ? VolumeData.blur.blurEdgeColor : _settingsDefault.blur.blurEdgeColor;
             _settings.blur.blurEdgeColorIntensity = isActive ? VolumeData.blur.blurEdgeColorIntensity : _settingsDefault.blur.blurEdgeColorIntensity;
         }

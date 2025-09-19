@@ -76,11 +76,15 @@ MonoBehaviour:
   renderFeatureSettings:
     nameTag: Magma
     liquid2DLayerMask: 4
-    cutoff: 0.2
-    opacityRate: 1
     obstructionLayerMask:
       serializedVersion: 2
       m_Bits: 64
+    cutoff: 0.2
+    opacityMode: 0
+    opacityValue: 1
+    coverColor: {r: 0, g: 0, b: 0, a: 0}
+    edgeIntensity: 0
+    edgeColor: {r: 1, g: 1, b: 1, a: 1}
     blur:
       iterations: 4
       blurSpread: 0.6
@@ -106,11 +110,15 @@ MonoBehaviour:
   renderFeatureSettings:
     nameTag: Water
     liquid2DLayerMask: 2
-    cutoff: 0.5
-    opacityRate: 0.6
     obstructionLayerMask:
       serializedVersion: 2
       m_Bits: 64
+    cutoff: 0.254
+    opacityMode: 1
+    opacityValue: 0.65
+    coverColor: {r: 0, g: 0.51962614, b: 1, a: 1}
+    edgeIntensity: 0.592
+    edgeColor: {r: 0.43867922, g: 0.699319, b: 1, a: 0.84313726}
     blur:
       iterations: 0
       blurSpread: 0.6
