@@ -210,6 +210,12 @@ namespace Fs.Liquid2D
             Vector3 right = end + Quaternion.Euler(0, 0, -150) * (Vector3)(dir * 0.6f);
             Gizmos.DrawLine(end, left);
             Gizmos.DrawLine(end, right);
+            
+            Gizmos.color = Color.yellow;
+            Matrix4x4 oldMatrix = Gizmos.matrix;
+            Gizmos.matrix = transform.localToWorldMatrix;
+            Gizmos.DrawCube(Vector3.zero, new Vector3(2f, 2f, 2f));
+            Gizmos.matrix = oldMatrix;
         }
         #endif
     }

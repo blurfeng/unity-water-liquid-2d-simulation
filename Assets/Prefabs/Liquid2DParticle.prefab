@@ -47,7 +47,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   settings:
-    sprite: {fileID: -2413806693520163455, guid: 343064a745fc23b4cabccb1d13822cff, type: 3}
+    sprite: {fileID: 21300000, guid: d395cef0ea5fee348a6160a686f26c30, type: 3}
     material: {fileID: 2100000, guid: 7453d47e894769e43b1338caed5ddfeb, type: 2}
     color: {r: 0, g: 0.44190174, b: 4.584609, a: 1}
     liquid2DLayerMask: 2
