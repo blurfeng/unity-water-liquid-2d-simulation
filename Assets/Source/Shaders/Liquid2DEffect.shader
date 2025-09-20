@@ -166,13 +166,18 @@ CBUFFER_END
                 col = lerp(_EdgeColor, col, t);
 
                 // ---- 阻挡纹理处理 ---- //
-                // 阻挡纹理完全阻挡流体颜色。一般是挡板、管道、瓶子等。
+                // 阻挡纹理完全阻挡流体颜色。一般是挡板、管道、瓶子的横截面等。
                 half4 colObstructionTex = SAMPLE_TEXTURE2D_X(_ObstructionTex, sampler_linear_clamp_ObstructionTex, IN.uv);
                 clip(1 - colObstructionTex.a);
                 // 阻挡物挡住流体颜色。
                 col = lerp(col, colObstructionTex, step(0.001, colObstructionTex.a));
                 
-                // TODO: 可以正面遮挡流体的颜色处理，比如玻璃瓶的正面，给流体盖上一层透明颜色。Occluder层。
+                // Tips:
+                // 注意，我们只是裁剪掉了阻挡纹理的透明部分，阻挡纹理本身的颜色并没有参与混合。
+                // 因为流体系统只专注于处理流体效果自身。
+                // 关于遮挡流体的物体，比如一个玻璃瓶。你应当将玻璃瓶的横截面的 Rendering Layer 设置为阻挡层。
+                // 但是正面盖在流体上的玻璃瓶部分的渲染，应当由用户自行处理。比如创建新的 Renderer Feature 来渲染玻璃瓶。
+                // 这个玻璃瓶的 Renderer Feature 应当在流体 Renderer Feature 之后执行。
                 
                 // ---- 水体扰动背景 ---- //
                 #if defined(_DISTORT)

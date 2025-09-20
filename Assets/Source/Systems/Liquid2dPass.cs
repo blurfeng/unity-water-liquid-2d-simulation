@@ -71,8 +71,6 @@ namespace Fs.Liquid2D
         private readonly Liquid2DRenderFeatureSettings _settings;
         private readonly Mesh _quadMesh;
         
-        private FilteringSettings _obstructionFilteringSettings;
-        
         public Liquid2dPass(Material materialBlur, Material materialEffect, Liquid2DRenderFeatureSettings settings)
         {
             _materialBlur = materialBlur;
@@ -82,7 +80,7 @@ namespace Fs.Liquid2D
             _settings = settings.Clone();
 
             _quadMesh = GenerateQuadMesh();
-            _obstructionFilteringSettings = new FilteringSettings(RenderQueueRange.all, settings.obstructionLayerMask);
+            SetObstructionFilteringSettings();
             
             // 设置 Pass 执行时机。
             renderPassEvent = RenderPassEvent.AfterRenderingTransparents;
@@ -128,7 +126,7 @@ namespace Fs.Liquid2D
             public TextureHandle blurDestination;
             public int blurIteration;
             
-            // 流体遮挡 Pass 相关。
+            // 流体阻挡 Pass 相关。
             public RendererListHandle obstructionRendererListHandle;
             public TextureHandle obstructionTh;
             
@@ -203,7 +201,7 @@ namespace Fs.Liquid2D
             #endregion
             
             // TEST: 直接将流体粒子TH拷贝回当前源TH。
-            // ClonePass(renderGraph, liquidParticleTh, sourceTextureHandle);
+            // PassClone(renderGraph, liquidParticleTh, sourceTextureHandle);
             // return;
             
             #region 模糊处理
@@ -314,21 +312,21 @@ namespace Fs.Liquid2D
             #endregion
 
             // TEST: 直接将最后一个模糊 RT 拷贝回当前源纹理句柄。
-            // ClonePass(renderGraph, blurThFinal, sourceTextureHandle);
+            // PassClone(renderGraph, blurThFinal, sourceTextureHandle);
             // return;
 
             #region 流体阻挡
             
             // 创建阻挡纹理。用于之后的水体效果处理Shader。一般是挡板、管道、地形、容器等。
 
-            // ---- 创建流体遮挡纹理 ---- //
+            // ---- 创建流体阻挡纹理 ---- //
             TextureDesc liquidObstructionDesc = mainDesc;
             liquidObstructionDesc.name = GetName("liquid 2d Obstruction");
             TextureHandle liquidObstructionTh = renderGraph.CreateTexture(liquidObstructionDesc);
 
             using (var builder = renderGraph.AddRasterRenderPass<PassData>(GetName("liquid 2d Obstruction"), out PassData passData))
             {
-                // 设置渲染目标纹理为流体遮挡纹理。
+                // 设置渲染目标纹理为流体阻挡纹理。
                 builder.SetRenderAttachment(liquidObstructionTh, 0, AccessFlags.Write);
                 
                 // 获取所有 Liquid Obstruction Layer Mask层的 Renderer 列表。
@@ -345,15 +343,15 @@ namespace Fs.Liquid2D
                     }
                 );
             }
-
-            #endregion
             
             // TEST: 直接将最后一个 RT 拷贝回当前源纹理句柄。
-            // ClonePass(renderGraph, obstructionTh, sourceTextureHandle);
+            // PassClone(renderGraph, liquidObstructionTh, sourceTextureHandle);
             // renderGraph.AddBlitPass(
-            //     obstructionTh, sourceTextureHandle, 
+            //     liquidObstructionTh, sourceTextureHandle, 
             //     Vector2.one, Vector2.zero, passName: GetName("obstructionTh to sourceTextureHandle"));
             // return;
+
+            #endregion
             
             #region 水体效果处理
 
@@ -384,7 +382,7 @@ namespace Fs.Liquid2D
             #endregion
 
             // TEST: 直接将流体粒子TH拷贝回当前源TH。
-            // ClonePass(renderGraph, effectTh, sourceTextureHandle);
+            // PassClone(renderGraph, effectTh, sourceTextureHandle);
         }
         
         /// <summary>
@@ -549,6 +547,24 @@ namespace Fs.Liquid2D
             cmd.DrawProcedural(Matrix4x4.identity, data.materialEffect, 0, MeshTopology.Triangles, 3, 1,
                 mpb);
         }
+
+        #region Layer
+
+        private FilteringSettings _obstructionFilteringSettings;
+        
+        /// <summary>
+        /// 设置阻挡层过滤设置。
+        /// </summary>
+        private void SetObstructionFilteringSettings()
+        {
+            _obstructionFilteringSettings = 
+                new FilteringSettings(
+                    RenderQueueRange.all,
+                    ~0,
+                    _settings.obstructionRenderingLayerMask);
+        }
+
+        #endregion
         
         #region Volume
         // 通过 Volume 设置，你可以在运行时动态修改流体效果的参数。 
@@ -594,10 +610,10 @@ namespace Fs.Liquid2D
             _settings.liquid2DLayerMask = isActive ? VolumeData.liquid2DLayerMask : _settingsDefault.liquid2DLayerMask;
             
             // 阻挡层遮罩。
-            _settings.obstructionLayerMask = isActive ? VolumeData.obstructionLayerMask : _settingsDefault.obstructionLayerMask;
-            if (_obstructionFilteringSettings.layerMask != _settings.obstructionLayerMask)
+            _settings.obstructionRenderingLayerMask = isActive ? VolumeData.obstructionRenderingLayerMask : _settingsDefault.obstructionRenderingLayerMask;
+            if (_obstructionFilteringSettings.layerMask != _settings.obstructionRenderingLayerMask)
             {
-                _obstructionFilteringSettings = new FilteringSettings(RenderQueueRange.all, _settings.obstructionLayerMask);
+                SetObstructionFilteringSettings();
             }
             
             _settings.cutoff = isActive ? VolumeData.cutoff : _settingsDefault.cutoff;

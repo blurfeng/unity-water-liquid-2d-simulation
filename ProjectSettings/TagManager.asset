@@ -11,7 +11,7 @@ TagManager:
   - 
   - Water
   - UI
-  - LiquidObstruction
+  - 
   - 
   - 
   - 
@@ -43,4 +43,4 @@ TagManager:
     locked: 0
   m_RenderingLayers:
   - Default
-  - Liquid
+  - LiquidObstruction

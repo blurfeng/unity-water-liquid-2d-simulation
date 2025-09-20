@@ -86,8 +86,15 @@ namespace Fs.Liquid2D
         [Tooltip("2D流体层遮罩。只会渲染设定的流体层的粒子。")]
         public ELiquid2DLayer liquid2DLayerMask = ELiquid2DLayer.Water;
         
-        [Tooltip("液体遮挡层遮罩。指定哪些层的物体会遮挡液体效果。")]
-        public LayerMask obstructionLayerMask;
+        [Tooltip("液体阻挡层遮罩。指定哪些层的物体会阻挡液体效果。一般是挡板或容器等，他们会完全阻挡液体及时自身是透明的。相当于阻挡物的横截面。")]
+        public RenderingLayerMask obstructionRenderingLayerMask;
+        
+        // Tips:
+        // 在2D游戏中，假设你有一个玻璃瓶用于装流体。玻璃瓶的横截面是阻挡层，这样流体就不会渲染在玻璃瓶的外面。
+        // 但是本流体系统不会处理盖在流体上的正面玻璃瓶部分的渲染，因为流体系统只专注于处理流体效果自身。
+        // 你应当将玻璃瓶的横截面的 Rendering Layer 设置为阻挡层。
+        // 但是正面盖在流体上的玻璃瓶部分的渲染，应当由用户自行处理。比如创建新的 Renderer Feature 来渲染玻璃瓶。
+        // 这个玻璃瓶的 Renderer Feature 应当在流体 Renderer Feature 之后执行。
         
         [Range(0f, 1f), Tooltip("流体透明边缘的裁剪阈值，越大边缘越锐利，水体范围膨胀越少。")]
         public float cutoff = 0.45f;
