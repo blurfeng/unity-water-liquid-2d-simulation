@@ -54,6 +54,31 @@ namespace Fs.Liquid2D
             [Range(0f, 1f), Tooltip("流体模糊边缘色强度。0时不显示边缘色（默认为当前相机场景纹理颜色），1为完全显示边缘色。")]
             public float blurEdgeColorIntensity = 0f;
         }
+
+        [Serializable]
+        public class Distort
+        {
+            [Tooltip("是否启用流体扭曲效果。")]
+            public bool enable = false;
+            
+            [Range(0.0001f, 1f), Tooltip("扰动采样缩放。值越大，扰动越频繁。")]
+            public float magnitude = 0.1f;
+            
+            [Range(1f, 500f), Tooltip("扰动频率。值越大，扰动越密集。")]
+            public float frequency = 380f;
+            
+            [Range(0.0001f, 0.1f), Tooltip("扰动振幅。值越大，扰动越明显。")]
+            public float amplitude = 0.008f;
+            
+            [Tooltip("扰动速度。X控制水平扰动速度，Y控制垂直扰动速度。")]
+            public Vector2 distortSpeed = new Vector2(0.1f, 1f);
+            
+            [Tooltip("扰动时间系数。用于控制不同噪点的运动速度和方向。")]
+            public Vector4 distortTimeFactors = new  Vector4(0.3f, -0.4f, 0.1f, 0.5f);
+            
+            [Tooltip("噪点坐标偏移。用于避免噪点纹理的重复性。")]
+            public float noiseCoordOffset = 4f;
+        }
         
         [Tooltip("2D流体 Renderer Feature 名称标签，用于区分不同的 Renderer Feature 配置。")]
         public string nameTag = "Liquid2D";
@@ -85,24 +110,15 @@ namespace Fs.Liquid2D
         [Tooltip("流体模糊设置。")]
         public Blur blur;
         
+        [Tooltip("流体扭曲设置。")]
+        public Distort distort;
+        
         public Liquid2DRenderFeatureSettings Clone()
         {
-            return new Liquid2DRenderFeatureSettings
-            {
-                nameTag = nameTag,
-                liquid2DLayerMask = liquid2DLayerMask,
-                cutoff = cutoff,
-                obstructionLayerMask = obstructionLayerMask,
-                blur = new Blur
-                {
-                    iterations = blur.iterations,
-                    blurSpread = blur.blurSpread,
-                    coreKeepIntensity = blur.coreKeepIntensity,
-                    scaleFactor = blur.scaleFactor,
-                    blurEdgeColor = blur.blurEdgeColor,
-                    blurEdgeColorIntensity = blur.blurEdgeColorIntensity
-                }
-            };
+            // 先序列化再反序列化，得到一个全新的对象。
+            return JsonUtility.FromJson<Liquid2DRenderFeatureSettings>(
+                JsonUtility.ToJson(this)
+            );
         }
     }
 }

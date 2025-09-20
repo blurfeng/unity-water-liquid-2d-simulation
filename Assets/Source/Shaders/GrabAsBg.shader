@@ -34,6 +34,12 @@
                 float2 uv : TEXCOORD0;
             };
 
+            struct Output
+            {
+                half4 color0 : SV_Target0;
+                half4 color1 : SV_Target1;
+            };
+
             TEXTURE2D_X(_MainTex);
             SAMPLER(sampler_linear_clamp_MainTex);
 
@@ -51,16 +57,23 @@
                 return OUT;
             }
             
-            half4 Frag(Varying IN) : SV_Target0
+            Output Frag(Varying IN) : SV_Target0
             {
+                Output OUT;
+                
                 float2 uv = IN.uv;
                 
                 // Blitter.BlitTexture方法中直接传入的 source 参数会被转换为_BlitTexture。
                 half4 color = SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, uv);
+
+                // 输出原始颜色。
+                OUT.color0 = color;
                 
                 // 只保留颜色，丢弃alpha。
                 // 允许自定义背景颜色，否则使用当前相机纹理作为背景色。
-                return half4(lerp(color.rgb, _Color.rgb, _ColorIntensity), 0); 
+                OUT.color1 = half4(lerp(color.rgb, _Color.rgb, _ColorIntensity), 0);
+
+                return OUT;
             }
             
             ENDHLSL
