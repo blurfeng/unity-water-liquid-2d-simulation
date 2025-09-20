@@ -21,7 +21,7 @@ namespace Fs.Liquid2D
         [Tooltip("流体粒子预制体（需挂载Liquid2DParticleRenderer）")]
         public List<LiquidParticle> liquidParticles = new List<LiquidParticle>();
 
-        [Range(1, 100), Tooltip("喷嘴宽度。")]
+        [Range(0.01f, 100f), Tooltip("喷嘴宽度。")]
         public float nozzleWidth = 1f;
         
         [Tooltip("流量。每秒喷射的粒子数量。")]

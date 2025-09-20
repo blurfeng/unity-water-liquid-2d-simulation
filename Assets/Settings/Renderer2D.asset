@@ -123,7 +123,7 @@ MonoBehaviour:
       m_Bits: 2
     cutoff: 0.6
     opacityMode: 1
-    opacityValue: 0.58
+    opacityValue: 0.3
     coverColor: {r: 0, g: 0.43330216, b: 1, a: 1}
     edgeIntensity: 0.6
     edgeColor: {r: 0.43867922, g: 0.699319, b: 1, a: 0.8235294}

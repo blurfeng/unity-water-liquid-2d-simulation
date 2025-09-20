@@ -6936,7 +6936,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 2765530974570106031, guid: e90b8bd72ab73984db597d1903a0a15a, type: 3}
       propertyPath: flowRate
-      value: 10
+      value: 20
       objectReference: {fileID: 0}
     - target: {fileID: 2765530974570106031, guid: e90b8bd72ab73984db597d1903a0a15a, type: 3}
       propertyPath: ejectForce
@@ -24364,11 +24364,11 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 2456078285444839326, guid: 4fe81118338b3164783a447869ba6788, type: 3}
       propertyPath: flowRate
-      value: 62
+      value: 60
       objectReference: {fileID: 0}
     - target: {fileID: 2456078285444839326, guid: 4fe81118338b3164783a447869ba6788, type: 3}
       propertyPath: ejectForce
-      value: 70
+      value: 62
       objectReference: {fileID: 0}
     - target: {fileID: 3375088843114875742, guid: 4fe81118338b3164783a447869ba6788, type: 3}
       propertyPath: m_Name

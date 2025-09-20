@@ -8,7 +8,7 @@ PhysicsMaterial2D:
   m_PrefabAsset: {fileID: 0}
   m_Name: pm_magma
   serializedVersion: 2
-  friction: 4
-  bounciness: 0.12
-  m_FrictionCombine: 3
-  m_BounceCombine: 3
+  friction: 0.3
+  bounciness: 0.1
+  m_FrictionCombine: 1
+  m_BounceCombine: 4

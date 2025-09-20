@@ -82,11 +82,23 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5961824672208803902, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
       propertyPath: m_Radius
-      value: 0.18
+      value: 0.14
       objectReference: {fileID: 0}
+    - target: {fileID: 5961824672208803902, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
+      propertyPath: m_Material
+      value: 
+      objectReference: {fileID: 6200000, guid: d1da1c4ef9c954445b49890a14ded2b1, type: 2}
     - target: {fileID: 6359955899863538535, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
       propertyPath: m_Name
       value: Liquid2DParticleMagma1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7884424366146339886, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
+      propertyPath: m_Material
+      value: 
+      objectReference: {fileID: 6200000, guid: d1da1c4ef9c954445b49890a14ded2b1, type: 2}
+    - target: {fileID: 7884424366146339886, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
+      propertyPath: m_GravityScale
+      value: 2
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
