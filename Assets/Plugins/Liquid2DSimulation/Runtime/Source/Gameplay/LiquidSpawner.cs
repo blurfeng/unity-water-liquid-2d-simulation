@@ -23,13 +23,13 @@ namespace Fs.Liquid2D
         public float nozzleWidth = 1f;
         
         [Tooltip("流量。每秒喷射的粒子数量。")]
-        public float flowRate = 26f;
+        public float flowRate = 60f;
         
         [Tooltip("尺寸随机范围（最小值，最大值）")]
         public Vector2 sizeRandomRange = new Vector2(0.9f, 1.2f);
 
         [Tooltip("喷射力大小")]
-        public float ejectForce = 16f;
+        public float ejectForce = 40f;
         
         [Tooltip("喷射力随机范围（最小值，最大值）")]
         public Vector2 ejectForceRandomRange = new Vector2(0.9f, 1.2f);

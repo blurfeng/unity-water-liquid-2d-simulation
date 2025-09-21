@@ -1,0 +1,110 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &-7417792322083633647
+MonoBehaviour:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6dc373bf996647fbb267c96e8223c050, type: 3}
+  m_Name: Liquid2DVolume
+  m_EditorClassIdentifier: 
+  active: 1
+  isActive:
+    m_OverrideState: 1
+    m_Value: 0
+  liquid2DVolumeDataList:
+    m_OverrideState: 1
+    m_Value:
+    - nameTag: Water
+      liquid2DLayerMask: 2
+      obstructionRenderingLayerMask:
+        serializedVersion: 0
+        m_Bits: 0
+      cutoff: 0.2
+      opacityMode: 0
+      opacityValue: 1
+      coverColor: {r: 0, g: 0, b: 0, a: 0}
+      edgeIntensity: 0
+      edgeColor: {r: 1, g: 1, b: 1, a: 1}
+      blur:
+        iterations: 7
+        blurSpread: 0.8
+        coreKeepIntensity: 0.4
+        scaleFactor: 4
+        blurEdgeColor: {r: 0, g: 0, b: 0, a: 0}
+        blurEdgeColorIntensity: 0
+      distort:
+        enable: 0
+        magnitude: 0.1
+        frequency: 380
+        amplitude: 0.008
+        distortSpeed: {x: 0.1, y: 1}
+        distortTimeFactors: {x: 0.3, y: -0.4, z: 0.1, w: 0.5}
+        noiseCoordOffset: 4
+      isActive: 1
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d7fd9488000d3734a9e00ee676215985, type: 3}
+  m_Name: Global Volume Profile
+  m_EditorClassIdentifier: 
+  components:
+  - {fileID: -7417792322083633647}
+  - {fileID: 2466043234722323037}
+--- !u!114 &2466043234722323037
+MonoBehaviour:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0b2db86121404754db890f4c8dfe81b2, type: 3}
+  m_Name: Bloom
+  m_EditorClassIdentifier: 
+  active: 1
+  skipIterations:
+    m_OverrideState: 0
+    m_Value: 1
+  threshold:
+    m_OverrideState: 1
+    m_Value: 1.15
+  intensity:
+    m_OverrideState: 1
+    m_Value: 1.3
+  scatter:
+    m_OverrideState: 0
+    m_Value: 0.7
+  clamp:
+    m_OverrideState: 0
+    m_Value: 65472
+  tint:
+    m_OverrideState: 0
+    m_Value: {r: 1, g: 1, b: 1, a: 1}
+  highQualityFiltering:
+    m_OverrideState: 0
+    m_Value: 0
+  downscale:
+    m_OverrideState: 0
+    m_Value: 0
+  maxIterations:
+    m_OverrideState: 0
+    m_Value: 6
+  dirtTexture:
+    m_OverrideState: 0
+    m_Value: {fileID: 0}
+    dimension: 1
+  dirtIntensity:
+    m_OverrideState: 0
+    m_Value: 0

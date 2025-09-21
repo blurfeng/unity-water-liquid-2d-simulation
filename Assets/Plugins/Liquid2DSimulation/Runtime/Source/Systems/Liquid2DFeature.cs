@@ -51,6 +51,8 @@ namespace Fs.Liquid2D
 
         public override void Create()
         {
+            CheckSettings();
+            
             // 检查 Shader 是否可用。
             if (!shaderBlur || !shaderBlur.isSupported ||
                 !shaderEffect || !shaderEffect.isSupported)

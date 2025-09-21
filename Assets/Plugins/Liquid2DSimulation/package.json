@@ -6,7 +6,7 @@
   "unity": "6000.2",
   "keywords": ["liquid 2D simulation", "liquid", "water", "2d", "liquid 2d"],
   "author": {
-    "name": "BlurFeng",
+    "name": "Blur Feng",
     "url": "https://github.com/BlurFeng"
   },
   "license": "MIT",
@@ -14,7 +14,8 @@
   "dependencies": {
     "com.unity.render-pipelines.universal": "17.2.0"
   },
-
+  "documentationUrl": "https://github.com/blurfeng/unity-water-liquid-2d-simulation/blob/main/Assets/Plugins/Liquid2DSimulation/Samples~/README.md",
+  
   "samples": [
     {
       "displayName": "Samples",

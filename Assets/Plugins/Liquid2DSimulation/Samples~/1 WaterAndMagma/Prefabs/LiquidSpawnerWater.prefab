@@ -1,6 +1,6 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
---- !u!1001 &3983563295482341271
+--- !u!1001 &3692081168282836134
 PrefabInstance:
   m_ObjectHideFlags: 0
   serializedVersion: 2
@@ -10,43 +10,27 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 1236614623622671160, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
       propertyPath: flowRate
-      value: 20
-      objectReference: {fileID: 0}
-    - target: {fileID: 1236614623622671160, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
-      propertyPath: ejectForce
-      value: 30
-      objectReference: {fileID: 0}
-    - target: {fileID: 1236614623622671160, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
-      propertyPath: liquidParticles.Array.size
-      value: 3
-      objectReference: {fileID: 0}
-    - target: {fileID: 1236614623622671160, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
-      propertyPath: liquidParticles.Array.data[0].weight
       value: 60
       objectReference: {fileID: 0}
     - target: {fileID: 1236614623622671160, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
-      propertyPath: liquidParticles.Array.data[1].weight
-      value: 30
+      propertyPath: ejectForce
+      value: 62
       objectReference: {fileID: 0}
     - target: {fileID: 1236614623622671160, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
-      propertyPath: liquidParticles.Array.data[2].weight
-      value: 10
+      propertyPath: swingAngleRange
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1236614623622671160, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
+      propertyPath: liquidParticles.Array.size
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 1236614623622671160, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
       propertyPath: liquidParticles.Array.data[0].liquidPrefab
       value: 
-      objectReference: {fileID: 7408577314087912205, guid: 8f28eb04a80f42648b8349ef3beff586, type: 3}
-    - target: {fileID: 1236614623622671160, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
-      propertyPath: liquidParticles.Array.data[1].liquidPrefab
-      value: 
-      objectReference: {fileID: 7408577314087912205, guid: faf851f462fc8474397b58ca8ca53d4f, type: 3}
-    - target: {fileID: 1236614623622671160, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
-      propertyPath: liquidParticles.Array.data[2].liquidPrefab
-      value: 
-      objectReference: {fileID: 7408577314087912205, guid: 96ec033569aab93439000e005fac9bb2, type: 3}
+      objectReference: {fileID: 2062081204259074479, guid: 9a8c08f9d7e662b4baaf608185f2e9cb, type: 3}
     - target: {fileID: 2155624610036930552, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
       propertyPath: m_Name
-      value: LiquidSpawnerMagma
+      value: LiquidSpawnerWater
       objectReference: {fileID: 0}
     - target: {fileID: 6729538587706341266, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
       propertyPath: m_LocalPosition.x
@@ -66,15 +50,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6729538587706341266, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
       propertyPath: m_LocalRotation.x
-      value: -0
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6729538587706341266, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
       propertyPath: m_LocalRotation.y
-      value: -0
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6729538587706341266, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
       propertyPath: m_LocalRotation.z
-      value: -0
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6729538587706341266, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x

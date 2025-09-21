@@ -5,9 +5,11 @@ Liquid 2D Simulation is a 2D fluid simulation system designed for Unity.\
 Liquid 2D Simulation は、Unity 向けに設計された 2D 流体シミュレーションシステムです。
 
 ## 🌱 使用演示场景
-请将 Samples 文件夹下的 `Renderer2D` 资源文件添加到 UniversalRP Asset 的 Renderer List 中。否则场景中的流体将无法正确渲染。\
-To use the demo scenes, please add the Renderer2D asset from the Samples folder to the Renderer List of the UniversalRP Asset. Otherwise, the fluids in the scenes will not render correctly.\
-デモシーンを使用するには、Samples フォルダーから Renderer2D アセットを UniversalRP アセットのレンダラーリストに追加してください。そうしないと、シーン内の流体が正しくレンダリングされません。
+当启动演示场景时，会自动将 `Renderer2D` 添加到 UniversalRP Asset 的 Renderer List 中。并让演示场景相机使用此 Renderer2D，但默认 Renderer2D 没有改变。你需要添加 Liquid 2D Feature 到当前默认的 Renderer2D，或者点击 UniversalRP Asset 的 Set Default 按钮，让场景使用此 Renderer2D。
+
+When the demo scene is launched, `Renderer2D` will be automatically added to the Renderer List of the UniversalRP Asset. The demo scene camera will use this Renderer2D, but the default Renderer2D remains unchanged. You need to add the Liquid 2D Feature to the current default Renderer2D or click the Set Default button of the UniversalRP Asset to make the scene use this Renderer2D.
+
+デモシーンが起動されると、`Renderer2D` が UniversalRP Asset の Renderer List に自動的に追加されます。デモシーンのカメラはこの Renderer2D を使用しますが、デフォルトの Renderer2D は変更されません。現在のデフォルトの Renderer2D に Liquid 2D Feature を追加するか、UniversalRP Asset の Set Default ボタンをクリックして、シーンがこの Renderer2D を使用するようにする必要があります。
 
 ## 📚 文档
 使用文档请参考 GitHub: \

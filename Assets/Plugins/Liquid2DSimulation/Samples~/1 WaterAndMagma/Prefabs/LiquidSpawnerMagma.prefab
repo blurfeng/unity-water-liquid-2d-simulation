@@ -35,15 +35,15 @@ PrefabInstance:
     - target: {fileID: 1236614623622671160, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
       propertyPath: liquidParticles.Array.data[0].liquidPrefab
       value: 
-      objectReference: {fileID: 7408577314087912205, guid: 8f28eb04a80f42648b8349ef3beff586, type: 3}
+      objectReference: {fileID: 7408577314087912205, guid: 556fd38f0b0d1d64fb349e350debf326, type: 3}
     - target: {fileID: 1236614623622671160, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
       propertyPath: liquidParticles.Array.data[1].liquidPrefab
       value: 
-      objectReference: {fileID: 7408577314087912205, guid: faf851f462fc8474397b58ca8ca53d4f, type: 3}
+      objectReference: {fileID: 7408577314087912205, guid: 08beae5aa1914b9468e3b323582796f1, type: 3}
     - target: {fileID: 1236614623622671160, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
       propertyPath: liquidParticles.Array.data[2].liquidPrefab
       value: 
-      objectReference: {fileID: 7408577314087912205, guid: 96ec033569aab93439000e005fac9bb2, type: 3}
+      objectReference: {fileID: 7408577314087912205, guid: 10142675799bf6e40b2c104729ff1643, type: 3}
     - target: {fileID: 2155624610036930552, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
       propertyPath: m_Name
       value: LiquidSpawnerMagma
@@ -66,15 +66,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6729538587706341266, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
       propertyPath: m_LocalRotation.x
-      value: -0
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6729538587706341266, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
       propertyPath: m_LocalRotation.y
-      value: -0
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6729538587706341266, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
       propertyPath: m_LocalRotation.z
-      value: -0
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6729538587706341266, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x

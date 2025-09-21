@@ -44,10 +44,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ae45dd1dce65f354a975434a0a9d015d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Fs.Liquid2D.LiquidSpawner
+  startOnAwake: 1
   startDelay: 2
   liquidParticles: []
-  spawnRate: 10
-  ejectAngle: 0
-  ejectForce: 5
+  nozzleWidth: 1
+  flowRate: 60
+  sizeRandomRange: {x: 0.9, y: 1.2}
+  ejectForce: 60
+  ejectForceRandomRange: {x: 0.9, y: 1.2}
   swingAngleRange: 90
   swingSpeed: 0.2
