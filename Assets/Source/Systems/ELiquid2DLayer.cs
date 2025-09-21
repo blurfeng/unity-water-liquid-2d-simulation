@@ -33,24 +33,7 @@ namespace Fs.Liquid2D
         /// 沼泽。
         /// </summary>
         Marsh = 1 << 3,
-    }
-
-    public static class Liquid2DLayerUtil
-    {
-        /// <summary>
-        /// 所有流体渲染层的名称数组。
-        /// </summary>
-        public static readonly string[] Liquid2DLayerNames;
-
-        /// <summary>
-        /// 是否有定义任何流体渲染层。
-        /// </summary>
-        public static bool IsHaveLayer => Liquid2DLayerNames.Length > 0;
-
-        static Liquid2DLayerUtil()
-        {
-            // 每次编译时获取一次枚举名称数组。
-            Liquid2DLayerNames = typeof(ELiquid2DLayer).GetEnumNames();
-        }
+        
+        // 添加你需要的更多层。
     }
 }

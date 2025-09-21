@@ -1,15 +1,18 @@
 using UnityEngine;
 
-public class DeadZone : MonoBehaviour
+namespace Fs.Liquid2D
 {
-    [Tooltip("需要销毁的目标层")]
-    public LayerMask layerMask;
-
-    private void OnTriggerEnter2D(Collider2D other)
+    public class DeadZone : MonoBehaviour
     {
-        if (((1 << other.gameObject.layer) & layerMask.value) != 0)
+        [Tooltip("需要销毁的目标层。")] 
+        public LayerMask layerMask;
+
+        private void OnTriggerEnter2D(Collider2D other)
         {
-            Destroy(other.gameObject);
+            if (((1 << other.gameObject.layer) & layerMask.value) != 0)
+            {
+                Destroy(other.gameObject);
+            }
         }
     }
 }

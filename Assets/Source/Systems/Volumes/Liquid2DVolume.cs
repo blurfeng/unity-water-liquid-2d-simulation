@@ -12,6 +12,11 @@ namespace Fs.Liquid2D.Volumes
         [Tooltip("是否启用2D流体 Renderer Feature 配置重载。")]
         public BoolParameter isActive = new BoolParameter(true, true);
         
+        /// <summary>
+        /// 2D流体 Volume 数据列表。
+        /// 因为 Volume 不支持添加相同类型的组件，所以这里使用列表来支持多组配置。
+        /// 每个 Liquid2DVolumeData 对应一个 Renderer Feature 的配置。使用 nameTag 来区分不同的配置。
+        /// </summary>
         public Liquid2DVolumeDataListParameter liquid2DVolumeDataList = new Liquid2DVolumeDataListParameter(
             new List<Liquid2DVolumeData>
             {
@@ -45,6 +50,10 @@ namespace Fs.Liquid2D.Volumes
         }
     }
 
+    /// <summary>
+    /// 2D流体 Volume 数据。
+    /// 允许在运行时通过 Volume 系统重载 Liquid2DRenderFeatureSettings 的配置。
+    /// </summary>
     [Serializable]
     public class Liquid2DVolumeData : Liquid2DRenderFeatureSettings
     {

@@ -1,4 +1,5 @@
-﻿Shader "Custom/URP/2D/GrabAsBg"
+﻿// 抓取当前相机渲染结果作为背景。
+Shader "Custom/URP/2D/GrabAsBg"
 {
     SubShader
     {
@@ -17,6 +18,7 @@
             ZWrite Off
             
             HLSLPROGRAM
+            
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
 

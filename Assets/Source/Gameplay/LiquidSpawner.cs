@@ -3,8 +3,6 @@ using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
 using Fs.Utility;
-using Unity.VisualScripting;
-using UnityEngine.Serialization;
 
 namespace Fs.Liquid2D
 {
@@ -110,12 +108,18 @@ namespace Fs.Liquid2D
             }
         }
 
+        /// <summary>
+        /// 开始喷射流体粒子。
+        /// </summary>
         public void StartSpawn()
         {
             if (_isSpawning) return;
             _isSpawning = true;
         }
         
+        /// <summary>
+        /// 停止喷射流体粒子。
+        /// </summary>
         public void StopSpawn()
         {
             if (!_isSpawning) return;
@@ -136,6 +140,10 @@ namespace Fs.Liquid2D
             return 0f;
         }
         
+        /// <summary>
+        /// 获取当前喷射方向，包含摆动偏移。
+        /// </summary>
+        /// <returns></returns>
         private Vector2 GetCurrentEjectDirection()
         {
             Vector2 forward = -TransformGet.up; // 默认朝下

@@ -1,8 +1,5 @@
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Rendering;
-using UnityEngine.Rendering.RenderGraphModule;
-using UnityEngine.Rendering.RenderGraphModule.Util;
 using UnityEngine.Rendering.Universal;
 
 namespace Fs.Liquid2D
@@ -25,6 +22,32 @@ namespace Fs.Liquid2D
         private Liquid2dPass _liquid2dPass;
         private Material _materialBlur;
         private Material _materialEffect;
+        
+        private void Awake()
+        {
+            CheckSettings();
+        }
+        
+        private void OnValidate()
+        {
+            CheckSettings();
+        }
+        
+        private void CheckSettings()
+        {
+            if (shaderBlur == null)
+            {
+                shaderBlur = Shader.Find("Custom/URP/2D/Liquid2DBlur");
+            }
+            if (shaderEffect == null)
+            {
+                shaderEffect = Shader.Find("Custom/URP/2D/Liquid2DEffect");
+            }
+            if (renderFeatureSettings == null)
+            {
+                renderFeatureSettings = new Liquid2DRenderFeatureSettings();
+            }
+        }
 
         public override void Create()
         {
@@ -65,7 +88,7 @@ namespace Fs.Liquid2D
         {
             if (disposing)
             {
-                _liquid2dPass.Dispose();
+                _liquid2dPass?.Dispose();
             }
         }
 

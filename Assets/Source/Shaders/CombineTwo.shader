@@ -1,4 +1,5 @@
-﻿Shader "Custom/URP/2D/CombineTwo"
+﻿// 合并两张纹理。主要用于合并模糊后的和模糊过程中核心更清晰的纹理，这样可以保持核心范围的清晰度。
+Shader "Custom/URP/2D/CombineTwo"
 {
     SubShader
     {
@@ -17,6 +18,7 @@
             ZWrite Off
             
             HLSLPROGRAM
+            
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
 
@@ -58,7 +60,7 @@
                 half4 col1 = SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, uv);
                 half4 col2 = SAMPLE_TEXTURE2D_X(_SecondTex, sampler_linear_clamp_SecondTex, uv);
                 
-                // 用_SecondTex的alpha做权重，核心更清晰。
+                // 用_SecondTex的 alpha 做权重，核心更清晰。
                 half4 color;
                 color.rgb = lerp(col1.rgb, col2.rgb, col2.a);
                 color.a   = max(col1.a, col2.a);

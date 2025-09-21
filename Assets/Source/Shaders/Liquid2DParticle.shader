@@ -1,4 +1,4 @@
-﻿// 流体粒子着色器，用于将所有流体粒子批量渲染为一个DrawCall。
+﻿// 流体粒子着色器，用于将所有流体粒子通过 GPU Instancing 一次性渲染到纹理上。
 Shader "Custom/URP/2D/Liquid2DParticle"
 {
     SubShader
@@ -22,6 +22,7 @@ Shader "Custom/URP/2D/Liquid2DParticle"
             ZWrite Off
 
             HLSLPROGRAM
+            
             #pragma vertex Vert
             #pragma fragment Frag
             #pragma multi_compile_instancing
@@ -73,6 +74,7 @@ Shader "Custom/URP/2D/Liquid2DParticle"
                 half4 col = texCol * color;
                 return col;
             }
+            
             ENDHLSL
         }
     }

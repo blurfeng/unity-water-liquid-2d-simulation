@@ -1,4 +1,5 @@
-﻿Shader "Custom/URP/2D/Clone"
+﻿// 使用 Blend SrcAlpha OneMinusSrcAlpha 模式克隆纹理到目标纹理。
+Shader "Custom/URP/2D/Clone"
 {
     SubShader
     {
@@ -8,7 +9,6 @@
             "RenderPipeline" = "UniversalPipeline"
         }
         
-        ZTest Off ZWrite Off Cull Off
         Pass
         {
             Name "Clone"
@@ -18,6 +18,7 @@
             ZWrite Off
 
             HLSLPROGRAM
+            
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.core/Runtime/Utilities/Blit.hlsl"
 

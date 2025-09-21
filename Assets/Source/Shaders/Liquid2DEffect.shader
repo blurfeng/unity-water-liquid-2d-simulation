@@ -1,8 +1,4 @@
-﻿// References:
-// https://docs.unity3d.com/Packages/com.unity.render-pipelines.universal@14.0/manual/renderer-features/how-to-fullscreen-blit.html
-
-// 流体效果着色器，用于实现类似液体的视觉效果。
-// 使用之前模糊过的纹理作为输入，结合透明度裁剪和颜色调整来模拟液体边缘和内部的视觉特性。
+﻿// 流体效果着色器，用于实现类似液体的视觉效果。
 Shader "Custom/URP/2D/Liquid2DEffect"
 {
     Properties
@@ -12,7 +8,7 @@ Shader "Custom/URP/2D/Liquid2DEffect"
         _CoverColor ("Cover Color", Color) = (0,0,0,0) // 叠加颜色，用于整体调节流体颜色。透明度为0时不影响颜色。
         _EdgeIntensity ("Edge Intensity", Range(0,1)) = 0.2 // 边缘颜色强度。越强边缘越宽。
         _EdgeColor ("Edge Color", Color) = (1,1,1,1) // 边缘颜色。
-
+        
         // 背景扰动相关参数。在流体为透明时会看到背景被扰动扭曲的效果。
         _Magnitude ("Distort Magnitude", Range(0, 1)) = 0.1 // 扰动采样缩放。值越大，扰动越频繁。
         _Frequency ("Noise Frequency", Range(1, 500)) = 380 // 扰动频率。值越大，扰动越密集。
@@ -39,6 +35,7 @@ Shader "Custom/URP/2D/Liquid2DEffect"
             ZWrite Off
             
             HLSLPROGRAM
+            
             // ---- Keywords ------------------------------------- Start
             #pragma shader_feature_local _OPACITY_REPLACE // 透明度倍率使用覆盖方式，而不是乘法方式。
             #pragma shader_feature_local _DISTORT // 开启水体扰动。
@@ -46,6 +43,7 @@ Shader "Custom/URP/2D/Liquid2DEffect"
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
+            #include "./ShaderLibrary/MathUtils.hlsl"
 
             #pragma vertex Vert
             #pragma fragment Frag
@@ -108,32 +106,6 @@ CBUFFER_END
                 OUT.uv = GetFullScreenTriangleTexCoord(IN.vertexID);
                 
                 return OUT;
-            }
-
-            half3 Saturation(half3 color, half saturation)
-            {
-                half gray = dot(color, half3(0.299, 0.587, 0.114));
-                return lerp(half3(gray, gray, gray), color, saturation);
-            }
-
-            float random (float2 uv)
-            {
-                return frac(sin(dot(uv,float2(12.9898,78.233)))*43758.5453123);
-            }
-            
-            float noise(float2 coord)
-            {
-                float2 i = floor(coord);
-                float2 f = frac(coord);
-
-                float a = random(i);
-                float b = random(i + float2(1.0, 0.0));
-                float c = random(i + float2(0.0, 1.0));
-                float d = random(i + float2(1.0, 1.0));
-
-                float2 cubic = f * f * (3.0 - 2.0 * f);
-
-                return lerp(a, b, cubic.x) + (c - a) * cubic.y * (1.0 - cubic.x) + (d - b) * cubic.x * cubic.y;
             }
             
             half4 Frag(Varying IN) : SV_Target
