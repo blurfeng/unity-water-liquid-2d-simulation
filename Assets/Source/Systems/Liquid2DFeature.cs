@@ -111,12 +111,12 @@ namespace Fs.Liquid2D
         /// <param name="particle"></param>
         public static void RegisterLiquidParticle(Liquid2DParticleRenderer particle)
         {
-            if (particle == null || particle.Settings == null) return;
+            if (particle == null || particle.RendererSettings == null) return;
 
-            if (!_particlesDic.TryGetValue(particle.Settings, out var list))
+            if (!_particlesDic.TryGetValue(particle.RendererSettings, out var list))
             {
                 list = new List<Liquid2DParticleRenderer>();
-                _particlesDic[particle.Settings] = list;
+                _particlesDic[particle.RendererSettings] = list;
             }
 
             if (!list.Contains(particle))
@@ -131,9 +131,9 @@ namespace Fs.Liquid2D
         /// <param name="particle"></param>
         public static void UnregisterLiquidParticle(Liquid2DParticleRenderer particle)
         {
-            if (particle == null || particle.Settings == null) return;
+            if (particle == null || particle.RendererSettings == null) return;
 
-            if (_particlesDic.TryGetValue(particle.Settings, out var list))
+            if (_particlesDic.TryGetValue(particle.RendererSettings, out var list))
             {
                 if (list.Contains(particle))
                 {
@@ -142,7 +142,7 @@ namespace Fs.Liquid2D
 
                 if (list.Count == 0)
                 {
-                    _particlesDic.Remove(particle.Settings);
+                    _particlesDic.Remove(particle.RendererSettings);
                 }
             }
         }

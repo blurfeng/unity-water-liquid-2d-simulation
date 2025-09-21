@@ -7,11 +7,11 @@ namespace Fs.Liquid2D
     /// 挂载此组件到流体粒子对象上以管理流体粒子的渲染设置。
     /// [ExecuteAlways] 宏标确保在编辑模式下也能注册到 Liquid2DFeature 来保证可见性。
     /// </summary>
-    [ExecuteAlways] 
+    [ExecuteAlways]
     public class Liquid2DParticleRenderer : MonoBehaviour
     {
         [SerializeField, Tooltip("流体粒子渲染器设置。")]
-        private Liquid2dParticleRendererSettings settings = new Liquid2dParticleRendererSettings();
+        private Liquid2dParticleRendererSettings rendererSettings = new Liquid2dParticleRendererSettings();
     
         [SerializeField, Tooltip("粒子生命时间（秒），到时间后自动销毁。")]
         private float lifetime = 0f;
@@ -19,7 +19,7 @@ namespace Fs.Liquid2D
         /// <summary>
         /// 流体粒子渲染器。
         /// </summary>
-        public Liquid2dParticleRendererSettings Settings => settings;
+        public Liquid2dParticleRendererSettings RendererSettings => rendererSettings;
 
         public Transform TransformGet
         {
@@ -73,7 +73,7 @@ namespace Fs.Liquid2D
         /// <returns></returns>
         private bool IsValid()
         {
-            if (!settings.IsValid())
+            if (!rendererSettings.IsValid())
                 return false;
 
             return true;

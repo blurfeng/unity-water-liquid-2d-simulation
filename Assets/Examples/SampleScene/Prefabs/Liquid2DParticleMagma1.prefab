@@ -77,7 +77,27 @@ PrefabInstance:
       value: 1.9170208
       objectReference: {fileID: 0}
     - target: {fileID: 5143337698038929875, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
+      propertyPath: rendererSettings.sprite
+      value: 
+      objectReference: {fileID: 21300000, guid: d395cef0ea5fee348a6160a686f26c30, type: 3}
+    - target: {fileID: 5143337698038929875, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
+      propertyPath: rendererSettings.color.b
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5143337698038929875, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
+      propertyPath: rendererSettings.color.g
+      value: 0.117771715
+      objectReference: {fileID: 0}
+    - target: {fileID: 5143337698038929875, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
+      propertyPath: rendererSettings.color.r
+      value: 2.6042306
+      objectReference: {fileID: 0}
+    - target: {fileID: 5143337698038929875, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
       propertyPath: settings.liquid2DLayerMask
+      value: 4
+      objectReference: {fileID: 0}
+    - target: {fileID: 5143337698038929875, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
+      propertyPath: rendererSettings.liquid2DLayerMask
       value: 4
       objectReference: {fileID: 0}
     - target: {fileID: 5961824672208803902, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
