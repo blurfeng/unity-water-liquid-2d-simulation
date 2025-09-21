@@ -1,0 +1,144 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 11145981673336645838492a2d98e247, type: 3}
+  m_Name: Renderer2D
+  m_EditorClassIdentifier: 
+  debugShaders:
+    debugReplacementPS: {fileID: 4800000, guid: cf852408f2e174538bcd9b7fda1c5ae7, type: 3}
+    hdrDebugViewPS: {fileID: 4800000, guid: 573620ae32aec764abd4d728906d2587, type: 3}
+    probeVolumeSamplingDebugComputeShader: {fileID: 7200000, guid: 53626a513ea68ce47b59dc1299fe3959, type: 3}
+  probeVolumeResources:
+    probeVolumeDebugShader: {fileID: 0}
+    probeVolumeFragmentationDebugShader: {fileID: 0}
+    probeVolumeOffsetDebugShader: {fileID: 0}
+    probeVolumeSamplingDebugShader: {fileID: 0}
+    probeSamplingDebugMesh: {fileID: 0}
+    probeSamplingDebugTexture: {fileID: 0}
+    probeVolumeBlendStatesCS: {fileID: 0}
+  m_RendererFeatures:
+  - {fileID: 8380843845757841626}
+  - {fileID: 4213133728103814185}
+  m_RendererFeatureMap: da306af812bd4e742954d8b6cd0e783a
+  m_UseNativeRenderPass: 0
+  m_LayerMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_TransparencySortMode: 0
+  m_TransparencySortAxis: {x: 0, y: 1, z: 0}
+  m_HDREmulationScale: 1
+  m_LightRenderTextureScale: 0.5
+  m_LightBlendStyles:
+  - name: Multiply
+    maskTextureChannel: 0
+    blendMode: 1
+  - name: Additive
+    maskTextureChannel: 0
+    blendMode: 0
+  - name: Multiply with Mask
+    maskTextureChannel: 1
+    blendMode: 1
+  - name: Additive with Mask
+    maskTextureChannel: 1
+    blendMode: 0
+  m_UseDepthStencilBuffer: 1
+  m_UseCameraSortingLayersTexture: 0
+  m_CameraSortingLayersTextureBound: -1
+  m_CameraSortingLayerDownsamplingMethod: 0
+  m_MaxLightRenderTextureCount: 16
+  m_MaxShadowRenderTextureCount: 1
+  m_PostProcessData: {fileID: 11400000, guid: 41439944d30ece34e96484bdb6645b55, type: 2}
+  m_DefaultMaterialType: 0
+  m_DefaultCustomMaterial: {fileID: 2100000, guid: a97c105638bdf8b4a8650670310a4cd3, type: 2}
+--- !u!114 &4213133728103814185
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 58ccafab4e6e1e74fb8316d4c2cc72de, type: 3}
+  m_Name: Liquid2DFeature Magma
+  m_EditorClassIdentifier: Assembly-CSharp::Fs.Liquid2D.Liquid2DFeature
+  m_Active: 1
+  shaderBlur: {fileID: 4800000, guid: ba2a65ae22134d45b98c9bead0df1a34, type: 3}
+  shaderEffect: {fileID: 4800000, guid: 22ec51fd89bf43c799b2934514998e2d, type: 3}
+  renderFeatureSettings:
+    nameTag: Magma
+    liquid2DLayerMask: 4
+    obstructionRenderingLayerMask:
+      serializedVersion: 0
+      m_Bits: 2
+    cutoff: 0.2
+    opacityMode: 0
+    opacityValue: 1
+    coverColor: {r: 0, g: 0, b: 0, a: 0}
+    edgeIntensity: 0
+    edgeColor: {r: 1, g: 1, b: 1, a: 1}
+    blur:
+      iterations: 4
+      blurSpread: 0.6
+      coreKeepIntensity: 0.4
+      scaleFactor: 4
+      blurEdgeColor: {r: 0.16037738, g: 0, b: 0, a: 1}
+      blurEdgeColorIntensity: 0.4
+    distort:
+      enable: 0
+      magnitude: 0.1
+      frequency: 380
+      amplitude: 0.008
+      distortSpeed: {x: 0.1, y: 1}
+      distortTimeFactors: {x: 0.3, y: -0.4, z: 0.1, w: 0.5}
+      noiseCoordOffset: 4
+--- !u!114 &8380843845757841626
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 58ccafab4e6e1e74fb8316d4c2cc72de, type: 3}
+  m_Name: Liquid2DFeature Water
+  m_EditorClassIdentifier: Assembly-CSharp::Fs.Liquid2D.Liquid2DFeature
+  m_Active: 1
+  shaderBlur: {fileID: 4800000, guid: ba2a65ae22134d45b98c9bead0df1a34, type: 3}
+  shaderEffect: {fileID: 4800000, guid: 22ec51fd89bf43c799b2934514998e2d, type: 3}
+  renderFeatureSettings:
+    nameTag: Water
+    liquid2DLayerMask: 2
+    obstructionRenderingLayerMask:
+      serializedVersion: 0
+      m_Bits: 2
+    cutoff: 0.6
+    opacityMode: 1
+    opacityValue: 0.3
+    coverColor: {r: 0, g: 0.43330216, b: 1, a: 1}
+    edgeIntensity: 0.6
+    edgeColor: {r: 0.43867922, g: 0.699319, b: 1, a: 0.8235294}
+    blur:
+      iterations: 3
+      blurSpread: 0.6
+      coreKeepIntensity: 0.379
+      scaleFactor: 4
+      blurEdgeColor: {r: 0, g: 0, b: 0.18867922, a: 0}
+      blurEdgeColorIntensity: 0.7
+    distort:
+      enable: 1
+      magnitude: 0.1
+      frequency: 380
+      amplitude: 0.008
+      distortSpeed: {x: 0.1, y: 1}
+      distortTimeFactors: {x: 0.3, y: -0.4, z: 0.1, w: 0.5}
+      noiseCoordOffset: 4

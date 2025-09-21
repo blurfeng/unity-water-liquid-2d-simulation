@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
-using Fs.Utility;
+using Fs.Liquid2D.Utility;
 
 namespace Fs.Liquid2D
 {

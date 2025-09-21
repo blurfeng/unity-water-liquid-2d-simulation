@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
-namespace Fs.Utility
+namespace Fs.Liquid2D.Utility
 {
     /// <summary>
     /// 提供随机相关的工具方法。

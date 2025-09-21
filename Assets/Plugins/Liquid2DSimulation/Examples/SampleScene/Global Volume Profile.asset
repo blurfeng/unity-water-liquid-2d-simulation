@@ -21,14 +21,30 @@ MonoBehaviour:
     m_Value:
     - nameTag: Water
       liquid2DLayerMask: 2
-      iterations: 7
-      blurSpread: 0.6
-      scaleFactor: 4
+      obstructionRenderingLayerMask:
+        serializedVersion: 0
+        m_Bits: 0
       cutoff: 0.2
-      liquidOcclusionLayerMask:
-        serializedVersion: 2
-        m_Bits: 64
-      backgroundColor: {r: 0, g: 0.025248341, b: 0.24528301, a: 0}
+      opacityMode: 0
+      opacityValue: 1
+      coverColor: {r: 0, g: 0, b: 0, a: 0}
+      edgeIntensity: 0
+      edgeColor: {r: 1, g: 1, b: 1, a: 1}
+      blur:
+        iterations: 7
+        blurSpread: 0.8
+        coreKeepIntensity: 0.4
+        scaleFactor: 4
+        blurEdgeColor: {r: 0, g: 0, b: 0, a: 0}
+        blurEdgeColorIntensity: 0
+      distort:
+        enable: 0
+        magnitude: 0.1
+        frequency: 380
+        amplitude: 0.008
+        distortSpeed: {x: 0.1, y: 1}
+        distortTimeFactors: {x: 0.3, y: -0.4, z: 0.1, w: 0.5}
+        noiseCoordOffset: 4
       isActive: 1
 --- !u!114 &11400000
 MonoBehaviour:

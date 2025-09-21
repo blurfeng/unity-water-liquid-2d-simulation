@@ -1,5 +1,5 @@
 ﻿
-namespace Fs.Utility
+namespace Fs.Liquid2D.Utility
 {
     /// <summary>
     /// 随机数据接口。
