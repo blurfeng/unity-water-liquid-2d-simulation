@@ -98,27 +98,27 @@ namespace Fs.Liquid2D
         
         // 所有的流体粒子注册到这里，按设置分组。用于之后的渲染。
 
-        private static readonly Dictionary<Liquid2dParticleRendererSettings, List<Liquid2DParticleRenderer>>
-            _particlesDic = new Dictionary<Liquid2dParticleRendererSettings, List<Liquid2DParticleRenderer>>();
+        private static readonly Dictionary<Liquid2dParticleSettings, List<Liquid2DParticle>>
+            _particlesDic = new Dictionary<Liquid2dParticleSettings, List<Liquid2DParticle>>();
         
         /// <summary>
         /// 所有注册的流体粒子，按设置分组。用于批量渲染。
         /// </summary>
-        internal static Dictionary<Liquid2dParticleRendererSettings, List<Liquid2DParticleRenderer>> ParticlesDic => _particlesDic;
+        internal static Dictionary<Liquid2dParticleSettings, List<Liquid2DParticle>> ParticlesDic => _particlesDic;
 
         /// <summary>
         /// 注册流体粒子。
         /// 为了 Game Instancing 批量渲染，我们需要将相同设置的粒子进行分组。
         /// </summary>
         /// <param name="particle"></param>
-        public static void RegisterLiquidParticle(Liquid2DParticleRenderer particle)
+        public static void RegisterLiquidParticle(Liquid2DParticle particle)
         {
-            if (particle == null || particle.RendererSettings == null) return;
+            if (particle == null || particle.Settings == null) return;
 
-            if (!_particlesDic.TryGetValue(particle.RendererSettings, out var list))
+            if (!_particlesDic.TryGetValue(particle.Settings, out var list))
             {
-                list = new List<Liquid2DParticleRenderer>();
-                _particlesDic[particle.RendererSettings] = list;
+                list = new List<Liquid2DParticle>();
+                _particlesDic[particle.Settings] = list;
             }
 
             if (!list.Contains(particle))
@@ -131,11 +131,11 @@ namespace Fs.Liquid2D
         /// 注销流体粒子。
         /// </summary>
         /// <param name="particle"></param>
-        public static void UnregisterLiquidParticle(Liquid2DParticleRenderer particle)
+        public static void UnregisterLiquidParticle(Liquid2DParticle particle)
         {
-            if (particle == null || particle.RendererSettings == null) return;
+            if (particle == null || particle.Settings == null) return;
 
-            if (_particlesDic.TryGetValue(particle.RendererSettings, out var list))
+            if (_particlesDic.TryGetValue(particle.Settings, out var list))
             {
                 if (list.Contains(particle))
                 {
@@ -144,7 +144,7 @@ namespace Fs.Liquid2D
 
                 if (list.Count == 0)
                 {
-                    _particlesDic.Remove(particle.RendererSettings);
+                    _particlesDic.Remove(particle.Settings);
                 }
             }
         }

@@ -405,7 +405,7 @@ namespace Fs.Liquid2D
                     if (item == null || !item.isActiveAndEnabled) continue;
                     
                     // 使用层遮罩过滤粒子。只渲染需要的粒子。
-                    if ((item.RendererSettings.liquid2DLayerMask & targetLayerMask) == 0) continue;
+                    if ((item.Settings.liquid2DLayerMask & targetLayerMask) == 0) continue;
                     
                     var ts = item.TransformGet;
                     
@@ -415,7 +415,7 @@ namespace Fs.Liquid2D
                     
                     // 填充矩阵和颜色数据。
                     data.matricesCache[count] = Matrix4x4.TRS(ts.position, ts.rotation, ts.localScale);
-                    data.colorArrayCache[count] = item.RendererSettings.color;
+                    data.colorArrayCache[count] = item.Settings.color;
                     count++;
                 }
              

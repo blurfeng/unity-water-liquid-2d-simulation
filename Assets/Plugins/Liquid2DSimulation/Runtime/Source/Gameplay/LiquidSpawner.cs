@@ -174,7 +174,7 @@ namespace Fs.Liquid2D
             go.transform.SetParent(ts);
             
             // 检查是否挂载 Liquid2DParticleRenderer。
-            var lRenderer = go.GetComponent<Liquid2DParticleRenderer>();
+            var lRenderer = go.GetComponent<Liquid2DParticle>();
             if (lRenderer == null)
             {
                 Debug.LogWarning("预制体未挂载Liquid2DParticleRenderer！");
@@ -248,7 +248,7 @@ namespace Fs.Liquid2D
 #if UNITY_EDITOR
         public void OnValidate()
         {
-            if (liquidPrefab != null && liquidPrefab.GetComponent<Liquid2DParticleRenderer>() == null)
+            if (liquidPrefab != null && liquidPrefab.GetComponent<Liquid2DParticle>() == null)
             {
                 Debug.LogWarning($"预制体 {liquidPrefab.name} 未挂载 Liquid2DParticleRenderer，已清空。");
                 liquidPrefab = null;

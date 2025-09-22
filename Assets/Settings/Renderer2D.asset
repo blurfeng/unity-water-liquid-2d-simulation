@@ -93,7 +93,7 @@ MonoBehaviour:
       blurEdgeColor: {r: 0.16037738, g: 0, b: 0, a: 1}
       blurEdgeColorIntensity: 0.4
     distort:
-      enable: 0
+      enable: 1
       magnitude: 0.1
       frequency: 380
       amplitude: 0.008

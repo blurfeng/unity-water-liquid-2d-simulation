@@ -59,7 +59,7 @@ namespace Fs.Liquid2D
         public class Distort
         {
             [Tooltip("是否启用流体扭曲效果。")]
-            public bool enable = false;
+            public bool enable = true;
             
             [Range(0.0001f, 1f), Tooltip("扰动采样缩放。值越大，扰动越频繁。")]
             public float magnitude = 0.1f;
