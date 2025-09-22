@@ -564,8 +564,8 @@ namespace Fs.Liquid2D
             {
                 passData.grabAsBgMaterial = MaterialGrabAsBg;
                 passData.sourceTh = source;
-                passData.grabAsBgEdgeColor = _settings.blur.blurEdgeColor;
-                passData.grabAsBgEdgeColorIntensity = _settings.blur.blurEdgeColorIntensity;
+                passData.grabAsBgEdgeColor = _settings.blur.blurBgColor;
+                passData.grabAsBgEdgeColorIntensity = _settings.blur.blurBgColorIntensity;
             
                 // 设置渲染目标纹理句柄和声明使用纹理句柄。
                 builder.SetRenderAttachment(renderAttachment1, 0, AccessFlags.Write);
@@ -683,8 +683,8 @@ namespace Fs.Liquid2D
             _settings.blur.coreKeepIntensity = isActive ? VolumeData.blur.coreKeepIntensity : _settingsDefault.blur.coreKeepIntensity;
             _settings.blur.scaleFactor = isActive ? VolumeData.blur.scaleFactor : _settingsDefault.blur.scaleFactor;
             // 模糊边缘色和强度。实际上在 Blur 前作为底图进行混合。默认的底图是当前相机的场景纹理（alpha为0）。
-            _settings.blur.blurEdgeColor = isActive ? VolumeData.blur.blurEdgeColor : _settingsDefault.blur.blurEdgeColor;
-            _settings.blur.blurEdgeColorIntensity = isActive ? VolumeData.blur.blurEdgeColorIntensity : _settingsDefault.blur.blurEdgeColorIntensity;
+            _settings.blur.blurBgColor = isActive ? VolumeData.blur.blurBgColor : _settingsDefault.blur.blurBgColor;
+            _settings.blur.blurBgColorIntensity = isActive ? VolumeData.blur.blurBgColorIntensity : _settingsDefault.blur.blurBgColorIntensity;
             
             // ---- 水体扰动设置 ---- //
             _settings.distort.enable = isActive ? VolumeData.distort.enable : _settingsDefault.distort.enable;

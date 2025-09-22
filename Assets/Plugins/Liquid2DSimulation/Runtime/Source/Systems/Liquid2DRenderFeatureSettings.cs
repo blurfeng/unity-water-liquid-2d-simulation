@@ -48,11 +48,11 @@ namespace Fs.Liquid2D
             [Tooltip("渲染缩放比例，越大性能越好，但边界越不清晰。")]
             public EScaleFactor scaleFactor = EScaleFactor.X4;
             
-            [SerializeField, ColorUsage(true, true), Tooltip("流体模糊边缘色。作为模糊时底图的颜色，最终影响整体水体的边缘色（默认为当前相机场景纹理颜色）。")]
-            public Color blurEdgeColor = Color.clear;
+            [SerializeField, ColorUsage(true, true), Tooltip("流体模糊背景色。作为模糊时底图的颜色，最终影响整体水体的边缘色（默认为当前相机场景纹理颜色）。")]
+            public Color blurBgColor = Color.clear;
         
-            [Range(0f, 1f), Tooltip("流体模糊边缘色强度。0时不显示边缘色（默认为当前相机场景纹理颜色），1为完全显示边缘色。")]
-            public float blurEdgeColorIntensity = 0f;
+            [Range(0f, 1f), Tooltip("流体模糊背景色强度。0时不使用背景色（默认为当前相机场景纹理颜色），1为完全显示背景色。")]
+            public float blurBgColorIntensity = 0f;
         }
 
         [Serializable]
