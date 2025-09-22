@@ -59,7 +59,7 @@ Shader "Custom/URP/2D/GrabAsBg"
                 return OUT;
             }
             
-            Output Frag(Varying IN) : SV_Target0
+            Output Frag(Varying IN)
             {
                 Output OUT;
                 

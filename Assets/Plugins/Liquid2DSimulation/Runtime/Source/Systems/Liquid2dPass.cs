@@ -470,6 +470,11 @@ namespace Fs.Liquid2D
             MaterialPropertyBlock mpb = new MaterialPropertyBlock();
             mpb.SetTexture(ShaderIds.MainTexId,data.blurSource); // 传入当前模糊纹理。
             mpb.SetFloat(ShaderIds.BlurOffsetId, offset); // 设置模糊偏移强度。
+            // 是否忽略背景色。
+            if (data.settings.blur.ignoreBgColor)
+                data.materialBlur.EnableKeyword("_IGNORE_BG_COLOR");
+            else
+                data.materialBlur.DisableKeyword("_IGNORE_BG_COLOR");
 
             // 绘制一个全屏三角形，使用模糊材质，并传入属性块。
             cmd.DrawProcedural(
@@ -494,14 +499,22 @@ namespace Fs.Liquid2D
             mpb.SetFloat(ShaderIds.Cutoff, data.settings.cutoff);
 
             // 透明度调整参数。
-            if (data.settings.opacityMode == EOpacityMode.Replace)
+            if (data.settings.opacityMode == EOpacityMode.Multiply)
             {
-                data.materialEffect.EnableKeyword("_OPACITY_REPLACE");
-            }
-            else
-            {
+                data.materialEffect.EnableKeyword("_OPACITY_MULTIPLY");
                 data.materialEffect.DisableKeyword("_OPACITY_REPLACE");
             }
+            else if (data.settings.opacityMode == EOpacityMode.Replace)
+            {
+                data.materialEffect.EnableKeyword("_OPACITY_REPLACE");
+                data.materialEffect.DisableKeyword("_OPACITY_MULTIPLY");
+            }
+            else // Default
+            {
+                data.materialEffect.DisableKeyword("_OPACITY_MULTIPLY");
+                data.materialEffect.DisableKeyword("_OPACITY_REPLACE");
+            }
+            
             mpb.SetFloat(ShaderIds.OpacityValue, data.settings.opacityValue);
             
             mpb.SetColor(ShaderIds.CoverColorId, data.settings.coverColor); // 覆盖颜色。
@@ -682,7 +695,8 @@ namespace Fs.Liquid2D
             _settings.blur.blurSpread = isActive ? VolumeData.blur.blurSpread : _settingsDefault.blur.blurSpread;
             _settings.blur.coreKeepIntensity = isActive ? VolumeData.blur.coreKeepIntensity : _settingsDefault.blur.coreKeepIntensity;
             _settings.blur.scaleFactor = isActive ? VolumeData.blur.scaleFactor : _settingsDefault.blur.scaleFactor;
-            // 模糊边缘色和强度。实际上在 Blur 前作为底图进行混合。默认的底图是当前相机的场景纹理（alpha为0）。
+            _settings.blur.ignoreBgColor = isActive ? VolumeData.blur.ignoreBgColor : _settingsDefault.blur.ignoreBgColor;
+            // 模糊背景色和强度。实际上在 Blur 前作为底图进行混合。默认的底图是当前相机的场景纹理（alpha为0）。
             _settings.blur.blurBgColor = isActive ? VolumeData.blur.blurBgColor : _settingsDefault.blur.blurBgColor;
             _settings.blur.blurBgColorIntensity = isActive ? VolumeData.blur.blurBgColorIntensity : _settingsDefault.blur.blurBgColorIntensity;
             

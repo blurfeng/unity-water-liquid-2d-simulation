@@ -18,6 +18,9 @@ Shader "Custom/URP/2D/Liquid2DBlur"
             ZWrite Off
         
             HLSLPROGRAM
+            // ---- Keywords ------------------------------------- Start
+            #pragma shader_feature_local _IGNORE_BG_COLOR // 忽略背景色。
+            // ---- Keywords ------------------------------------- End
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
@@ -70,6 +73,28 @@ Shader "Custom/URP/2D/Liquid2DBlur"
                 // https://zhuanlan.zhihu.com/p/632957274
                 // Kawase Blur 进行简单的模糊处理，采样周围像素并平均。
                 
+                #if defined(_IGNORE_BG_COLOR)
+                
+                half4 col0 = SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv01.xy);
+                half4 col1 = SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv01.zw);
+                half4 col2 = SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv23.xy);
+                half4 col3 = SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv23.zw);
+                half4 col4 = SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv4);
+
+                // 中心点权重4，其余为1
+                half w0 = col0.a * 4;
+                half w1 = col1.a;
+                half w2 = col2.a;
+                half w3 = col3.a;
+                half w4 = col4.a;
+
+                half totalWeight = w0 + w1 + w2 + w3 + w4 + 1e-5;
+                half3 rgb = (col0.rgb * w0 + col1.rgb * w1 + col2.rgb * w2 + col3.rgb * w3 + col4.rgb * w4) / totalWeight;
+                half a = (col0.a * 4 + col1.a + col2.a + col3.a + col4.a) * 0.125;
+
+                return half4(rgb, a);
+                
+                #else
                 // 采样中心。将自身颜色也加入混合，更好的保持自身颜色。中心权重更高。
                 half4 col = SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv01.xy) * 4;
                 // 四个斜角。
@@ -79,6 +104,7 @@ Shader "Custom/URP/2D/Liquid2DBlur"
                 col += SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv4);
                 // 权重归一化。
                 return col * 0.125;
+                #endif
             }
             
             ENDHLSL

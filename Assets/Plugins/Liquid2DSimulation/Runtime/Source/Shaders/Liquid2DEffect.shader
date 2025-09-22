@@ -37,6 +37,7 @@ Shader "Custom/URP/2D/Liquid2DEffect"
             HLSLPROGRAM
             
             // ---- Keywords ------------------------------------- Start
+            #pragma shader_feature_local _OPACITY_MULTIPLY // 透明度倍率使用乘法方式。
             #pragma shader_feature_local _OPACITY_REPLACE // 透明度倍率使用覆盖方式，而不是乘法方式。
             #pragma shader_feature_local _DISTORT // 开启水体扰动。
             // ---- Keywords ------------------------------------- End
@@ -128,11 +129,12 @@ CBUFFER_END
                 half t = saturate((col.a - edgeStart) / max(edgeRange, 1e-5));
 
                 // ---- 透明度处理 ---- //
-                #if defined(_OPACITY_REPLACE)
+                #if defined(_OPACITY_MULTIPLY)
+                col.a = col.a * _OpacityValue; // 透明度乘以一个值，整体调节透明度。
+                #elif defined(_OPACITY_REPLACE)
                 col.a = _OpacityValue; // 直接覆盖透明度。
-                #else
-                col.a = col.a * _OpacityValue;
                 #endif
+                // 注意：如果不启用任何透明度模式，则保持原有透明度不变。
 
                 // ---- 边缘颜色-应用边缘色 ---- //
                 col = lerp(_EdgeColor, col, t);

@@ -17,6 +17,11 @@ namespace Fs.Liquid2D
     public enum EOpacityMode
     {
         /// <summary>
+        /// 默认模式，不会影响透明度。
+        /// </summary>
+        Default,
+        
+        /// <summary>
         /// 透明度值作为倍率和原有透明度相乘。
         /// </summary>
         Multiply,
@@ -47,6 +52,9 @@ namespace Fs.Liquid2D
 
             [Tooltip("渲染缩放比例，越大性能越好，但边界越不清晰。")]
             public EScaleFactor scaleFactor = EScaleFactor.X4;
+
+            [Tooltip("是否忽略背景色。启用后，背景色将不参与模糊计算，模糊时仅使用流体颜色(但实际上任然会受到一些影响)。补充说明：模糊算法实际上是对每个像素点和边缘颜色进行混合，所以流体粒子颜色会受到背景色影响，越靠近边缘越明显。")]
+            public bool ignoreBgColor = false;
             
             [SerializeField, ColorUsage(true, true), Tooltip("流体模糊背景色。作为模糊时底图的颜色，最终影响整体水体的边缘色（默认为当前相机场景纹理颜色）。")]
             public Color blurBgColor = Color.clear;
@@ -100,7 +108,7 @@ namespace Fs.Liquid2D
         public float cutoff = 0.45f;
         
         [Tooltip("透明度计算模式。")]
-        public EOpacityMode opacityMode = EOpacityMode.Multiply;
+        public EOpacityMode opacityMode = EOpacityMode.Default;
         
         [Range(0f, 1f), Tooltip("透明度值，根据模式作用到最终的流体颜色。")]
         public float opacityValue = 1f;

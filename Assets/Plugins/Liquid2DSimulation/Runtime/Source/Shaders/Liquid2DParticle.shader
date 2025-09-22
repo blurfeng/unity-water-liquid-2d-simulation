@@ -61,7 +61,7 @@ Shader "Custom/URP/2D/Liquid2DParticle"
                 UNITY_TRANSFER_INSTANCE_ID(IN, OUT);
 
                 OUT.uv = IN.uv;
-                OUT.positionCS = TransformObjectToHClip(IN.positionOS);
+                OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
                 return OUT;
             }
 
