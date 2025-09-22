@@ -87,6 +87,18 @@ namespace Fs.Liquid2D
             [Tooltip("噪点坐标偏移。用于避免噪点纹理的重复性。")]
             public float noiseCoordOffset = 4f;
         }
+
+        [Serializable]
+        public class Pixel
+        {
+            public bool enable = false;
+            
+            [Range(1, 32), Tooltip("像素化尺寸，值越大像素化效果越明显。")]
+            public int pixelSize = 4;
+
+            [Tooltip("是否使用像素化背景色。开启后，在流体透明的情况下，背景色会被像素化。")]
+            public bool pixelBg = true;
+        }
         
         [Tooltip("2D流体 Renderer Feature 名称标签，用于区分不同的 Renderer Feature 配置。")]
         public string nameTag = "Liquid2D";
@@ -127,6 +139,9 @@ namespace Fs.Liquid2D
         
         [Tooltip("流体扭曲设置。")]
         public Distort distort;
+        
+        [Tooltip("流体像素化设置。用于生成像素化风格效果。")]
+        public Pixel pixel;
         
         public Liquid2DRenderFeatureSettings Clone()
         {

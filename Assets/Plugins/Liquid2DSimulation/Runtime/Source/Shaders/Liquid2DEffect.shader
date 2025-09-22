@@ -40,6 +40,8 @@ Shader "Custom/URP/2D/Liquid2DEffect"
             #pragma shader_feature_local _OPACITY_MULTIPLY // 透明度倍率使用乘法方式。
             #pragma shader_feature_local _OPACITY_REPLACE // 透明度倍率使用覆盖方式，而不是乘法方式。
             #pragma shader_feature_local _DISTORT // 开启水体扰动。
+            #pragma shader_feature_local _PIXEL // 开启像素化水体效果。
+            #pragma shader_feature_local _PIXEL_BG // 开启像素化背景。
             // ---- Keywords ------------------------------------- End
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
@@ -65,9 +67,10 @@ Shader "Custom/URP/2D/Liquid2DEffect"
             SAMPLER(sampler_linear_clamp_MainTex);
             TEXTURE2D_X(_ObstructionTex);
             SAMPLER(sampler_linear_clamp_ObstructionTex);
-            // 水体扰动背景相关参数。
-
-            #if defined(_DISTORT)
+            
+            // 背景纹理。当需要扰动或像素化背景时使用。将处理后的背景作为流体的背景。
+            // 否则流体是透明的，可以看到真正的背景。
+            #if defined(_DISTORT) || defined(_PIXEL_BG)
             TEXTURE2D_X(_BackgroundTex);
             SAMPLER(sampler_linear_clamp_BackgroundTex);
             #endif
@@ -80,6 +83,8 @@ CBUFFER_START(UnityPerMaterial)
             half _EdgeIntensity; // 边缘颜色强度。越强边缘越宽。
             half4 _EdgeColor; // 边缘颜色。
             
+            
+            // 水体扰动相关参数。
             #if defined(_DISTORT)
             // 计算扰动方式。
             float _Magnitude; // 扰动采样缩放。
@@ -96,6 +101,12 @@ CBUFFER_START(UnityPerMaterial)
             // half _DistortIntensity; // 扰动强度。
             // half _AspectRatio; // 视口宽高比，用于修正UV坐标。
             #endif
+
+            // 像素化相关参数。
+            #if defined(_PIXEL)
+            float2 _PixelSize;
+            #endif
+            
 CBUFFER_END
             
             Varying Vert(Attribute IN)
@@ -111,7 +122,15 @@ CBUFFER_END
             
             half4 Frag(Varying IN) : SV_Target
             {
-                half4 col = SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, IN.uv);
+                float2 uvDefault = IN.uv;
+                float2 uvProcess = IN.uv;
+
+                #if defined(_PIXEL)
+                uvProcess.xy = floor(uvProcess.xy * _PixelSize) / _PixelSize;
+                // return half4(uvPixel,0,1);
+                #endif
+                
+                half4 col = SAMPLE_TEXTURE2D_X(_MainTex, sampler_linear_clamp_MainTex, uvProcess);
                 
                 // ---- 透明度裁剪 ---- //
                 // 裁剪掉透明度低于阈值的像素，形成流体边缘效果。
@@ -141,7 +160,7 @@ CBUFFER_END
 
                 // ---- 阻挡纹理处理 ---- //
                 // 阻挡纹理完全阻挡流体颜色。一般是挡板、管道、瓶子的横截面等。
-                half4 colObstructionTex = SAMPLE_TEXTURE2D_X(_ObstructionTex, sampler_linear_clamp_ObstructionTex, IN.uv);
+                half4 colObstructionTex = SAMPLE_TEXTURE2D_X(_ObstructionTex, sampler_linear_clamp_ObstructionTex, uvDefault);
                 clip(1 - colObstructionTex.a);
                 // 阻挡物挡住流体颜色。
                 col = lerp(col, colObstructionTex, step(0.001, colObstructionTex.a));
@@ -155,10 +174,17 @@ CBUFFER_END
                 
                 // ---- 水体扰动背景 ---- //
                 #if defined(_DISTORT)
+
+                // 像素化背景时，扰动使用像素化后的UV，否则使用默认UV。
+                #if defined(_PIXEL_BG)
+                float2 uvDistortGet = uvProcess;
+                #else
+                float2 uvDistortGet = uvDefault;
+                #endif
                 
                 float time = _Time.y;
-                float2 noisecoord1 = IN.uv * _Frequency * (_Magnitude);
-                float2 noisecoord2 = IN.uv * _Frequency * (_Magnitude) + _NoiseCoordOffset;
+                float2 noisecoord1 = uvDistortGet * _Frequency * (_Magnitude);
+                float2 noisecoord2 = uvDistortGet * _Frequency * (_Magnitude) + _NoiseCoordOffset;
                 float2 motion1 = float2(time * _DistortTimeFactors.x, time * _DistortTimeFactors.y) * _DistortSpeed.x;
                 float2 motion2 = float2(time * _DistortTimeFactors.z, time * _DistortTimeFactors.w) * _DistortSpeed.y;
 
@@ -169,7 +195,7 @@ CBUFFER_END
                 // 计算最终采样偏移。
                 float2 distort_sum = (distort1 + distort2) * _Amplitude;
                 //return half4(distort_sum,0,1);
-                float2 uvDistorted = saturate(IN.uv + distort_sum);
+                float2 uvDistorted = saturate(uvDistortGet + distort_sum);
                 
                 // 采样背景纹理。
 				half4 colBg = SAMPLE_TEXTURE2D_X(_BackgroundTex, sampler_linear_clamp_BackgroundTex, uvDistorted);
@@ -181,7 +207,7 @@ CBUFFER_END
                 return finalColor;
 
                 // ---- 使用贴图控制扰动效果的方式 ---- //
-                // float2 distortUv = IN.uv;
+                // float2 distortUv = uvDefault;
                 // distortUv.x *= _AspectRatio;
                 //
                 // float2 _DistortSpeed = float2(1,1);
@@ -189,13 +215,28 @@ CBUFFER_END
                 // _DistortIntensity = 0.01;
                 // distortUv = distortUv * _DistortScale + _Time.y * _DistortSpeed;
                 // half2 distort = SAMPLE_TEXTURE2D_X(_DistortTex, sampler_linear_repeat_DistortTex, distortUv) * 2 - 1;
-                // float2 uvDistorted = saturate(IN.uv + distort * _DistortIntensity);
+                // float2 uvDistorted = saturate(uvDefault + distort * _DistortIntensity);
                 // half4 bg = SAMPLE_TEXTURE2D_X(_BackgroundTex, sampler_linear_clamp_BackgroundTex, uvDistorted);
                 // half4 finalCol = lerp(bg, col, col.a);
                 // return finalCol;
                 
                 #else
+
+                // 开启像素化背景时，使用像素化后的UV采样背景，否则使用默认UV。
+                #if defined(_PIXEL_BG)
+                // 采样背景纹理。
+				half4 colBg = SAMPLE_TEXTURE2D_X(_BackgroundTex, sampler_linear_clamp_BackgroundTex, uvProcess);
+                // 混合流体颜色和背景颜色。
+                half4 finalColor;
+                finalColor.rgb = col.rgb * col.a + colBg.rgb * (1 - col.a);
+                // 正常混合是 col.a + colBg.a * (1 - col.a) 但是 colBg.a 是1，所以简化了。
+                finalColor.a = 1.0; // 混合以后已经包含了背景色，不需要和原有背景混合了，直接不透明。
+                return finalColor;
+                #else
+                // 直接返回流体颜色。此时水体是透明的，可以看到真正的背景。
                 return col;
+                #endif
+                
                 #endif
             }
             ENDHLSL

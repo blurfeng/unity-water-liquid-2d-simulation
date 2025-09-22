@@ -35,6 +35,9 @@ namespace Fs.Liquid2D
             internal static readonly int DistortSpeed = Shader.PropertyToID("_DistortSpeed");
             internal static readonly int DistortTimeFactors = Shader.PropertyToID("_DistortTimeFactors");
             internal static readonly int NoiseCoordOffset = Shader.PropertyToID("_NoiseCoordOffset");
+            
+            // 像素化相关。
+            internal static readonly int PixelSize = Shader.PropertyToID("_PixelSize");
         }
         
         private static readonly ShaderTagId _shaderTagId = new ShaderTagId("UniversalForward");
@@ -353,7 +356,7 @@ namespace Fs.Liquid2D
             {
                 // 通道数据设置。
                 // passData.resourceData = resourceData;
-                // passData.cameraData = cameraData;
+                passData.cameraData = cameraData;
                 passData.settings = _settings;
                 
                 passData.materialEffect = _materialEffect;
@@ -493,10 +496,10 @@ namespace Fs.Liquid2D
             
             // 设置外描边材质属性块，传入绘制RT。
             MaterialPropertyBlock mpb = new MaterialPropertyBlock();
-            mpb.SetTexture(ShaderIds.BackgroundTex, data.sourceTh);
-            mpb.SetTexture(ShaderIds.MainTexId, data.blurFinalTh);
-            mpb.SetTexture(ShaderIds.ObstructionTex, data.obstructionTh);
-            mpb.SetFloat(ShaderIds.Cutoff, data.settings.cutoff);
+            mpb.SetTexture(ShaderIds.MainTexId, data.blurFinalTh); // 流体纹理。
+            mpb.SetTexture(ShaderIds.ObstructionTex, data.obstructionTh); // 流体阻挡纹理。
+            mpb.SetFloat(ShaderIds.Cutoff, data.settings.cutoff); // 裁剪阈值。
+            mpb.SetTexture(ShaderIds.BackgroundTex, data.sourceTh); // 背景纹理。用于扰动采样。
 
             // 透明度调整参数。
             if (data.settings.opacityMode == EOpacityMode.Multiply)
@@ -514,12 +517,32 @@ namespace Fs.Liquid2D
                 data.materialEffect.DisableKeyword("_OPACITY_MULTIPLY");
                 data.materialEffect.DisableKeyword("_OPACITY_REPLACE");
             }
-            
             mpb.SetFloat(ShaderIds.OpacityValue, data.settings.opacityValue);
             
             mpb.SetColor(ShaderIds.CoverColorId, data.settings.coverColor); // 覆盖颜色。
             mpb.SetFloat(ShaderIds.EdgeIntensity, data.settings.edgeIntensity); // 边缘强度。
             mpb.SetColor(ShaderIds.EdgeColor, data.settings.edgeColor); // 边缘颜色。
+
+            // 像素风格化。
+            if (data.settings.pixel.enable)
+            {
+                data.materialEffect.EnableKeyword("_PIXEL");
+                // 计算像素化尺寸。
+                float aspect = (float)Screen.width / Screen.height; // 屏幕宽高比。
+                int pixelWidthCount = Screen.width / data.settings.pixel.pixelSize; // 水平像素块数量。
+                Vector2 pixelSize = new Vector2(pixelWidthCount, pixelWidthCount / aspect); // 计算垂直像素块数量。
+                mpb.SetVector(ShaderIds.PixelSize, pixelSize); // 传入像素化尺寸。
+
+                // 是否使背景像素化。在水体透明时背景色也会像素化。
+                if (data.settings.pixel.pixelBg)
+                    data.materialEffect.EnableKeyword("_PIXEL_BG");
+                else
+                    data.materialEffect.DisableKeyword("_PIXEL_BG");
+            }
+            else
+            {
+                data.materialEffect.DisableKeyword("_PIXEL");
+            }
 
             // 水体扰动纹理和强度。
             bool distortEnable = data.settings.distort.enable
@@ -707,6 +730,11 @@ namespace Fs.Liquid2D
             _settings.distort.distortSpeed = isActive ? VolumeData.distort.distortSpeed : _settingsDefault.distort.distortSpeed;
             _settings.distort.distortTimeFactors = isActive ? VolumeData.distort.distortTimeFactors : _settingsDefault.distort.distortTimeFactors;
             _settings.distort.noiseCoordOffset = isActive ? VolumeData.distort.noiseCoordOffset : _settingsDefault.distort.noiseCoordOffset;
+            
+            // ---- 像素化 ---- //
+            _settings.pixel.enable = isActive ? VolumeData.pixel.enable : _settingsDefault.pixel.enable;
+            _settings.pixel.pixelSize = isActive ? VolumeData.pixel.pixelSize : _settingsDefault.pixel.pixelSize;
+            _settings.pixel.pixelBg = isActive ? VolumeData.pixel.pixelBg : _settingsDefault.pixel.pixelBg;
         }
 
         #endregion
