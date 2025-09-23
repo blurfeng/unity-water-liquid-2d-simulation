@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: b06e85cdb86ff204aa4c8e276668b4c4
+timeCreated: 1566952951
+licenseType: Store
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 100100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 35666
+  packageName: Lean Pool
+  packageVersion: 2.1.0
+  assetPath: Assets/Plugins/CW/LeanCommon/Examples/Prefabs/Label.prefab
+  uploadId: 653650

@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: c4abd47c11b471846b9d3513daf6c92b
+timeCreated: 1564661134
+licenseType: Store
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 11400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 35666
+  packageName: Lean Pool
+  packageVersion: 2.1.0
+  assetPath: Assets/Plugins/CW/LeanPool/GUIDE.asset
+  uploadId: 653650

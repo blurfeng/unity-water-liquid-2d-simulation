@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: fb0683762a5624a4c811d418fcfa2781
+TextScriptImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 35666
+  packageName: Lean Pool
+  packageVersion: 2.1.0
+  assetPath: Assets/Plugins/CW/LeanPool/package.json
+  uploadId: 653650

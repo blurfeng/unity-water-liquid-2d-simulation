@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 174bc9f391f1b7f4292b3824c5019a21
+AssemblyDefinitionImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 35666
+  packageName: Lean Pool
+  packageVersion: 2.1.0
+  assetPath: Assets/Plugins/CW/LeanPool/LeanPool.asmdef
+  uploadId: 653650

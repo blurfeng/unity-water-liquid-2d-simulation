@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 87b4c5accc768904c86c03a32b2246fe
+timeCreated: 1510709399
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 35666
+  packageName: Lean Pool
+  packageVersion: 2.1.0
+  assetPath: Assets/Plugins/CW/LeanPool/Examples/Prefabs/Rigidbody Cube + LeanPooledRigidbody.prefab
+  uploadId: 653650

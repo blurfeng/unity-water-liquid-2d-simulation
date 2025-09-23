@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 1a20a4ca77649e949b0b3eba8497ee2e
+timeCreated: 1510709207
+licenseType: Store
+DefaultImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 35666
+  packageName: Lean Pool
+  packageVersion: 2.1.0
+  assetPath: Assets/Plugins/CW/LeanPool/Examples/05 Capacity.unity
+  uploadId: 653650

@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 0c9d4f038e8ea4348a27f124174bf225
+timeCreated: 1510709207
+licenseType: Store
+DefaultImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 35666
+  packageName: Lean Pool
+  packageVersion: 2.1.0
+  assetPath: Assets/Plugins/CW/LeanPool/Examples/02 Send Message.unity
+  uploadId: 653650
