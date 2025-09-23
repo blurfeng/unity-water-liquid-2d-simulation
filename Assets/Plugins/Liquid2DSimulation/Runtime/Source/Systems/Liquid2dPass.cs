@@ -563,7 +563,7 @@ namespace Fs.Liquid2D
             // 像素风格化。
             if (data.settings.pixel.enable)
             {
-                data.materialEffect.EnableKeyword("_PIXEL");
+                data.materialEffect.EnableKeyword("_PIXEL_ENABLE");
                 // 计算像素化尺寸。
                 float aspect = (float)Screen.width / Screen.height; // 屏幕宽高比。
                 int pixelWidthCount = Screen.width / data.settings.pixel.pixelSize; // 水平像素块数量。
@@ -578,7 +578,7 @@ namespace Fs.Liquid2D
             }
             else
             {
-                data.materialEffect.DisableKeyword("_PIXEL");
+                data.materialEffect.DisableKeyword("_PIXEL_ENABLE");
             }
 
             // 水体扰动纹理和强度。
@@ -587,7 +587,7 @@ namespace Fs.Liquid2D
                                  && !(data.settings.opacityMode == EOpacityMode.Replace && data.settings.opacityValue >= 1f); 
             if (distortEnable)
             {
-                data.materialEffect.EnableKeyword("_DISTORT");
+                data.materialEffect.EnableKeyword("_DISTORT_ENABLE");
                 
                 mpb.SetFloat(ShaderIds.Magnitude, data.settings.distort.magnitude);
                 mpb.SetFloat(ShaderIds.Frequency, data.settings.distort.frequency);
@@ -598,7 +598,7 @@ namespace Fs.Liquid2D
             }
             else
             {
-                data.materialEffect.DisableKeyword("_DISTORT");
+                data.materialEffect.DisableKeyword("_DISTORT_ENABLE");
             }
             
             // 绘制一个全屏三角形，使用外描边材质，并传入属性块。

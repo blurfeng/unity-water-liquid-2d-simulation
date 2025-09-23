@@ -120,13 +120,13 @@ namespace Fs.Liquid2D
             public bool enable = false;
             
             [Range(0f, 1f), Tooltip("液体边缘范围，越大边缘越宽。")]
-            public float edgeRange = 0f;
+            public float edgeRange = 0.6f;
         
             [Range(0f, 1f), Tooltip("液体边缘强度。越大边缘越明显。")]
-            public float edgeIntensity = 0f;
+            public float edgeIntensity = 0.1f;
             
             [ColorUsage(true, true), Tooltip("液体边缘颜色。")]
-            public Color edgeColor = Color.white;
+            public Color edgeColor = new Color(1f, 1f, 1f, 0.8f);
             
             [Tooltip("液体边缘混合类型。")]
             public EdgeBlendType blendType = EdgeBlendType.BlendSrcAlphaOneMinusSrcAlpha;
@@ -141,7 +141,7 @@ namespace Fs.Liquid2D
             public bool enable = false;
             
             [Range(1, 32), Tooltip("像素化尺寸，值越大像素化效果越明显。")]
-            public int pixelSize = 4;
+            public int pixelSize = 6;
 
             [Tooltip("是否使用像素化背景色。开启后，在流体透明的情况下，背景色会被像素化。")]
             public bool pixelBg = true;

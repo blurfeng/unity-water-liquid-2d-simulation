@@ -22,11 +22,11 @@ Shader "Custom/URP/2D/Liquid2DEffect"
             // ---- Keywords ------------------------------------- Start
             #pragma shader_feature_local _OPACITY_MULTIPLY // 透明度倍率使用乘法方式。
             #pragma shader_feature_local _OPACITY_REPLACE // 透明度倍率使用覆盖方式，而不是乘法方式。
-            #pragma shader_feature_local _DISTORT // 开启水体扰动。
+            #pragma shader_feature_local _DISTORT_ENABLE // 开启水体扰动。
             #pragma shader_feature_local _EDGE_ENABLE // 开启边缘颜色效果。
             #pragma shader_feature_local _EDGE_BLEND_SA_OMSA // 边缘颜色使用 SrcAlpha OneMinusSrcAlpha 混合方式。
             #pragma shader_feature_local _EDGE_BLEND_LERP // 边缘颜色使用lerp混合方式。
-            #pragma shader_feature_local _PIXEL // 开启像素化水体效果。
+            #pragma shader_feature_local _PIXEL_ENABLE // 开启像素化水体效果。
             #pragma shader_feature_local _PIXEL_BG // 开启像素化背景。
             // ---- Keywords ------------------------------------- End
 
@@ -56,7 +56,7 @@ Shader "Custom/URP/2D/Liquid2DEffect"
             
             // 背景纹理。当需要扰动或像素化背景时使用。将处理后的背景作为流体的背景。
             // 否则流体是透明的，可以看到真正的背景。
-            #if defined(_DISTORT) || defined(_PIXEL_BG)
+            #if defined(_DISTORT_ENABLE) || defined(_PIXEL_BG)
             TEXTURE2D_X(_BackgroundTex);
             SAMPLER(sampler_linear_clamp_BackgroundTex);
             #endif
@@ -68,7 +68,7 @@ CBUFFER_START(UnityPerMaterial)
             half4 _CoverColor; // 叠加颜色。
             
             // 水体扰动相关参数。
-            #if defined(_DISTORT)
+            #if defined(_DISTORT_ENABLE)
             // 计算扰动方式。
             float _Magnitude; // 扰动采样缩放。
             float _Frequency; // 噪点频率。
@@ -93,7 +93,7 @@ CBUFFER_START(UnityPerMaterial)
             #endif
 
             // 像素化相关参数。
-            #if defined(_PIXEL)
+            #if defined(_PIXEL_ENABLE)
             float2 _PixelSize;
             #endif
             
@@ -116,7 +116,7 @@ CBUFFER_END
                 float2 uvProcess = IN.uv;
 
                 // ---- 像素化处理 ---- //
-                #if defined(_PIXEL)
+                #if defined(_PIXEL_ENABLE)
                 // 计算像素化后的UV坐标。
                 uvProcess.xy = floor(uvProcess.xy * _PixelSize) / _PixelSize;
                 // return half4(uvPixel,0,1);
@@ -177,7 +177,7 @@ CBUFFER_END
                 // 这个玻璃瓶的 Renderer Feature 应当在流体 Renderer Feature 之后执行。
                 
                 // ---- 水体扰动背景 ---- //
-                #if defined(_DISTORT)
+                #if defined(_DISTORT_ENABLE)
 
                 // 像素化背景时，扰动使用像素化后的UV，否则使用默认UV。
                 #if defined(_PIXEL_BG)
