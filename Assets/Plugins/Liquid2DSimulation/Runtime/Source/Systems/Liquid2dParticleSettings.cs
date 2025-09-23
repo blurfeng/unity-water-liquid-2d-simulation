@@ -5,6 +5,8 @@ namespace Fs.Liquid2D
 {
     /// <summary>
     /// 流体粒子渲染器设置。
+    /// Fluid particle renderer settings.
+    /// 流体粒子レンダラー設定。
     /// </summary>
     [Serializable]
     public class Liquid2dParticleSettings
@@ -23,6 +25,8 @@ namespace Fs.Liquid2D
     
         /// <summary>
         /// 检查渲染器设置是否有效。
+        /// Check if renderer settings are valid.
+        /// レンダラー設定が有効かチェック。
         /// </summary>
         /// <returns></returns>
         public bool IsValid()

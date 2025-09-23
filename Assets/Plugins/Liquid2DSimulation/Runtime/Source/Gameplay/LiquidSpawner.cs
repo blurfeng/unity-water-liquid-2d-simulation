@@ -55,7 +55,7 @@ namespace Fs.Liquid2D
         private float _timer = 0f;
         private float _swingTime;
         
-        // 是否正在喷射中。
+        // 是否正在喷射中。 // Whether it is currently spawning. // 現在噴射中かどうか。
         private bool _isSpawning = false;
         
         private void Start()
@@ -70,7 +70,7 @@ namespace Fs.Liquid2D
         {
             if (!_isSpawning) return;
             
-            // 延迟启动。
+            // 延迟启动。 // Delayed start. // 遅延スタート。
             if (!_isDelayedStarted)
             {
                 if (startDelay > 0f)
@@ -89,13 +89,13 @@ namespace Fs.Liquid2D
                 return;
             }
             
-            // 摆动。
+            // 摆动。 // Swing. // スイング。
             if (swingAngleRange > 0f && swingSpeed > 0f)
             {
                 _swingTime += Time.deltaTime;
             }
             
-            // 喷射粒子。
+            // 喷射粒子。 // Spawn particles. // 粒子を噴射。
             if (flowRate > 0f)
             {
                 _timer += Time.deltaTime;
@@ -110,6 +110,8 @@ namespace Fs.Liquid2D
 
         /// <summary>
         /// 开始喷射流体粒子。
+        /// Start spawning fluid particles.
+        /// 流体粒子の噴射を開始。
         /// </summary>
         public void StartSpawn()
         {
@@ -119,6 +121,8 @@ namespace Fs.Liquid2D
         
         /// <summary>
         /// 停止喷射流体粒子。
+        /// Stop spawning fluid particles.
+        /// 流体粒子の噴射を停止。
         /// </summary>
         public void StopSpawn()
         {
@@ -128,6 +132,8 @@ namespace Fs.Liquid2D
         
         /// <summary>
         /// 获取当前喷射角度，包含摆动偏移。
+        /// Get current ejection angle, including swing offset.
+        /// 現在の噴射角度を取得（スイング偏移を含む）。
         /// </summary>
         /// <returns></returns>
         private float GetCurrentEjectAngle()
@@ -142,6 +148,8 @@ namespace Fs.Liquid2D
         
         /// <summary>
         /// 获取当前喷射方向，包含摆动偏移。
+        /// Get current ejection direction, including swing offset.
+        /// 現在の噴射方向を取得（スイング偏移を含む）。
         /// </summary>
         /// <returns></returns>
         private Vector2 GetCurrentEjectDirection()
@@ -152,28 +160,28 @@ namespace Fs.Liquid2D
         }
 
         /// <summary>
-        /// 生成一个流体粒子。
+        /// 生成一个流体粒子。 // Spawn one fluid particle. // 1つの流体粒子を生成。
         /// </summary>
         private void SpawnOne()
         {
-            // 随机选择一个流体粒子预制体。
+            // 随机选择一个流体粒子预制体。 // Randomly select a fluid particle prefab. // ランダムに流体粒子のプレハブを選択。
             if (liquidParticles.Count == 0) return;
             LiquidParticle liquidParticle = liquidParticles.RandomWeight();
             
-            // 获取当前喷射方向。
+            // 获取当前喷射方向。 // Get current ejection direction. // 現在の噴射方向を取得。
             Vector2 dir = GetCurrentEjectDirection();
             Transform ts = TransformGet;
             
-            // 随机获取生成位置。
-            Vector2 normal = new Vector2(-dir.y, dir.x); // 计算法线
+            // 随机获取生成位置。 // Randomly get spawn position. // ランダムに生成位置を取得。
+            Vector2 normal = new Vector2(-dir.y, dir.x); // 计算法线 // Calculate normal // 法線を計算
             float offset = UnityEngine.Random.Range(-nozzleWidth * 0.5f, nozzleWidth * 0.5f);
             Vector3 spawnPos = ts.position + (Vector3)(normal * offset);
             
-            // 生成预制体。
+            // 生成预制体。 // Instantiate prefab. // プレハブをインスタンス化。
             var go = Instantiate(liquidParticle.liquidPrefab, spawnPos, Quaternion.identity);
             go.transform.SetParent(ts);
             
-            // 检查是否挂载 Liquid2DParticleRenderer。
+            // 检查是否挂载 Liquid2DParticleRenderer。 // Check if Liquid2DParticleRenderer is attached. // Liquid2DParticleRendererがアタッチされているか確認。
             var lRenderer = go.GetComponent<Liquid2DParticle>();
             if (lRenderer == null)
             {
@@ -182,7 +190,7 @@ namespace Fs.Liquid2D
                 return;
             }
             
-            // 随机设置尺寸。
+            // 随机设置尺寸。 // Randomly set size. // ランダムにサイズを設定。
             if (sizeRandomRange.y > sizeRandomRange.x && sizeRandomRange.x > 0f)
             {
                 float size = UnityEngine.Random.Range(sizeRandomRange.x, sizeRandomRange.y);
@@ -192,7 +200,7 @@ namespace Fs.Liquid2D
             var rb = go.GetComponent<Rigidbody2D>();
             if (rb != null)
             {
-                // 随机设置喷射力。
+                // 随机设置喷射力。 // Randomly set ejection force. // ランダムに噴射力を設定。
                 float force = ejectForce;
                 if (ejectForceRandomRange.y > ejectForceRandomRange.x && ejectForceRandomRange.x >= 0f)
                 {

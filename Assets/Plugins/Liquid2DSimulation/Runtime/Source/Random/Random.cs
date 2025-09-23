@@ -10,13 +10,21 @@ namespace Fs.Liquid2D.Utility
     /// 提供随机相关的工具方法。
     /// 比如可以通过权重配置随机选取一个对象。
     /// 如果没有复杂的随机需求，可以直接使用 UnityEngine.Random 类。
+    /// Provides random-related utility methods.
+    /// For example, you can randomly select an object through weight configuration.
+    /// If there are no complex random requirements, you can directly use the UnityEngine.Random class.
+    /// ランダム関連のユーティリティメソッドを提供。
+    /// 例えば、重み設定によりオブジェクトをランダムに選択できます。
+    /// 複雑なランダム要件がない場合は、UnityEngine.Randomクラスを直接使用できます。
     /// </summary>
     public static class Random
     {
-        #region Weight 按权重随机
+        #region Weight 按权重随机 // Weight-based randomization // 重みベースのランダム化
         
         /// <summary>
         /// 通过权重随机，获取一个对象。
+        /// Get an object through weight-based randomization.
+        /// 重みベースのランダム化によりオブジェクトを取得。
         /// </summary>
         /// <param name="items">对象容器。</param>
         /// <param name="getWeight">获取权重方法。</param>

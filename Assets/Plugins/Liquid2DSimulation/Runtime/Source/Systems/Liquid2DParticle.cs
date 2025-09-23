@@ -6,6 +6,12 @@ namespace Fs.Liquid2D
     /// 2d流体粒子渲染器。
     /// 挂载此组件到流体粒子对象上以管理流体粒子的渲染设置。
     /// [ExecuteAlways] 宏标确保在编辑模式下也能注册到 Liquid2DFeature 来保证可见性。
+    /// 2D fluid particle renderer.
+    /// Attach this component to fluid particle objects to manage fluid particle rendering settings.
+    /// The [ExecuteAlways] attribute ensures registration to Liquid2DFeature even in edit mode for visibility.
+    /// 2D流体粒子レンダラー。
+    /// このコンポーネントを流体粒子オブジェクトにアタッチして、流体粒子のレンダリング設定を管理します。
+    /// [ExecuteAlways]属性により、編集モードでもLiquid2DFeatureに登録されて可視性が保証されます。
     /// </summary>
     [ExecuteAlways]
     public class Liquid2DParticle : MonoBehaviour
@@ -18,6 +24,8 @@ namespace Fs.Liquid2D
         
         /// <summary>
         /// 流体粒子渲染器。
+        /// Fluid particle renderer.
+        /// 流体粒子レンダラー。
         /// </summary>
         public Liquid2dParticleSettings Settings => settings;
 
@@ -57,18 +65,20 @@ namespace Fs.Liquid2D
                 return;
             }
         
-            // 注册到 Liquid2dFeature。
+            // 注册到 Liquid2dFeature。 // Register to Liquid2dFeature. // Liquid2dFeatureに登録。
             Liquid2DFeature.RegisterLiquidParticle(this);
         }
     
         private void OnDisable()
         {
-            // 从 Liquid2dFeature 注销。
+            // 从 Liquid2dFeature 注销。 // Unregister from Liquid2dFeature. // Liquid2dFeatureから登録解除。
             Liquid2DFeature.UnregisterLiquidParticle(this);
         }
     
         /// <summary>
         /// 检查渲染器设置是否有效。
+        /// Check if renderer settings are valid.
+        /// レンダラー設定が有効かチェック。
         /// </summary>
         /// <returns></returns>
         private bool IsValid()
@@ -82,6 +92,10 @@ namespace Fs.Liquid2D
         /// <summary>
         /// 设置粒子生命时间（秒），到时间后自动销毁。
         /// 每次调用会重置计时。
+        /// Set particle lifetime (seconds), automatically destroy after time.
+        /// Each call resets the timer.
+        /// 粒子の寿命（秒）を設定し、時間後に自動破棄。
+        /// 各呼び出しでタイマーをリセット。
         /// </summary>
         /// <param name="setLifetime"></param>
         public void SetLifetime(float setLifetime)
@@ -95,7 +109,7 @@ namespace Fs.Liquid2D
 #if UNITY_EDITOR
         void OnDrawGizmos()
         {
-            #region 绘制可在 Scene 中选中的形状
+            #region 绘制可在 Scene 中选中的形状 // Draw shapes that can be selected in Scene // Sceneで選択可能な形状を描画
 
             var cld = Collider2DGet;
             if (cld == null) return;

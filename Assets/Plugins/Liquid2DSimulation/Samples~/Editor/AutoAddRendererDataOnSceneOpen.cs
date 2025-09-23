@@ -27,7 +27,7 @@ namespace Plugins.Liquid2DSimulation.Samples.Editor
                 !scenePath.Contains("/Samples/", System.StringComparison.OrdinalIgnoreCase))
                 return;
 
-            // 查找 Samples 目录下的 Liquid2DRenderer2D.asset。
+            // 查找 Samples 目录下的 Liquid2DRenderer2D.asset。 // Find Liquid2DRenderer2D.asset in Samples directory. // SamplesディレクトリでLiquid2DRenderer2D.assetを検索。
             var guids = AssetDatabase.FindAssets("Liquid2DRenderer2D t:ScriptableRendererData", searchPaths);
             string assetPath = guids.Select(AssetDatabase.GUIDToAssetPath)
                                     .FirstOrDefault(p => p.EndsWith("Liquid2DRenderer2D.asset"));
@@ -61,7 +61,7 @@ namespace Plugins.Liquid2DSimulation.Samples.Editor
                 Debug.Log("已自动将 Renderer Data 添加到 URP Asset: " + assetPath);
             }
 
-            // 设置所有相机使用新 Renderer。
+            // 设置所有相机使用新 Renderer。 // Set all cameras to use new Renderer. // すべてのカメラで新しいRendererを使用するよう設定。
             foreach (var cam in Object.FindObjectsByType<Camera>(FindObjectsSortMode.None))
             {
                 var urpCam = cam.GetComponent<UniversalAdditionalCameraData>();

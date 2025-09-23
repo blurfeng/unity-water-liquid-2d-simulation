@@ -12,34 +12,34 @@ namespace Fs.Liquid2D
     }
     
     /// <summary>
-    /// 透明度计算模式。
+    /// 透明度计算模式。 // Opacity calculation mode. // 透明度計算モード。
     /// </summary>
     public enum EOpacityMode
     {
         /// <summary>
-        /// 默认模式，不会影响透明度。
+        /// 默认模式，不会影响透明度。 // Default mode, does not affect opacity. // デフォルトモード、透明度に影響しません。
         /// </summary>
         Default,
         
         /// <summary>
-        /// 透明度值作为倍率和原有透明度相乘。
+        /// 透明度值作为倍率和原有透明度相乘。 // Opacity value is multiplied as a multiplier with the original opacity. // 透明度値は倍率として元の透明度と乗算されます。
         /// </summary>
         Multiply,
         
         /// <summary>
-        /// 透明度值直接替代原有透明度。
+        /// 透明度值直接替代原有透明度。 // Opacity value directly replaces the original opacity. // 透明度値は元の透明度を直接置き換えます。
         /// </summary>
         Replace
     }
     
     /// <summary>
-    /// 2D流体 Renderer Feature 设置。
+    /// 2D流体 Renderer Feature 设置。 // 2D fluid Renderer Feature settings. // 2D流体レンダラー機能の設定。
     /// </summary>
     [Serializable]
     public class Liquid2DRenderFeatureSettings
     {
         /// <summary>
-        /// 模糊设置。
+        /// 模糊设置。 // Blur settings. // ブラー設定。
         /// </summary>
         [Serializable]
         public class Blur
@@ -67,7 +67,7 @@ namespace Fs.Liquid2D
         }
 
         /// <summary>
-        /// 扭曲设置。
+        /// 扭曲设置。 // Distortion settings. // 歪み設定。
         /// </summary>
         [Serializable]
         public class Distort
@@ -95,7 +95,7 @@ namespace Fs.Liquid2D
         }
 
         /// <summary>
-        /// 边缘设置。
+        /// 边缘设置。 // Edge settings. // エッジ設定。
         /// </summary>
         [Serializable]
         public class Edge
@@ -104,15 +104,21 @@ namespace Fs.Liquid2D
             {
                 /// <summary>
                 /// 颜色混合。
-                /// 边缘颜色是流体颜色和边缘颜色的混合，混合比例由边缘强度决定。
-                /// 能更好的和水体融合。
+                /// 边缘颜色是流体颜色和边缘颜色的混合，混合比例由边缘强度决定。能更好的和水体融合。
+                /// Color Blending.
+                /// The edge color is a blend of the fluid color and the edge color, with the blend ratio determined by the edge intensity. It blends better with the water body.
+                /// 色のブレンド。
+                /// エッジカラーは流体カラーとエッジカラーのブレンドであり、ブレンド比率はエッジ強度によって決まります。水体とよりよく融合します。
                 /// </summary>
                 BlendSrcAlphaOneMinusSrcAlpha,
                 
                 /// <summary>
                 /// 线性插值混合。
-                /// 边缘颜色是流体颜色和边缘颜色的线性插值，插值比例由边缘强度决定。
-                /// 可以实现边缘透明化，和水体有明显区别的效果。
+                /// 边缘颜色是流体颜色和边缘颜色的线性插值，插值比例由边缘强度决定。可以实现边缘透明化，和水体有明显区别的效果。
+                /// Linear Interpolation Blending.
+                /// The edge color is a linear interpolation of the fluid color and the edge color, with the interpolation ratio determined by the edge intensity. This can achieve edge transparency and a distinct effect from the water body.
+                /// 線形補間ブレンド。
+                /// エッジカラーは流体カラーとエッジカラーの線形補間であり、補間比率はエッジ強度によって決まります。エッジの透明度を実現し、水体とは明確に異なる効果を得ることができます。
                 /// </summary>
                 Lerp,
             }
@@ -133,7 +139,7 @@ namespace Fs.Liquid2D
         }
         
         /// <summary>
-        /// 像素化设置。
+        /// 像素化设置。 // Pixelation settings. // ピクセル化設定。
         /// </summary>
         [Serializable]
         public class Pixel
@@ -155,13 +161,27 @@ namespace Fs.Liquid2D
         
         [Tooltip("液体阻挡层遮罩。指定哪些层的物体会阻挡液体效果。一般是挡板或容器等，他们会完全阻挡液体及时自身是透明的。相当于阻挡物的横截面。")]
         public RenderingLayerMask obstructionRenderingLayerMask;
-        
+
         // Tips:
         // 在2D游戏中，假设你有一个玻璃瓶用于装流体。玻璃瓶的横截面是阻挡层，这样流体就不会渲染在玻璃瓶的外面。
         // 但是本流体系统不会处理盖在流体上的正面玻璃瓶部分的渲染，因为流体系统只专注于处理流体效果自身。
         // 你应当将玻璃瓶的横截面的 Rendering Layer 设置为阻挡层。
         // 但是正面盖在流体上的玻璃瓶部分的渲染，应当由用户自行处理。比如创建新的 Renderer Feature 来渲染玻璃瓶。
         // 这个玻璃瓶的 Renderer Feature 应当在流体 Renderer Feature 之后执行。
+
+        // Tips:
+        // In a 2D game, suppose you have a glass bottle for holding fluid. The cross-section of the glass bottle is the obstruction layer, so the fluid will not be rendered outside the glass bottle.
+        // However, the fluid system does not handle the rendering of the front part of the glass bottle that covers the fluid, as the fluid system focuses only on handling the fluid effect itself.
+        // You should set the Rendering Layer of the cross-section of the glass bottle to the obstruction layer.
+        // However, the rendering of the front part of the glass bottle that covers the fluid should be handled by the user. For example, create a new Renderer Feature to render the glass bottle.
+        // This glass bottle Renderer Feature should be executed after the fluid Renderer Feature. 
+
+        // Tips:
+        // 2Dゲームでは、流体を保持するためのガラス瓶があるとします。ガラス瓶の断面は障害物レイヤーであり、流体はガラス瓶の外側にレンダリングされません。
+        // ただし、流体を覆うガラス瓶の前面部分のレンダリングは流体システムでは処理されません。流体システムは流体効果自体の処理にのみ焦点を当てているためです。
+        // ガラス瓶の断面のレンダリングレイヤーを障害物レイヤーに設定する必要があります。
+        // ただし、流体を覆うガラス瓶の前面部分のレンダリングはユーザーが処理する必要があります。たとえば、ガラス瓶をレンダリングするための新しいレンダラーフィーチャーを作成します。
+        // このガラス瓶のレンダラーフィーチャーは、流体レンダラーフィーチャーの後に実行する必要があります。
         
         [Range(0f, 1f), Tooltip("流体透明边缘的裁剪阈值，越大边缘越锐利，水体范围膨胀越少。")]
         public float cutoff = 0.45f;
@@ -190,9 +210,9 @@ namespace Fs.Liquid2D
         public Liquid2DRenderFeatureSettings Clone()
         {
             // 先序列化再反序列化，得到一个全新的对象。
-            return JsonUtility.FromJson<Liquid2DRenderFeatureSettings>(
-                JsonUtility.ToJson(this)
-            );
+            // First serialize and then deserialize to get a brand new object.
+            // 最初にシリアル化してから逆シリアル化して、まったく新しいオブジェクトを取得します。
+            return JsonUtility.FromJson<Liquid2DRenderFeatureSettings>(JsonUtility.ToJson(this));
         }
     }
 }
