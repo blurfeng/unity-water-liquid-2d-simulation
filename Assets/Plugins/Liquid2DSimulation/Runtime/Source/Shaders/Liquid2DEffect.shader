@@ -1,23 +1,6 @@
 ﻿// 流体效果着色器，用于实现类似液体的视觉效果。
 Shader "Custom/URP/2D/Liquid2DEffect"
 {
-    Properties
-    {
-        _Cutoff ("Alpha Cutoff", Range(0,1)) = 0.3 // 透明度裁剪阈值。低于此值的像素将被裁剪掉，形成流体边缘效果。
-        _OpacityValue ("Opacity Value", Range(0,1)) = 0.6 // 透明度值，用法和模式相关。会相乘或覆盖原有透明度。
-        _CoverColor ("Cover Color", Color) = (0,0,0,0) // 叠加颜色，用于整体调节流体颜色。透明度为0时不影响颜色。
-        _EdgeIntensity ("Edge Intensity", Range(0,1)) = 0.2 // 边缘颜色强度。越强边缘越宽。
-        _EdgeColor ("Edge Color", Color) = (1,1,1,1) // 边缘颜色。
-        
-        // 背景扰动相关参数。在流体为透明时会看到背景被扰动扭曲的效果。
-        _Magnitude ("Distort Magnitude", Range(0, 1)) = 0.1 // 扰动采样缩放。值越大，扰动越频繁。
-        _Frequency ("Noise Frequency", Range(1, 500)) = 380 // 扰动频率。值越大，扰动越密集。
-        _Amplitude ("Distort Amplitude", Range(0, 0.1)) = 0.008 // 扰动强度。值越大，扰动越明显。
-        _DistortSpeed ("Distort Speed", Vector) = (0.1, 1, 0, 0) // 扰动速度。x分量控制x方向扰动速度，y分量控制y方向扰动速度。
-        _DistortTimeFactors ("Distort Time Factors", Vector) = (0.3, -0.4, 0.1, 0.5) // 扰动时间系数。用于控制不同噪点的运动速度和方向。
-        _NoiseCoordOffset ("Noise Coord Offset", Float) = 4.0 // 噪点坐标偏移。用于增加噪点的复杂度，防止重复模式。
-    }
-    
     SubShader
     {
         Tags
@@ -40,6 +23,9 @@ Shader "Custom/URP/2D/Liquid2DEffect"
             #pragma shader_feature_local _OPACITY_MULTIPLY // 透明度倍率使用乘法方式。
             #pragma shader_feature_local _OPACITY_REPLACE // 透明度倍率使用覆盖方式，而不是乘法方式。
             #pragma shader_feature_local _DISTORT // 开启水体扰动。
+            #pragma shader_feature_local _EDGE_ENABLE // 开启边缘颜色效果。
+            #pragma shader_feature_local _EDGE_BLEND_SA_OMSA // 边缘颜色使用 SrcAlpha OneMinusSrcAlpha 混合方式。
+            #pragma shader_feature_local _EDGE_BLEND_LERP // 边缘颜色使用lerp混合方式。
             #pragma shader_feature_local _PIXEL // 开启像素化水体效果。
             #pragma shader_feature_local _PIXEL_BG // 开启像素化背景。
             // ---- Keywords ------------------------------------- End
@@ -76,13 +62,10 @@ Shader "Custom/URP/2D/Liquid2DEffect"
             #endif
             
 CBUFFER_START(UnityPerMaterial)
-            
+
             half _Cutoff; // 透明度裁剪阈值。
             half _OpacityValue; // 透明度值，用法和模式相关。
             half4 _CoverColor; // 叠加颜色。
-            half _EdgeIntensity; // 边缘颜色强度。越强边缘越宽。
-            half4 _EdgeColor; // 边缘颜色。
-            
             
             // 水体扰动相关参数。
             #if defined(_DISTORT)
@@ -100,6 +83,13 @@ CBUFFER_START(UnityPerMaterial)
             // SAMPLER(sampler_linear_repeat_DistortTex); // 重复采样，防止边缘断裂。注意是 repeat 不是 clamp。
             // half _DistortIntensity; // 扰动强度。
             // half _AspectRatio; // 视口宽高比，用于修正UV坐标。
+            #endif
+
+            #if defined(_EDGE_ENABLE)
+            half _EdgeStart; // 边缘颜色起始位置。
+            half _EdgeEnd; // 边缘颜色结束位置。
+            half _EdgeMixStart; // 边缘颜色混合起始位置。
+            half4 _EdgeColor; // 边缘颜色。
             #endif
 
             // 像素化相关参数。
@@ -125,7 +115,9 @@ CBUFFER_END
                 float2 uvDefault = IN.uv;
                 float2 uvProcess = IN.uv;
 
+                // ---- 像素化处理 ---- //
                 #if defined(_PIXEL)
+                // 计算像素化后的UV坐标。
                 uvProcess.xy = floor(uvProcess.xy * _PixelSize) / _PixelSize;
                 // return half4(uvPixel,0,1);
                 #endif
@@ -141,11 +133,10 @@ CBUFFER_END
                 col.rgb = lerp(col.rgb, _CoverColor.rgb, _CoverColor.a);
 
                 // ---- 边缘颜色-计算lerp值 ---- //
-                half edgeRange = _EdgeIntensity * (1 - _Cutoff);
-                half edgeStart = _Cutoff;
-
-                // 归一化 t，超出范围自动截断到 [0,1]。
-                half t = saturate((col.a - edgeStart) / max(edgeRange, 1e-5));
+                #if defined(_EDGE_ENABLE)
+                // 计算边缘颜色的混合值。使用透明度处理之前的透明度值才能分辨出边缘。
+                half edge = smoothstep(_EdgeMixStart, _EdgeEnd, col.a);
+                #endif
 
                 // ---- 透明度处理 ---- //
                 #if defined(_OPACITY_MULTIPLY)
@@ -156,7 +147,20 @@ CBUFFER_END
                 // 注意：如果不启用任何透明度模式，则保持原有透明度不变。
 
                 // ---- 边缘颜色-应用边缘色 ---- //
-                col = lerp(_EdgeColor, col, t);
+                #if defined(_EDGE_ENABLE)
+                
+                #if defined(_EDGE_BLEND_SA_OMSA)
+                // 计算边缘混合权重。
+                half edgeAlpha = _EdgeColor.a * (1 - edge);
+                // 按 Alpha 混合公式叠加边缘色。
+                col.rgb = col.rgb * (1 - edgeAlpha) + _EdgeColor.rgb * edgeAlpha;
+                col.a   = col.a   * (1 - edgeAlpha) + _EdgeColor.a   * edgeAlpha;
+                #elif defined(_EDGE_BLEND_LERP)
+                // 使用lerp混合边缘色。
+                col = lerp(col, _EdgeColor, (1 - edge));
+                #endif
+
+                #endif
 
                 // ---- 阻挡纹理处理 ---- //
                 // 阻挡纹理完全阻挡流体颜色。一般是挡板、管道、瓶子的横截面等。

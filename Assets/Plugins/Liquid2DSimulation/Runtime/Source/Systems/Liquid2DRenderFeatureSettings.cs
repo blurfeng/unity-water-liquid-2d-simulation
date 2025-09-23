@@ -38,6 +38,9 @@ namespace Fs.Liquid2D
     [Serializable]
     public class Liquid2DRenderFeatureSettings
     {
+        /// <summary>
+        /// 模糊设置。
+        /// </summary>
         [Serializable]
         public class Blur
         {
@@ -63,6 +66,9 @@ namespace Fs.Liquid2D
             public float blurBgColorIntensity = 0f;
         }
 
+        /// <summary>
+        /// 扭曲设置。
+        /// </summary>
         [Serializable]
         public class Distort
         {
@@ -88,6 +94,47 @@ namespace Fs.Liquid2D
             public float noiseCoordOffset = 4f;
         }
 
+        /// <summary>
+        /// 边缘设置。
+        /// </summary>
+        [Serializable]
+        public class Edge
+        {
+            public enum EdgeBlendType
+            {
+                /// <summary>
+                /// 颜色混合。
+                /// 边缘颜色是流体颜色和边缘颜色的混合，混合比例由边缘强度决定。
+                /// 能更好的和水体融合。
+                /// </summary>
+                BlendSrcAlphaOneMinusSrcAlpha,
+                
+                /// <summary>
+                /// 线性插值混合。
+                /// 边缘颜色是流体颜色和边缘颜色的线性插值，插值比例由边缘强度决定。
+                /// 可以实现边缘透明化，和水体有明显区别的效果。
+                /// </summary>
+                Lerp,
+            }
+            
+            public bool enable = false;
+            
+            [Range(0f, 1f), Tooltip("液体边缘范围，越大边缘越宽。")]
+            public float edgeRange = 0f;
+        
+            [Range(0f, 1f), Tooltip("液体边缘强度。越大边缘越明显。")]
+            public float edgeIntensity = 0f;
+            
+            [ColorUsage(true, true), Tooltip("液体边缘颜色。")]
+            public Color edgeColor = Color.white;
+            
+            [Tooltip("液体边缘混合类型。")]
+            public EdgeBlendType blendType = EdgeBlendType.BlendSrcAlphaOneMinusSrcAlpha;
+        }
+        
+        /// <summary>
+        /// 像素化设置。
+        /// </summary>
         [Serializable]
         public class Pixel
         {
@@ -128,17 +175,14 @@ namespace Fs.Liquid2D
         [ColorUsage(true, true), Tooltip("覆盖颜色会覆盖流体粒子自身的颜色，作为流体的整体色调。alpha为强度，1时完全覆盖粒子颜色，0时不覆盖。")]
         public Color coverColor = Color.clear;
         
-        [Range(0f, 1f), Tooltip("液体边缘强度，越大边缘越宽。")]
-        public float edgeIntensity = 0f;
-
-        [ColorUsage(true, true), Tooltip("液体边缘颜色。")]
-        public Color edgeColor = Color.white;
-
         [Tooltip("流体模糊设置。")]
         public Blur blur;
         
         [Tooltip("流体扭曲设置。")]
         public Distort distort;
+        
+        [Tooltip("流体边缘设置。")]
+        public Edge edge;
         
         [Tooltip("流体像素化设置。用于生成像素化风格效果。")]
         public Pixel pixel;

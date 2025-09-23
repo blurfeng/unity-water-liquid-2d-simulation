@@ -1,4 +1,5 @@
-﻿using Fs.Liquid2D.Volumes;
+﻿using System;
+using Fs.Liquid2D.Volumes;
 using UnityEngine;
 using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
@@ -24,7 +25,9 @@ namespace Fs.Liquid2D
             internal static readonly int ObstructionTex = Shader.PropertyToID("_ObstructionTex");
             internal static readonly int OpacityValue = Shader.PropertyToID("_OpacityValue");
             internal static readonly int CoverColorId = Shader.PropertyToID("_CoverColor");
-            internal static readonly int EdgeIntensity = Shader.PropertyToID("_EdgeIntensity");
+            internal static readonly int EdgeStart = Shader.PropertyToID("_EdgeStart");
+            internal static readonly int EdgeEnd = Shader.PropertyToID("_EdgeEnd");
+            internal static readonly int EdgeMixStart = Shader.PropertyToID("_EdgeMixStart");
             internal static readonly int EdgeColor = Shader.PropertyToID("_EdgeColor");
             internal static readonly int BackgroundTex = Shader.PropertyToID("_BackgroundTex");
             
@@ -517,11 +520,45 @@ namespace Fs.Liquid2D
                 data.materialEffect.DisableKeyword("_OPACITY_MULTIPLY");
                 data.materialEffect.DisableKeyword("_OPACITY_REPLACE");
             }
-            mpb.SetFloat(ShaderIds.OpacityValue, data.settings.opacityValue);
+            mpb.SetFloat(ShaderIds.OpacityValue, data.settings.opacityValue); // 透明度值。
             
-            mpb.SetColor(ShaderIds.CoverColorId, data.settings.coverColor); // 覆盖颜色。
-            mpb.SetFloat(ShaderIds.EdgeIntensity, data.settings.edgeIntensity); // 边缘强度。
-            mpb.SetColor(ShaderIds.EdgeColor, data.settings.edgeColor); // 边缘颜色。
+            // 覆盖颜色。透明度值是强度。
+            mpb.SetColor(ShaderIds.CoverColorId, data.settings.coverColor);
+
+            if (data.settings.edge.enable)
+            {
+                data.materialEffect.EnableKeyword("_EDGE_ENABLE");
+                
+                float cutoff = data.settings.cutoff;
+                float edgeRange = data.settings.edge.edgeRange;
+                float edgeIntensity = data.settings.edge.edgeIntensity;
+                
+                // 计算边缘参数。
+                float edgeStart = cutoff;
+                float edgeEnd = cutoff + edgeRange * (1 - cutoff);
+                float edgeMixStart = Mathf.Lerp(edgeStart, edgeEnd, edgeIntensity * 0.999f);
+            
+                mpb.SetFloat(ShaderIds.EdgeStart, edgeStart); // 边缘开始位置。
+                mpb.SetFloat(ShaderIds.EdgeEnd, edgeEnd); // 边缘结束位置。
+                mpb.SetFloat(ShaderIds.EdgeMixStart, edgeMixStart); // 边缘混合开始位置。用于 smoothstep 计算。
+                mpb.SetColor(ShaderIds.EdgeColor, data.settings.edge.edgeColor); // 边缘颜色。
+
+                switch (data.settings.edge.blendType)
+                {
+                    case Liquid2DRenderFeatureSettings.Edge.EdgeBlendType.BlendSrcAlphaOneMinusSrcAlpha:
+                        data.materialEffect.EnableKeyword("_EDGE_BLEND_SA_OMSA");
+                        data.materialEffect.DisableKeyword("_EDGE_BLEND_LERP");
+                        break;
+                    case Liquid2DRenderFeatureSettings.Edge.EdgeBlendType.Lerp:
+                        data.materialEffect.EnableKeyword("_EDGE_BLEND_LERP");
+                        data.materialEffect.DisableKeyword("_EDGE_BLEND_SA_OMSA");
+                        break;
+                }
+            }
+            else
+            {
+                data.materialEffect.DisableKeyword("_EDGE_ENABLE");
+            }
 
             // 像素风格化。
             if (data.settings.pixel.enable)
@@ -707,11 +744,14 @@ namespace Fs.Liquid2D
             
             _settings.opacityMode = isActive ? VolumeData.opacityMode : _settingsDefault.opacityMode;
             _settings.opacityValue = isActive ? VolumeData.opacityValue : _settingsDefault.opacityValue;
-            
             _settings.coverColor = isActive ? VolumeData.coverColor : _settingsDefault.coverColor;
             
-            _settings.edgeIntensity = isActive ? VolumeData.edgeIntensity : _settingsDefault.edgeIntensity;
-            _settings.edgeColor = isActive ? VolumeData.edgeColor : _settingsDefault.edgeColor;
+            // ---- 边缘设置 ---- //
+            _settings.edge.enable = isActive ? VolumeData.edge.enable : _settingsDefault.edge.enable;
+            _settings.edge.edgeRange = isActive ? VolumeData.edge.edgeRange : _settingsDefault.edge.edgeRange;
+            _settings.edge.edgeIntensity = isActive ? VolumeData.edge.edgeIntensity : _settingsDefault.edge.edgeIntensity;
+            _settings.edge.edgeColor = isActive ? VolumeData.edge.edgeColor : _settingsDefault.edge.edgeColor;
+            _settings.edge.blendType = isActive ? VolumeData.edge.blendType : _settingsDefault.edge.blendType;
 
             // ---- 模糊设置 ---- //
             _settings.blur.iterations = isActive ? VolumeData.blur.iterations : _settingsDefault.blur.iterations;
