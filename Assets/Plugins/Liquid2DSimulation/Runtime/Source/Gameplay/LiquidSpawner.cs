@@ -3,42 +3,63 @@ using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
 using Fs.Liquid2D.Utility;
+using Fs.Liquid2D.Localization;
 
 namespace Fs.Liquid2D
 {
     public class LiquidSpawner : MonoBehaviour
     {
         [Header("Common")]
-        [Tooltip("是否在启动时自动开始喷射")]
+        [LocalizationTooltip("是否在启动时自动开始喷射",
+             "Whether to automatically start spraying on startup",
+             "起動時に自動的にスプレーを開始するかどうか")]
         public bool startOnAwake = true;
         
-        [Tooltip("启动时的延迟时间")]
+        [LocalizationTooltip("启动时的延迟时间",
+             "Delay time on startup",
+             "起動時の遅延時間")]
         public float startDelay = 2f;
         
         [Header("Liquid Particle Settings")]
-        [Tooltip("流体粒子预制体（需挂载Liquid2DParticleRenderer）")]
+        [LocalizationTooltip("流体粒子预制体（需挂载Liquid2DParticleRenderer）",
+             "Fluid particle prefab (requires Liquid2DParticleRenderer component)",
+             "流体パーティクルプレハブ（Liquid2DParticleRendererコンポーネントが必要）")]
         public List<LiquidParticle> liquidParticles = new List<LiquidParticle>();
 
-        [Range(0.01f, 100f), Tooltip("喷嘴宽度。")]
+        [Range(0.01f, 100f), LocalizationTooltip("喷嘴宽度。",
+             "Nozzle width.",
+             "ノズル幅。")]
         public float nozzleWidth = 1f;
         
-        [Tooltip("流量。每秒喷射的粒子数量。")]
+        [LocalizationTooltip("流量。每秒喷射的粒子数量。",
+             "Flow rate. Number of particles sprayed per second.",
+             "流量。毎秒噴射されるパーティクル数。")]
         public float flowRate = 60f;
         
-        [Tooltip("尺寸随机范围（最小值，最大值）")]
+        [LocalizationTooltip("尺寸随机范围（最小值，最大值）",
+             "Size random range (minimum, maximum)",
+             "サイズランダム範囲（最小値、最大値）")]
         public Vector2 sizeRandomRange = new Vector2(0.9f, 1.2f);
 
-        [Tooltip("喷射力大小")]
+        [LocalizationTooltip("喷射力大小",
+             "Ejection force magnitude",
+             "噴射力の大きさ")]
         public float ejectForce = 40f;
         
-        [Tooltip("喷射力随机范围（最小值，最大值）")]
+        [LocalizationTooltip("喷射力随机范围（最小值，最大值）",
+             "Ejection force random range (minimum, maximum)",
+             "噴射力ランダム範囲（最小値、最大値）")]
         public Vector2 ejectForceRandomRange = new Vector2(0.9f, 1.2f);
         
         [Header("Swing")]
-        [Tooltip("摆动角度范围（最大偏移，单位度）")]
+        [LocalizationTooltip("摆动角度范围（最大偏移，单位度）",
+             "Swing angle range (maximum offset, in degrees)",
+             "スイング角度範囲（最大オフセット、度単位）")]
         public float swingAngleRange = 0f;
 
-        [Tooltip("摆动速度（周期/秒）")]
+        [LocalizationTooltip("摆动速度（周期/秒）",
+             "Swing speed (cycles per second)",
+             "スイング速度（サイクル/秒）")]
         public float swingSpeed = 0.2f;
 
         public Transform TransformGet
@@ -239,13 +260,19 @@ namespace Fs.Liquid2D
     [Serializable]
     public class LiquidParticle : IRandomData
     {
-        [Tooltip("流体粒子预制体（需挂载Liquid2DParticleRenderer）。")]
+        [LocalizationTooltip("流体粒子预制体（需挂载Liquid2DParticleRenderer）。",
+             "Fluid particle prefab (requires Liquid2DParticleRenderer component).",
+             "流体パーティクルプレハブ（Liquid2DParticleRendererコンポーネントが必要）。")]
         public GameObject liquidPrefab;
         
-        [Tooltip("权重，决定被选中的概率。")]
+        [LocalizationTooltip("权重，决定被选中的概率。",
+             "Weight, determines the probability of being selected.",
+             "重み、選択される確率を決定します。")]
         public int weight = 1;
         
-        [Tooltip("生命周期，单位秒。大于0则在时间到后自动销毁。")]
+        [LocalizationTooltip("生命周期，单位秒。大于0则在时间到后自动销毁。",
+             "Lifetime in seconds. If greater than 0, automatically destroys after time expires.",
+             "ライフタイム（秒単位）。0より大きい場合、時間が経過すると自動的に破棄されます。")]
         public float lifetime = 0f;
 
         public int GetWeight()

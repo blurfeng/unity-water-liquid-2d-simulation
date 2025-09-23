@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Fs.Liquid2D.Localization;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
 
@@ -14,13 +15,19 @@ namespace Fs.Liquid2D
     /// </summary>
     public class Liquid2DFeature : ScriptableRendererFeature
     {
-        [SerializeField, Tooltip("用于模糊流体粒子的 Shader。")]
+        [SerializeField, LocalizationTooltip("用于模糊流体粒子的 Shader。",
+             "Shader used for blurring fluid particles.",
+             "流体パーティクルをブラーするために使用されるシェーダー。")]
         private Shader shaderBlur;
         
-        [SerializeField, Tooltip("用于渲染流体效果的 Shader。")]
+        [SerializeField, LocalizationTooltip("用于渲染流体效果的 Shader。",
+             "Shader used for rendering fluid effects.",
+             "流体エフェクトをレンダリングするために使用されるシェーダー。")]
         private Shader shaderEffect;
         
-        [SerializeField, Tooltip("流体效果设置。")] 
+        [SerializeField, LocalizationTooltip("流体效果设置。",
+             "Fluid effect settings.",
+             "流体エフェクト設定。")] 
         private Liquid2DRenderFeatureSettings renderFeatureSettings;
         
         private Liquid2dPass _liquid2dPass;

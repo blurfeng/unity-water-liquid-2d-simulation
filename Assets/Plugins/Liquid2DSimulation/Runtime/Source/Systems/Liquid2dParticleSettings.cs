@@ -1,5 +1,6 @@
 ﻿using System;
 using UnityEngine;
+using Fs.Liquid2D.Localization;
 
 namespace Fs.Liquid2D
 {
@@ -11,16 +12,24 @@ namespace Fs.Liquid2D
     [Serializable]
     public class Liquid2dParticleSettings
     {
-        [SerializeField, Tooltip("流体粒子贴图。")]
+        [SerializeField, LocalizationTooltip("流体粒子贴图。",
+             "Fluid particle sprite texture.",
+             "流体パーティクルスプライトテクスチャ。")]
         public Sprite sprite;
     
-        [SerializeField, Tooltip("流体粒子材质。")]
+        [SerializeField, LocalizationTooltip("流体粒子材质。",
+             "Fluid particle material.",
+             "流体パーティクルマテリアル。")]
         public Material material;
     
-        [SerializeField, ColorUsage(true, true), Tooltip("流体粒子颜色。")]
+        [SerializeField, ColorUsage(true, true), LocalizationTooltip("流体粒子颜色。",
+             "Fluid particle color.",
+             "流体パーティクルカラー。")]
         public Color color = new Color(0f, 1f, 4f, 1f);
         
-        [Tooltip("2D流体层遮罩。定义了这个流体粒子属于哪个层。")]
+        [LocalizationTooltip("2D流体层遮罩。定义了这个流体粒子属于哪个层。",
+             "2D fluid layer mask. Defines which layer this fluid particle belongs to.",
+             "2D流体レイヤーマスク。この流体パーティクルがどのレイヤーに属するかを定義します。")]
         public ELiquid2DLayer liquid2DLayerMask = ELiquid2DLayer.Water;
     
         /// <summary>

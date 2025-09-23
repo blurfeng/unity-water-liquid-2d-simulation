@@ -3,13 +3,16 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using UnityEngine;
 using UnityEngine.Rendering;
+using Fs.Liquid2D.Localization;
 
 namespace Fs.Liquid2D.Volumes
 {
     [DisplayName("Liquid2D")]
     public class Liquid2DVolume : VolumeComponent
     {
-        [Tooltip("是否启用2D流体 Renderer Feature 配置重载。")]
+        [LocalizationTooltip("是否启用2D流体 Renderer Feature 配置重载。",
+             "Whether to enable 2D fluid Renderer Feature configuration override.",
+             "2D流体レンダラーフィーチャー設定の上書きを有効にするかどうか。")]
         public BoolParameter isActive = new BoolParameter(true, true);
         
         /// <summary>
@@ -72,7 +75,9 @@ namespace Fs.Liquid2D.Volumes
             this.nameTag = nameTag;
         }
         
-        [Tooltip("是否启用该配置。")]
+        [LocalizationTooltip("是否启用该配置。",
+             "Whether to enable this configuration.",
+             "この設定を有効にするかどうか。")]
         public bool isActive;
     }
 }
