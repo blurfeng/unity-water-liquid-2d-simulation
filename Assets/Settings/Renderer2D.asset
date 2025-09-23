@@ -79,17 +79,16 @@ MonoBehaviour:
     obstructionRenderingLayerMask:
       serializedVersion: 0
       m_Bits: 2
-    cutoff: 0.2
+    cutoff: 0.14
     opacityMode: 0
     opacityValue: 1
     coverColor: {r: 0, g: 0, b: 0, a: 0}
-    edgeIntensity: 0
-    edgeColor: {r: 1, g: 1, b: 1, a: 1}
     blur:
       iterations: 4
       blurSpread: 0.6
       coreKeepIntensity: 0.4
       scaleFactor: 4
+      ignoreBgColor: 0
       blurBgColor: {r: 0.16078432, g: 0, b: 0, a: 1}
       blurBgColorIntensity: 0.4
     distort:
@@ -100,6 +99,16 @@ MonoBehaviour:
       distortSpeed: {x: 0.1, y: 1}
       distortTimeFactors: {x: 0.3, y: -0.4, z: 0.1, w: 0.5}
       noiseCoordOffset: 4
+    edge:
+      enable: 0
+      edgeRange: 0.6
+      edgeIntensity: 0.1
+      edgeColor: {r: 1, g: 1, b: 1, a: 0.8}
+      blendType: 0
+    pixel:
+      enable: 0
+      pixelSize: 6
+      pixelBg: 1
 --- !u!114 &8380843845757841626
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -124,14 +133,13 @@ MonoBehaviour:
     cutoff: 0.6
     opacityMode: 1
     opacityValue: 0.3
-    coverColor: {r: 0, g: 0.43330216, b: 1, a: 1}
-    edgeIntensity: 0.6
-    edgeColor: {r: 0.43867922, g: 0.699319, b: 1, a: 0.8235294}
+    coverColor: {r: 0, g: 0.43137264, b: 1, a: 1}
     blur:
       iterations: 3
       blurSpread: 0.6
       coreKeepIntensity: 0.379
       scaleFactor: 4
+      ignoreBgColor: 0
       blurBgColor: {r: 0, g: 0, b: 0, a: 0}
       blurBgColorIntensity: 0
     distort:
@@ -142,3 +150,13 @@ MonoBehaviour:
       distortSpeed: {x: 0.1, y: 1}
       distortTimeFactors: {x: 0.3, y: -0.4, z: 0.1, w: 0.5}
       noiseCoordOffset: 4
+    edge:
+      enable: 1
+      edgeRange: 0.8
+      edgeIntensity: 0.1
+      edgeColor: {r: 0.5518868, g: 0.8222361, b: 1, a: 0.627451}
+      blendType: 0
+    pixel:
+      enable: 0
+      pixelSize: 6
+      pixelBg: 1
