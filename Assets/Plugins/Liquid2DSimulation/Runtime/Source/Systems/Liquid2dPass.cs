@@ -471,7 +471,7 @@ namespace Fs.Liquid2D
                     if (item == null || !item.isActiveAndEnabled) continue;
                     
                     // 使用层遮罩过滤粒子。只渲染需要的粒子。 // Use layer mask to filter particles. Only render required particles. // レイヤーマスクを使用して粒子をフィルタリングします。必要な粒子のみをレンダリングします。
-                    if ((item.Settings.liquid2DLayerMask & targetLayerMask) == 0) continue;
+                    if ((item.RenderSettings.liquid2DLayerMask & targetLayerMask) == 0) continue;
                     
                     var ts = item.TransformGet;
                     
@@ -481,7 +481,7 @@ namespace Fs.Liquid2D
                     
                     // 填充矩阵和颜色数据。 // Fill in matrix and color data. // 行列と色データを入力します。
                     data.matricesCache[count] = Matrix4x4.TRS(ts.position, ts.rotation, ts.localScale);
-                    data.colorArrayCache[count] = item.Settings.color;
+                    data.colorArrayCache[count] = item.RenderSettings.color;
                     count++;
                 }
              

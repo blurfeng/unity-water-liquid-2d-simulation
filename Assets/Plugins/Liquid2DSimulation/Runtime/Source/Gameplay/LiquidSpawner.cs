@@ -10,56 +10,54 @@ namespace Fs.Liquid2D
     public class LiquidSpawner : MonoBehaviour
     {
         [Header("Common")]
-        [LocalizationTooltip("是否在启动时自动开始喷射",
-             "Whether to automatically start spraying on startup",
-             "起動時に自動的にスプレーを開始するかどうか")]
+        [LocalizationTooltip(
+            "是否在启动时自动开始喷射", 
+            "Whether to automatically start spraying on startup", 
+            "起動時に自動的にスプレーを開始するかどうか")]
         public bool startOnAwake = true;
         
-        [LocalizationTooltip("启动时的延迟时间",
-             "Delay time on startup",
-             "起動時の遅延時間")]
+        [LocalizationTooltip("启动时的延迟时间", "Delay time on startup", "起動時の遅延時間")]
         public float startDelay = 2f;
         
         [Header("Liquid Particle Settings")]
-        [LocalizationTooltip("流体粒子预制体（需挂载Liquid2DParticleRenderer）",
-             "Fluid particle prefab (requires Liquid2DParticleRenderer component)",
-             "流体パーティクルプレハブ（Liquid2DParticleRendererコンポーネントが必要）")]
+        [LocalizationTooltip(
+            "流体粒子预制体（需挂载Liquid2DParticleRenderer）", 
+            "Fluid particle prefab (requires Liquid2DParticleRenderer component)", 
+            "流体パーティクルプレハブ（Liquid2DParticleRendererコンポーネントが必要）")]
         public List<LiquidParticle> liquidParticles = new List<LiquidParticle>();
 
-        [Range(0.01f, 100f), LocalizationTooltip("喷嘴宽度。",
-             "Nozzle width.",
-             "ノズル幅。")]
+        [Range(0.01f, 100f), LocalizationTooltip("喷嘴宽度。", "Nozzle width.", "ノズル幅。")]
         public float nozzleWidth = 1f;
         
-        [LocalizationTooltip("流量。每秒喷射的粒子数量。",
-             "Flow rate. Number of particles sprayed per second.",
-             "流量。毎秒噴射されるパーティクル数。")]
+        [LocalizationTooltip(
+            "流量。每秒喷射的粒子数量。", 
+            "Flow rate. Number of particles sprayed per second.", 
+            "流量。毎秒噴射されるパーティクル数。")]
         public float flowRate = 60f;
         
-        [LocalizationTooltip("尺寸随机范围（最小值，最大值）",
-             "Size random range (minimum, maximum)",
-             "サイズランダム範囲（最小値、最大値）")]
+        [LocalizationTooltip(
+            "尺寸随机范围（最小值，最大值）", 
+            "Size random range (minimum, maximum)", 
+            "サイズランダム範囲（最小値、最大値）")]
         public Vector2 sizeRandomRange = new Vector2(0.9f, 1.2f);
 
-        [LocalizationTooltip("喷射力大小",
-             "Ejection force magnitude",
-             "噴射力の大きさ")]
+        [LocalizationTooltip("喷射力大小", "Ejection force magnitude", "噴射力の大きさ")]
         public float ejectForce = 40f;
         
-        [LocalizationTooltip("喷射力随机范围（最小值，最大值）",
-             "Ejection force random range (minimum, maximum)",
-             "噴射力ランダム範囲（最小値、最大値）")]
+        [LocalizationTooltip(
+            "喷射力随机范围（最小值，最大值）",
+            "Ejection force random range (minimum, maximum)", 
+            "噴射力ランダム範囲（最小値、最大値）")]
         public Vector2 ejectForceRandomRange = new Vector2(0.9f, 1.2f);
         
         [Header("Swing")]
-        [LocalizationTooltip("摆动角度范围（最大偏移，单位度）",
-             "Swing angle range (maximum offset, in degrees)",
-             "スイング角度範囲（最大オフセット、度単位）")]
+        [LocalizationTooltip(
+            "摆动角度范围（最大偏移，单位度）", 
+            "Swing angle range (maximum offset, in degrees)", 
+            "スイング角度範囲（最大オフセット、度単位）")]
         public float swingAngleRange = 0f;
 
-        [LocalizationTooltip("摆动速度（周期/秒）",
-             "Swing speed (cycles per second)",
-             "スイング速度（サイクル/秒）")]
+        [LocalizationTooltip("摆动速度（周期/秒）", "Swing speed (cycles per second)", "スイング速度（サイクル/秒）")]
         public float swingSpeed = 0.2f;
 
         public Transform TransformGet
@@ -78,7 +76,20 @@ namespace Fs.Liquid2D
         
         // 是否正在喷射中。 // Whether it is currently spawning. // 現在噴射中かどうか。
         private bool _isSpawning = false;
+        private static bool _isInitForJit = false;
         
+        private void Awake()
+        {
+            // 预热JIT。一些复杂的类，特别是泛型类，在首次使用时会有较大的性能开销，可能会导致卡顿。
+            // Warm up JIT. Some complex classes, especially generic classes, have a large performance overhead when used for the first time, which may cause stuttering.
+            // JITをウォームアップします。特にジェネリッククラスなどの複雑なクラスは、初めて使用する際に大きなパフォーマンスオーバーヘッドが発生し、スタッタリングの原因となる可能性があります。
+            if (!_isInitForJit)
+            {
+                _isInitForJit = true;
+                liquidParticles.RandomWeight();
+            }
+        }
+
         private void Start()
         {
             if (startOnAwake)

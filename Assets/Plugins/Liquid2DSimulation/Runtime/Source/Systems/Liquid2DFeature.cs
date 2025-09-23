@@ -15,17 +15,20 @@ namespace Fs.Liquid2D
     /// </summary>
     public class Liquid2DFeature : ScriptableRendererFeature
     {
-        [SerializeField, LocalizationTooltip("用于模糊流体粒子的 Shader。",
+        [SerializeField, LocalizationTooltip(
+             "用于模糊流体粒子的 Shader。",
              "Shader used for blurring fluid particles.",
              "流体パーティクルをブラーするために使用されるシェーダー。")]
         private Shader shaderBlur;
         
-        [SerializeField, LocalizationTooltip("用于渲染流体效果的 Shader。",
+        [SerializeField, LocalizationTooltip(
+             "用于渲染流体效果的 Shader。",
              "Shader used for rendering fluid effects.",
              "流体エフェクトをレンダリングするために使用されるシェーダー。")]
         private Shader shaderEffect;
         
-        [SerializeField, LocalizationTooltip("流体效果设置。",
+        [SerializeField, LocalizationTooltip(
+             "流体效果设置。",
              "Fluid effect settings.",
              "流体エフェクト設定。")] 
         private Liquid2DRenderFeatureSettings renderFeatureSettings;
@@ -111,15 +114,15 @@ namespace Fs.Liquid2D
         // All fluid particles are registered here, grouped by settings. Used for later rendering.
         // すべての流体粒子がここに登録され、設定によってグループ化されます。後のレンダリングに使用。
 
-        private static readonly Dictionary<Liquid2dParticleSettings, List<Liquid2DParticle>>
-            _particlesDic = new Dictionary<Liquid2dParticleSettings, List<Liquid2DParticle>>();
+        private static readonly Dictionary<Liquid2dParticleRenderSettings, List<Liquid2DParticle>>
+            _particlesDic = new Dictionary<Liquid2dParticleRenderSettings, List<Liquid2DParticle>>();
         
         /// <summary>
         /// 所有注册的流体粒子，按设置分组。用于批量渲染。
         /// All registered fluid particles, grouped by settings. Used for batch rendering.
         /// 登録されたすべての流体粒子を設定別にグループ化。バッチレンダリングに使用。
         /// </summary>
-        internal static Dictionary<Liquid2dParticleSettings, List<Liquid2DParticle>> ParticlesDic => _particlesDic;
+        internal static Dictionary<Liquid2dParticleRenderSettings, List<Liquid2DParticle>> ParticlesDic => _particlesDic;
 
         /// <summary>
         /// 注册流体粒子。
@@ -132,12 +135,12 @@ namespace Fs.Liquid2D
         /// <param name="particle"></param>
         public static void RegisterLiquidParticle(Liquid2DParticle particle)
         {
-            if (particle == null || particle.Settings == null) return;
+            if (particle == null || particle.RenderSettings == null) return;
 
-            if (!_particlesDic.TryGetValue(particle.Settings, out var list))
+            if (!_particlesDic.TryGetValue(particle.RenderSettings, out var list))
             {
                 list = new List<Liquid2DParticle>();
-                _particlesDic[particle.Settings] = list;
+                _particlesDic[particle.RenderSettings] = list;
             }
 
             if (!list.Contains(particle))
@@ -154,9 +157,9 @@ namespace Fs.Liquid2D
         /// <param name="particle"></param>
         public static void UnregisterLiquidParticle(Liquid2DParticle particle)
         {
-            if (particle == null || particle.Settings == null) return;
+            if (particle == null || particle.RenderSettings == null) return;
 
-            if (_particlesDic.TryGetValue(particle.Settings, out var list))
+            if (_particlesDic.TryGetValue(particle.RenderSettings, out var list))
             {
                 if (list.Contains(particle))
                 {
@@ -165,7 +168,7 @@ namespace Fs.Liquid2D
 
                 if (list.Count == 0)
                 {
-                    _particlesDic.Remove(particle.Settings);
+                    _particlesDic.Remove(particle.RenderSettings);
                 }
             }
         }

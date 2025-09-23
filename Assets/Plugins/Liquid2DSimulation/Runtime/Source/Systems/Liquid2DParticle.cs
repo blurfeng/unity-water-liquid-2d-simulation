@@ -1,4 +1,6 @@
-﻿using UnityEngine;
+﻿using System;
+using Fs.Liquid2D.Localization;
+using UnityEngine;
 
 namespace Fs.Liquid2D
 {
@@ -16,18 +18,25 @@ namespace Fs.Liquid2D
     [ExecuteAlways]
     public class Liquid2DParticle : MonoBehaviour
     {
-        [SerializeField, Tooltip("流体粒子渲染器设置。")]
-        private Liquid2dParticleSettings settings = new Liquid2dParticleSettings();
-    
-        [SerializeField, Tooltip("粒子生命时间（秒），到时间后自动销毁。")]
+        [SerializeField, LocalizationTooltip(
+             "粒子生命时间（秒），到时间后自动销毁。",
+             "Particle lifetime (seconds), automatically destroy after time.",
+             "粒子の寿命（秒）を設定し、時間後に自動破棄。"
+         )]
         private float lifetime = 0f;
+        
+        [SerializeField, LocalizationTooltip(
+             "流体粒子渲染器设置。",
+             "Fluid particle renderer settings.",
+             "流体パーティクルレンダラー設定。")]
+        private Liquid2dParticleRenderSettings renderSettings = new Liquid2dParticleRenderSettings();
         
         /// <summary>
         /// 流体粒子渲染器。
         /// Fluid particle renderer.
         /// 流体粒子レンダラー。
         /// </summary>
-        public Liquid2dParticleSettings Settings => settings;
+        public Liquid2dParticleRenderSettings RenderSettings => renderSettings;
 
         public Transform TransformGet
         {
@@ -83,7 +92,7 @@ namespace Fs.Liquid2D
         /// <returns></returns>
         private bool IsValid()
         {
-            if (!settings.IsValid())
+            if (!renderSettings.IsValid())
                 return false;
 
             return true;

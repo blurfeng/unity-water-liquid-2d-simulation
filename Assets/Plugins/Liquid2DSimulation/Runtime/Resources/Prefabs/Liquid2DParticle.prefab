@@ -46,8 +46,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7f424e78a4fd4648b4e7dc22e0d1abf2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  settings:
-    sprite: {fileID: 21300000, guid: d395cef0ea5fee348a6160a686f26c30, type: 3}
+  renderSettings:
+    sprite: {fileID: 21300000, guid: 474aa5d06b976c5449aa374d5c77d9aa, type: 3}
     material: {fileID: 2100000, guid: 7453d47e894769e43b1338caed5ddfeb, type: 2}
     color: {r: 0, g: 1, b: 4, a: 1}
     liquid2DLayerMask: 2

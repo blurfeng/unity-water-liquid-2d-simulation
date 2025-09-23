@@ -70,11 +70,27 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5143337698038929875, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
       propertyPath: settings.color.g
-      value: 0.4077798
+      value: 0.9259059
       objectReference: {fileID: 0}
     - target: {fileID: 5143337698038929875, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
       propertyPath: settings.color.r
-      value: 1
+      value: 2.2706027
+      objectReference: {fileID: 0}
+    - target: {fileID: 5143337698038929875, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
+      propertyPath: renderSettings.sprite
+      value: 
+      objectReference: {fileID: 21300000, guid: d395cef0ea5fee348a6160a686f26c30, type: 3}
+    - target: {fileID: 5143337698038929875, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
+      propertyPath: renderSettings.color.b
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5143337698038929875, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
+      propertyPath: renderSettings.color.g
+      value: 0.36328387
+      objectReference: {fileID: 0}
+    - target: {fileID: 5143337698038929875, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
+      propertyPath: renderSettings.color.r
+      value: 1.9766746
       objectReference: {fileID: 0}
     - target: {fileID: 5143337698038929875, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
       propertyPath: rendererSettings.sprite
@@ -94,6 +110,10 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5143337698038929875, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
       propertyPath: settings.liquid2DLayerMask
+      value: 4
+      objectReference: {fileID: 0}
+    - target: {fileID: 5143337698038929875, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
+      propertyPath: renderSettings.liquid2DLayerMask
       value: 4
       objectReference: {fileID: 0}
     - target: {fileID: 5143337698038929875, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}

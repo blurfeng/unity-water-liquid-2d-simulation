@@ -73,6 +73,18 @@ PrefabInstance:
       value: 0.26586103
       objectReference: {fileID: 0}
     - target: {fileID: 5143337698038929875, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
+      propertyPath: renderSettings.color.a
+      value: 0.8627451
+      objectReference: {fileID: 0}
+    - target: {fileID: 5143337698038929875, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
+      propertyPath: renderSettings.color.b
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 5143337698038929875, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
+      propertyPath: renderSettings.color.g
+      value: 0.26666668
+      objectReference: {fileID: 0}
+    - target: {fileID: 5143337698038929875, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
       propertyPath: rendererSettings.sprite
       value: 
       objectReference: {fileID: 21300000, guid: 474aa5d06b976c5449aa374d5c77d9aa, type: 3}
