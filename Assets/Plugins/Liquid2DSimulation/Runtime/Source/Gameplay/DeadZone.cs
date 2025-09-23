@@ -14,7 +14,7 @@ namespace Fs.Liquid2D
         {
             if (((1 << other.gameObject.layer) & layerMask.value) != 0)
             {
-                Destroy(other.gameObject);
+                Loader.Destroy(other.gameObject);
             }
         }
     }

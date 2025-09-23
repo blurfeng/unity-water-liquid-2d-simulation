@@ -191,46 +191,51 @@ namespace Fs.Liquid2D
             
             // 获取当前喷射方向。 // Get current ejection direction. // 現在の噴射方向を取得。
             Vector2 dir = GetCurrentEjectDirection();
-            Transform ts = TransformGet;
+            Transform tsSpa = TransformGet;
             
             // 随机获取生成位置。 // Randomly get spawn position. // ランダムに生成位置を取得。
             Vector2 normal = new Vector2(-dir.y, dir.x); // 计算法线 // Calculate normal // 法線を計算
             float offset = UnityEngine.Random.Range(-nozzleWidth * 0.5f, nozzleWidth * 0.5f);
-            Vector3 spawnPos = ts.position + (Vector3)(normal * offset);
+            Vector3 spawnPos = tsSpa.position + (Vector3)(normal * offset);
             
             // 生成预制体。 // Instantiate prefab. // プレハブをインスタンス化。
-            var go = Instantiate(liquidParticle.liquidPrefab, spawnPos, Quaternion.identity);
-            go.transform.SetParent(ts);
-            
-            // 检查是否挂载 Liquid2DParticleRenderer。 // Check if Liquid2DParticleRenderer is attached. // Liquid2DParticleRendererがアタッチされているか確認。
-            var lRenderer = go.GetComponent<Liquid2DParticle>();
-            if (lRenderer == null)
+            Loader.Load(liquidParticle.liquidPrefab, (go) =>
             {
-                Debug.LogWarning("预制体未挂载Liquid2DParticleRenderer！");
-                Destroy(go);
-                return;
-            }
+                Transform goTs = go.transform;
+                goTs.position = spawnPos;
+                // goTs.rotation = Quaternion.identity;
+                go.transform.SetParent(tsSpa);
             
-            // 随机设置尺寸。 // Randomly set size. // ランダムにサイズを設定。
-            if (sizeRandomRange.y > sizeRandomRange.x && sizeRandomRange.x > 0f)
-            {
-                float size = UnityEngine.Random.Range(sizeRandomRange.x, sizeRandomRange.y);
-                go.transform.localScale *= size;
-            }
-            
-            var rb = go.GetComponent<Rigidbody2D>();
-            if (rb != null)
-            {
-                // 随机设置喷射力。 // Randomly set ejection force. // ランダムに噴射力を設定。
-                float force = ejectForce;
-                if (ejectForceRandomRange.y > ejectForceRandomRange.x && ejectForceRandomRange.x >= 0f)
+                // 检查是否挂载 Liquid2DParticleRenderer。 // Check if Liquid2DParticleRenderer is attached. // Liquid2DParticleRendererがアタッチされているか確認。
+                var lRenderer = go.GetComponent<Liquid2DParticle>();
+                if (lRenderer == null)
                 {
-                    force *= UnityEngine.Random.Range(ejectForceRandomRange.x, ejectForceRandomRange.y);
+                    Debug.LogWarning("预制体未挂载Liquid2DParticleRenderer！");
+                    Destroy(go);
+                    return;
                 }
-                rb.AddForce(dir * force, ForceMode2D.Impulse);
-            }
             
-            lRenderer.SetLifetime(liquidParticle.lifetime);
+                // 随机设置尺寸。 // Randomly set size. // ランダムにサイズを設定。
+                if (sizeRandomRange.y > sizeRandomRange.x && sizeRandomRange.x > 0f)
+                {
+                    float size = UnityEngine.Random.Range(sizeRandomRange.x, sizeRandomRange.y);
+                    go.transform.localScale *= size;
+                }
+            
+                var rb = go.GetComponent<Rigidbody2D>();
+                if (rb != null)
+                {
+                    // 随机设置喷射力。 // Randomly set ejection force. // ランダムに噴射力を設定。
+                    float force = ejectForce;
+                    if (ejectForceRandomRange.y > ejectForceRandomRange.x && ejectForceRandomRange.x >= 0f)
+                    {
+                        force *= UnityEngine.Random.Range(ejectForceRandomRange.x, ejectForceRandomRange.y);
+                    }
+                    rb.AddForce(dir * force, ForceMode2D.Impulse);
+                }
+            
+                lRenderer.SetLifetime(liquidParticle.lifetime);
+            });
         }
 
         #if UNITY_EDITOR
