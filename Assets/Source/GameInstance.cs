@@ -38,21 +38,12 @@ namespace Source
             // カスタムリソースのロードと破棄方法を初期化します。
             Loader.InitLoaderWithPrefabSynchronous((prefab) =>
             {
-                return Object.Instantiate(prefab);
+                return Pool.Spawn(prefab);
             });
             
             Loader.InitLoaderWithSynchronous((path) =>
             {
-                var prefab = Resources.Load<GameObject>(path);
-                if (prefab)
-                {
-                    return Object.Instantiate(prefab);
-                }
-                else
-                {
-                    Debug.LogError($"Load UI Failed! Path: {path}");
-                    return null;
-                }
+                return Pool.ResourcesLoadAndSpawn(path);
             });
             
             // 初始化销毁方式。
@@ -60,7 +51,7 @@ namespace Source
             // 破棄方法を初期化します。
             Loader.InitDestroy((go) =>
             {
-                Object.Destroy(go);
+                Pool.Despawn(go);
             });
         }
     }
