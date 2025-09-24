@@ -1,20 +1,24 @@
-# Liquid 2D Simulation
-
-Liquid 2D Simulation 是一款用于 Unity 的2D流体模拟系统。\
-Liquid 2D Simulation is a 2D fluid simulation system designed for Unity.\
-Liquid 2D Simulation は、Unity 向けに設計された 2D 流体シミュレーションシステムです。
-
 ![](Documents/samples_1.gif)
 
+<p align="center">
+  📥
+  <a href="#using-upm">Install</a> |
+  <a href="#download-package">Download</a>
+</p>
 
-## 🌍 语言/Language/言語
-- ***阅读中文文档 > [中文](README.md)***
-- ***Read this document in > [English](README_en.md)***
-- ***日本語のドキュメントを読む > [日本語](README_ja.md)***
+<p align="center">
+  🌍
+  <a href="./README.md">中文</a> |
+  English |
+  <a href="./README_JA.md">日本語</a>
+</p>
 
+# Liquid 2D Simulation
+Liquid 2D Simulation is a 2D fluid simulation system designed for `Unity`. \
+Ready to use out of the box, it enables you to quickly achieve realistic physical fluid effects. \
+With its extensive configuration options, you can freely create fluids with a variety of textures and behaviors.
 
 ## 📜 Table of Contents
-
 - [Introduction](#introduction)
   - [Project Features](#project-features)
 - [💻 System Requirements](#-system-requirements)
@@ -25,20 +29,20 @@ Liquid 2D Simulation は、Unity 向けに設計された 2D 流体シミュレ�
   - [3. Add Renderer Feature](#3-add-renderer-feature)
   - [4. Create Fluid Particle Prefab](#4-create-fluid-particle-prefab)
   - [5. Create Particle Spawner](#5-create-particle-spawner)
-- [Renderer Feature Settings Guide](#renderer-feature-settings-guide)
+- [🌊 Renderer Feature Settings Guide](#-renderer-feature-settings-guide)
   - [Cover Color](#cover-color)
   - [Opacity](#opacity)
   - [Blur](#blur)
   - [Distort](#distort)
   - [Edge](#edge)
   - [Pixel](#pixel)
-- [Fluid Particle Settings Guide](#fluid-particle-settings-guide)
+- [💧 Fluid Particle Settings Guide](#-fluid-particle-settings-guide)
   - [Sprite Texture](#sprite-texture)
   - [Collider](#collider)
   - [Rigidbody 2D](#rigidbody-2d)
-- [Particle Spawner Settings Guide](#particle-spawner-settings-guide)
+- [⛲ Particle Spawner Settings Guide](#-particle-spawner-settings-guide)
   - [Control Spawning](#control-spawning)
-- [Todo List](#todo-list)
+- [📋 Todo List](#-todo-list)
 
 
 ## Introduction
@@ -51,20 +55,21 @@ In the actual process, particle fusion effects are achieved through alpha blendi
 ![](Documents/mix_1.gif)
 
 ### Project Features
-| Feature                           | Description                                                                                          |
-| --------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| URP2D                             | Project based on URP2D.                                                                              |
-| Render Graph                      | Uses the new Render Graph framework for rendering with significantly improved performance.           |
-| GPU Instance                      | Uses GPU Instance to render particles, can render many particles at once, supporting more particles. |
-| Runtime Volume Modification       | Supports modifying fluid particle rendering effects through Volume at runtime.                       |
-| Physical Particle Simulation      | Simulates physical effects of fluid particles through rigidbodies for more natural performance.      |
+| Feature                             | Description                                                                                          |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| URP 2D                              | Project based on URP2D.                                                                              |
+| Render Graph                        | Uses the new Render Graph framework for rendering with significantly improved performance.           |
+| GPU Instance                        | Uses GPU Instance to render particles, can render many particles at once, supporting more particles. |
+| Runtime Volume Modification         | Supports modifying fluid particle rendering effects through Volume at runtime.                       |
+| Physical Particle Simulation        | Simulates physical effects of fluid particles through rigidbodies for more natural performance.      |
+| Particle Physics Calculation ⚠️TODO | A high-performance particle physics algorithm that can smoothly handle thousands of particles.       |
 
 
 ## 💻 System Requirements
-- Unity 6000.2 or newer. (Or use the Unity 2022.3 branch version)
-- URP2D rendering pipeline.
-- Uses Renderer Graph framework for rendering.
-- Platform compatible with shaders.
+- `Unity6000.2` or later versions.
+- The 2022.3 branch supports `Unity2022.3`, but updates for this branch are slower than the main branch.
+- URP 2D rendering pipeline. The Unity6 version uses the Renderer Graph framework for rendering.
+- Platforms compatible with shaders.
 
 
 ## 🌳 Branches
@@ -96,7 +101,7 @@ Install the plugin to your project through UPM. If you need demo scenes, import 
 5. After importing the Samples folder, you can see demo scenes in the `Assets/Samples/Liquid 2D Simulation/./Samples` directory.\
 ![](Documents/qs_1_5.png)
 
-#### Package
+#### Download Package
 Install the plugin to your project using the installation package.
 Download the latest installation package from the [Releases](https://github.com/blurfeng/unity-water-liquid-2d-simulation/releases) page.\
 Then import the package into your project.\
@@ -147,8 +152,8 @@ You can also directly create a particle spawner prefab yourself, then add the `L
 ![](Documents/ls_1.png)
 
 
-## Renderer Feature Settings Guide
-Renderer Feature is used to render fluid particles and ultimately achieve fluid effects.\
+## 🌊 Renderer Feature Settings Guide
+`Liquid2DFeature` Renderer Feature is used to render fluid particles and ultimately achieve fluid effects.\
 The following mainly explains important features or parameters. More detailed parameters can be viewed directly in the Inspector panel tooltips.
 
 ### Cover Color
@@ -195,8 +200,8 @@ This can make fluids suitable for pixel-style games.\
 Pixelated background can make the area covered by fluid also show pixelated effects, making the style more unified.
 
 
-## Fluid Particle Settings Guide
-Fluid particles are the basic units that compose fluids.\
+## 💧 Fluid Particle Settings Guide
+`Liquid2DParticle` Fluid particles are the basic units that compose fluids.\
 The following mainly explains important features or parameters. More detailed parameters can be viewed directly in the Inspector panel tooltips.
 
 ### Sprite Texture
@@ -224,8 +229,8 @@ Physics materials also affect the behavior of fluid particles. By adjusting fric
 ![](Documents/pm_1.png)
 ![](Documents/pm_2.png)
 
-## Particle Spawner Settings Guide
-Particle spawner is used to generate fluid particles, like a pipe or fountain.\
+## ⛲ Particle Spawner Settings Guide
+`LiquidSpawner` is used to generate fluid particles, like a pipe or fountain.\
 The following mainly explains important features or parameters. More detailed parameters can be viewed directly in the Inspector panel tooltips.
 
 ### Control Spawning
@@ -238,12 +243,12 @@ This allows you to use more different particles to simulate more complex fluids,
 ![](Documents/ls_3.gif)
 
 For magma configuration tips, I set the `Cutoff` to 0.14 here, so the fluid retains more parts with low transparency.\
-Then enable the `Distort` effect. This way you'll see the background near the transparent parts of the magma fluid edges being refracted and distorted, creating an effect similar to rising heat.\
+Then enable the `Distort` effect. This way you'll see the background near the transparent parts of the magma fluid edges being refracted and distorted, creating an effect similar to rising heat.
 
 
-## Todo List
+## 📋 Todo List
 - **Fluid Particles**
   - Color mixing: Simulate mixing of different colored fusible fluid colors, such as yellow and blue mixing to become green.
 - **Physics System**
-  - Optimization: Currently when generating large numbers of particles, Unity's physics system becomes slow. Need to find better solutions, such as using DOTS physics system.
+  - Optimization: When generating a large number of particles, Unity's physics system can quickly become a performance bottleneck. It is necessary to optimize the physics system, calculate fluid physics manually, or use the DOTS framework to improve performance.
   - Inter-fluid particle physical interactions: Through simulating physical effects like viscosity and tension, represent different types of fluids, such as oil, honey, foam, etc.
