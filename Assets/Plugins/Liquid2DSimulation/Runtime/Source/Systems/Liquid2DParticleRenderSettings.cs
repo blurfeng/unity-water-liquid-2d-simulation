@@ -10,7 +10,7 @@ namespace Fs.Liquid2D
     /// 流体粒子レンダラー設定。
     /// </summary>
     [Serializable]
-    public class Liquid2dParticleRenderSettings
+    public class Liquid2DParticleRenderSettings
     {
         [SerializeField, LocalizationTooltip(
              "流体粒子贴图。",
@@ -47,7 +47,7 @@ namespace Fs.Liquid2D
             return sprite != null && material != null;
         }
     
-        public bool Equals(Liquid2dParticleRenderSettings other)
+        public bool Equals(Liquid2DParticleRenderSettings other)
         {
             if (other == null) return false;
             return sprite == other.sprite && material == other.material;
@@ -55,7 +55,7 @@ namespace Fs.Liquid2D
 
         public override bool Equals(object obj)
         {
-            return Equals(obj as Liquid2dParticleRenderSettings);
+            return Equals(obj as Liquid2DParticleRenderSettings);
         }
 
         public override int GetHashCode()

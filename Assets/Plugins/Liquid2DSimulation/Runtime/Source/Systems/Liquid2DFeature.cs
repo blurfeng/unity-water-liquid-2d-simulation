@@ -33,7 +33,7 @@ namespace Fs.Liquid2D
              "流体エフェクト設定。")] 
         private Liquid2DRenderFeatureSettings renderFeatureSettings;
         
-        private Liquid2dPass _liquid2dPass;
+        private Liquid2DPass _liquid2DPass;
         private Material _materialBlur;
         private Material _materialEffect;
         
@@ -81,7 +81,7 @@ namespace Fs.Liquid2D
             _materialEffect = new Material(shaderEffect);
             _materialBlur.renderQueue = 3000;
             _materialEffect.renderQueue = 3000;
-            _liquid2dPass = new Liquid2dPass(_materialBlur, _materialEffect, renderFeatureSettings);
+            _liquid2DPass = new Liquid2DPass(_materialBlur, _materialEffect, renderFeatureSettings);
         }
 
         public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
@@ -91,20 +91,20 @@ namespace Fs.Liquid2D
             //     return;
             
             // 确认 Pass 和材质是否可用。 // Confirm if Pass and materials are available. // Passとマテリアルが利用可能かを確認。
-            if (_liquid2dPass == null || _materialBlur == null || _materialEffect == null)
+            if (_liquid2DPass == null || _materialBlur == null || _materialEffect == null)
             {
                 // Debug.LogWarning($"Liquid2dFeature: Missing Liquid2d Pass. {GetType().Name} render pass will not execute.");
                 return;
             }
             
-            renderer.EnqueuePass(_liquid2dPass);
+            renderer.EnqueuePass(_liquid2DPass);
         }
 
         protected override void Dispose(bool disposing)
         {
             if (disposing)
             {
-                _liquid2dPass?.Dispose();
+                _liquid2DPass?.Dispose();
             }
         }
 
@@ -114,15 +114,15 @@ namespace Fs.Liquid2D
         // All fluid particles are registered here, grouped by settings. Used for later rendering.
         // すべての流体粒子がここに登録され、設定によってグループ化されます。後のレンダリングに使用。
 
-        private static readonly Dictionary<Liquid2dParticleRenderSettings, List<Liquid2DParticle>>
-            _particlesDic = new Dictionary<Liquid2dParticleRenderSettings, List<Liquid2DParticle>>();
+        private static readonly Dictionary<Liquid2DParticleRenderSettings, List<Liquid2DParticle>>
+            _particlesDic = new Dictionary<Liquid2DParticleRenderSettings, List<Liquid2DParticle>>();
         
         /// <summary>
         /// 所有注册的流体粒子，按设置分组。用于批量渲染。
         /// All registered fluid particles, grouped by settings. Used for batch rendering.
         /// 登録されたすべての流体粒子を設定別にグループ化。バッチレンダリングに使用。
         /// </summary>
-        internal static Dictionary<Liquid2dParticleRenderSettings, List<Liquid2DParticle>> ParticlesDic => _particlesDic;
+        internal static Dictionary<Liquid2DParticleRenderSettings, List<Liquid2DParticle>> ParticlesDic => _particlesDic;
 
         /// <summary>
         /// 注册流体粒子。

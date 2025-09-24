@@ -29,14 +29,14 @@ namespace Fs.Liquid2D
              "流体粒子渲染器设置。",
              "Fluid particle renderer settings.",
              "流体パーティクルレンダラー設定。")]
-        private Liquid2dParticleRenderSettings renderSettings = new Liquid2dParticleRenderSettings();
+        private Liquid2DParticleRenderSettings renderSettings = new Liquid2DParticleRenderSettings();
         
         /// <summary>
         /// 流体粒子渲染器。
         /// Fluid particle renderer.
         /// 流体粒子レンダラー。
         /// </summary>
-        public Liquid2dParticleRenderSettings RenderSettings => renderSettings;
+        public Liquid2DParticleRenderSettings RenderSettings => renderSettings;
         
         private HashSet<Liquid2DParticle> _contactParticles = new();
 
@@ -155,7 +155,7 @@ namespace Fs.Liquid2D
              "流体粒子混合设置。",
              "Fluid particle mix settings.",
              "流体パーティクルミックス設定。")]
-        private Liquid2dParticleMixSettings mixSettings = new Liquid2dParticleMixSettings();
+        private Liquid2DParticleMixSettings mixSettings = new Liquid2DParticleMixSettings();
         
         private readonly Dictionary<Liquid2DParticle, float> _lastStaticMixTimes = new();
         

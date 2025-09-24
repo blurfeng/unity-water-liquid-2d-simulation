@@ -11,7 +11,7 @@ namespace Fs.Liquid2D
     /// 流体パーティクルミックス設定。異なる色の流体パーティクルが色を混ぜるときの動作を定義するために使用されます。
     /// </summary>
     [Serializable]
-    public class Liquid2dParticleMixSettings
+    public class Liquid2DParticleMixSettings
     {
         [LocalizationTooltip(
              "启用颜色混合。如果启用，当不同颜色的流体粒子碰撞时，它们的颜色会混合在一起。只有相同 Liquid2DLayer 流体层的粒子才会混合颜色。",

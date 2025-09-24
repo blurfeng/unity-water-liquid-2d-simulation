@@ -9,7 +9,7 @@ using UnityEngine.Rendering.Universal;
 
 namespace Fs.Liquid2D
 {
-    public class Liquid2dPass : ScriptableRenderPass
+    public class Liquid2DPass : ScriptableRenderPass
     {
         /// <summary>
         /// Shader 属性 ID。 // Shader property IDs. // シェーダープロパティID。
@@ -76,7 +76,7 @@ namespace Fs.Liquid2D
         private readonly Liquid2DRenderFeatureSettings _settingsDefault;
         private readonly Liquid2DRenderFeatureSettings _settings;
         
-        public Liquid2dPass(Material materialBlur, Material materialEffect, Liquid2DRenderFeatureSettings settings)
+        public Liquid2DPass(Material materialBlur, Material materialEffect, Liquid2DRenderFeatureSettings settings)
         {
             _materialBlur = materialBlur;
             _materialEffect = materialEffect;
