@@ -1,20 +1,23 @@
-# Liquid 2D Simulation - 2D流体模拟
-
-Liquid 2D Simulation 是一款用于 Unity 的2D流体模拟系统。\
-Liquid 2D Simulation is a 2D fluid simulation system designed for Unity.\
-Liquid 2D Simulation は、Unity 向けに設計された 2D 流体シミュレーションシステムです。
-
 ![](Documents/samples_1.gif)
 
+<p align="center">
+  📥
+  <a href="#使用-upm">安装</a> |
+  <a href="#下载安装包">下载</a>
+</p>
 
-## 🌍 语言/Language/言語
-- ***阅读中文文档 > [中文](README.md)***
-- ***Read this document in > [English](README_en.md)***
-- ***日本語のドキュメントを読む > [日本語](README_ja.md)***
+<p align="center">
+  🌍
+  中文 |
+  <a href="./README_EN.md">English</a> |
+  <a href="./README_JA.md">日本語</a>
+</p>
 
+# Liquid 2D Simulation - 2D流体模拟
+Liquid 2D Simulation 是一款面向 `Unity` 的 2D 流体模拟系统，开箱即用，能够快速实现逼真的物理流体效果。\
+借助丰富的配置参数，你可以自由地创建各种不同质感的流体表现。
 
 ## 📜 目录
-
 - [简介](#简介)
   - [项目特性](#项目特性)
 - [💻 环境要求](#-环境要求)
@@ -25,20 +28,20 @@ Liquid 2D Simulation は、Unity 向けに設計された 2D 流体シミュレ�
   - [3.添加 Renderer Feature](#3添加-renderer-feature)
   - [4.创建流体粒子预制体](#4创建流体粒子预制体)
   - [5.创建粒子生成器](#5创建粒子生成器)
-- [Renderer Feature 设置指南](#renderer-feature-设置指南)
+- [🌊 Renderer Feature 设置指南](#-renderer-feature-设置指南)
   - [Cover Color 覆盖颜色](#cover-color-覆盖颜色)
   - [Opacity 不透明度](#opacity-不透明度)
   - [BLur 模糊](#blur-模糊)
   - [Distort 扭曲](#distort-扭曲)
   - [Edge 边缘](#edge-边缘)
   - [Pixel 像素化](#pixel-像素化)
-- [流体粒子设置指南](#流体粒子设置指南)
+- [💧 流体粒子设置指南](#-流体粒子设置指南)
   - [Sprite 贴图](#sprite-贴图)
   - [Collider](#collider)
   - [Rigidbody 2D 刚体](#rigidbody-2d-刚体)
-- [粒子生成器设置指南](#粒子生成器设置指南)
+- [⛲ 粒子生成器设置指南](#-粒子生成器设置指南)
   - [控制喷射](#控制喷射)
-- [待办事项列表](#待办事项列表)
+- [📋 待办事项列表](#-待办事项列表)
 
 
 ## 简介
@@ -51,19 +54,19 @@ Liquid 2D Simulation は、Unity 向けに設計された 2D 流体シミュレ�
 ![](Documents/mix_1.gif)
 
 ### 项目特性
-| 项目特性                           | 描述                                                                                         |
+| 特性                              | 描述                                                                                         |
 | --------------------------------- | -------------------------------------------------------------------------------------------- |
-| URP2D                             | 基于 URP2D 的项目。                                                                           |
+| URP 2D                            | 基于 URP2D 的项目。                                                                           |
 | Render Graph                      | 使用新的 Render Graph 框架进行渲染，性能大幅提升。                                              |
 | GPU Instance                      | 使用 GPU Instance 方式渲染粒子，可以一次渲染大量粒子，支持更多粒子数量。                          |
 | Volume 运行时修改                  | 支持在运行时通过 Volume 修改流体粒子的渲染效果。                                                |
 | 物理粒子模拟                       | 通过刚体模拟流体粒子的物理效果，使表现更自然。                                                   |
-
+| 粒子物理计算 ⚠️TODO                | 高性能的粒子物理算法，可支持数千粒子依然流畅运行。                                               |
 
 ## 💻 环境要求
-- Unity6000.2 或更新的版本。（或者使用Unity2022.3的分支版本）
-- URP2D 渲染管线。
-- 使用 Renderer Graph 框架进行渲染。
+- `Unity6000.2`或更新的版本。
+- 2022.3分支支持`Unity2022.3`版本，但是此分支的更新慢与主分支。
+- URP 2D 渲染管线。Unity6版本使用 Renderer Graph 框架进行渲染。
 - 与着色器兼容的平台。
 
 
@@ -96,7 +99,7 @@ https://github.com/blurfeng/unity-water-liquid-2d-simulation.git?path=Assets/Plu
 5. 导入 Samples 文件夹后，你可以在 `Assets/Samples/Liquid 2D Simulation/./Samples` 目录下看到演示场景。\
 ![](Documents/qs_1_5.png)
 
-#### package
+#### 下载安装包
 使用安装包将插件安装到你的项目中。
 在 [Releases](https://github.com/blurfeng/unity-water-liquid-2d-simulation/releases) 页面下载最新的安装包。\
 然后将包导入到你的项目中。\
@@ -147,8 +150,8 @@ https://github.com/blurfeng/unity-water-liquid-2d-simulation.git?path=Assets/Plu
 ![](Documents/ls_1.png)
 
 
-## Renderer Feature 设置指南
-Renderer Feature 用于渲染流体粒子，并最终实现流体效果。\
+## 🌊 Renderer Feature 设置指南
+`Liquid2DFeature` Renderer Feature 用于渲染流体粒子，并最终实现流体效果。\
 以下主要讲解重要的特性或参数，更详细的参数可以直接查看 Inspector 面板的 Tooltip。
 
 ### Cover Color 覆盖颜色
@@ -195,8 +198,8 @@ Replace 模式会将不透明度直接应用到粒子上。这也会覆盖粒子
 像素化背景可以让流体覆盖的区域也呈现像素化效果，使风格更统一。
 
 
-## 流体粒子设置指南
-流体粒子是组成流体的基本单元。\
+## 💧 流体粒子设置指南
+`Liquid2DParticle`流体粒子是组成流体的基本单元。\
 以下主要讲解重要的特性或参数，更详细的参数可以直接查看 Inspector 面板的 Tooltip。
 
 ### Sprite 贴图
@@ -224,8 +227,8 @@ Replace 模式会将不透明度直接应用到粒子上。这也会覆盖粒子
 ![](Documents/pm_1.png)
 ![](Documents/pm_2.png)
 
-## 粒子生成器设置指南
-粒子生成器用于生成流体粒子，类似一个水管或喷泉。\
+## ⛲ 粒子生成器设置指南
+`LiquidSpawner` 粒子生成器用于生成流体粒子，类似一个水管或喷泉。\
 以下主要讲解重要的特性或参数，更详细的参数可以直接查看 Inspector 面板的 Tooltip。
 
 ### 控制喷射
@@ -238,12 +241,12 @@ Replace 模式会将不透明度直接应用到粒子上。这也会覆盖粒子
 ![](Documents/ls_3.gif)
 
 关于岩浆的配置技巧，这里我将 `Cutoff` 设置为 0.14，这样流体会保留更多透明度低的部分。\
-然后启用 `Distort` 效果。这样你会看到岩浆流体边缘接近透明的部分背景被折射扭曲，类似热气腾腾的效果。\
+然后启用 `Distort` 效果。这样你会看到岩浆流体边缘接近透明的部分背景被折射扭曲，类似热气腾腾的效果。
 
 
-## 待办事项列表
+## 📋 待办事项列表
 - **流体粒子**
   - 颜色混合：模拟不同颜色的可相融流体颜色的混合，比如黄色和蓝色混合成绿色。
 - **物理系统**
-  - 优化：目前在生成大量粒子时，Unity 的物理系统会变得很慢。需要找到更好的解决方案，比如使用 DOTS 物理系统。
+  - 优化：目前在生成大量粒子时，Unity物理系统会很快到达瓶颈。物理系统待优化，自行计算流体物理，或使用 DOTS 系统。
   - 流体粒子间的相互物理作用：通过模拟粘性和张力等物理效果，表现不同类型的流体，比如石油、蜂蜜、泡沫等。
