@@ -45,7 +45,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Fs.Liquid2D.LiquidSpawner
   startOnAwake: 1
-  startDelay: 2
+  firstStartDelay: 1
+  startDelay: 0.5
+  duration: 0
   liquidParticles: []
   nozzleWidth: 1
   flowRate: 60

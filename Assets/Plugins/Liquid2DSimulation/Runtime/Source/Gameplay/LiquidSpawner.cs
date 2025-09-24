@@ -16,8 +16,14 @@ namespace Fs.Liquid2D
             "起動時に自動的にスプレーを開始するかどうか")]
         public bool startOnAwake = true;
         
-        [LocalizationTooltip("启动时的延迟时间", "Delay time on startup", "起動時の遅延時間")]
-        public float startDelay = 2f;
+        [LocalizationTooltip("初次启动时的延迟时间", "Delay time for the first start", "最初の起動時の遅延時間")]
+        public float firstStartDelay = 1f;
+        
+        [LocalizationTooltip("启动延迟时间（每次StartSpawn时都会应用）", "Start delay time (applied every time StartSpawn is called)", "開始遅延時間（StartSpawn呼び出し毎に適用）")]
+        public float startDelay = 0.5f;
+        
+        [LocalizationTooltip("持续时间（0表示无限持续）", "Duration time (0 means infinite duration)", "持続時間（0は無限持続を意味する）")]
+        public float duration = 0f;
         
         [Header("Liquid Particle Settings")]
         [LocalizationTooltip(
@@ -71,7 +77,9 @@ namespace Fs.Liquid2D
         private Transform _transform;
 
         private bool _isDelayedStarted = false;
-        private float _timer = 0f;
+        private bool _isFirstStart = true;
+        private float _delayTimer = 0f;
+        private float _durationTimer = 0f;
         private float _swingTime;
         
         // 是否正在喷射中。 // Whether it is currently spawning. // 現在噴射中かどうか。
@@ -105,13 +113,14 @@ namespace Fs.Liquid2D
             // 延迟启动。 // Delayed start. // 遅延スタート。
             if (!_isDelayedStarted)
             {
-                if (startDelay > 0f)
+                float currentDelay = _isFirstStart ? firstStartDelay : startDelay;
+                if (currentDelay > 0f)
                 {
-                    _timer += Time.deltaTime;
-                    if (_timer >= startDelay)
+                    _delayTimer += Time.deltaTime;
+                    if (_delayTimer >= currentDelay)
                     {
                         _isDelayedStarted = true;
-                        _timer = 0f;
+                        _delayTimer = 0f;
                     }
                 }
                 else
@@ -119,6 +128,17 @@ namespace Fs.Liquid2D
                     _isDelayedStarted = true;
                 }
                 return;
+            }
+            
+            // 持续时间检查。 // Duration check. // 持続時間チェック。
+            if (duration > 0f)
+            {
+                _durationTimer += Time.deltaTime;
+                if (_durationTimer >= duration)
+                {
+                    StopSpawn();
+                    return;
+                }
             }
             
             // 摆动。 // Swing. // スイング。
@@ -130,11 +150,11 @@ namespace Fs.Liquid2D
             // 喷射粒子。 // Spawn particles. // 粒子を噴射。
             if (flowRate > 0f)
             {
-                _timer += Time.deltaTime;
+                _delayTimer += Time.deltaTime;
                 float intetval = 1f / flowRate;
-                while (_timer >= intetval)
+                while (_delayTimer >= intetval)
                 {
-                    _timer -= intetval;
+                    _delayTimer -= intetval;
                     SpawnOne();
                 }
             }
@@ -149,6 +169,14 @@ namespace Fs.Liquid2D
         {
             if (_isSpawning) return;
             _isSpawning = true;
+            
+            // 重置计时器。 // Reset timers. // タイマーをリセット。
+            _isDelayedStarted = false;
+            _delayTimer = 0f;
+            _durationTimer = 0f;
+            
+            // 标记非首次启动。 // Mark as not first start. // 初回開始ではないことをマーク。
+            _isFirstStart = false;
         }
         
         /// <summary>
@@ -250,6 +278,24 @@ namespace Fs.Liquid2D
         }
 
         #if UNITY_EDITOR
+        private Color _gizmosBodyColor = Color.yellow;
+        
+        private void OnValidate()
+        {
+            if (liquidParticles.Count > 0)
+            {
+                var go = liquidParticles[0].liquidPrefab;
+                if (go)
+                {
+                    var p = go.GetComponent<Liquid2DParticle>();
+                    if (p)
+                    {
+                        _gizmosBodyColor = p.RenderSettings.color;
+                    }
+                }
+            }
+        }
+
         private void OnDrawGizmos()
         {
             Gizmos.color = Color.cyan;
@@ -264,7 +310,7 @@ namespace Fs.Liquid2D
             Gizmos.DrawLine(end, left);
             Gizmos.DrawLine(end, right);
             
-            Gizmos.color = Color.yellow;
+            Gizmos.color = _gizmosBodyColor;
             Matrix4x4 oldMatrix = Gizmos.matrix;
             Gizmos.matrix = transform.localToWorldMatrix;
             Gizmos.DrawCube(Vector3.zero, new Vector3(2f, 2f, 2f));

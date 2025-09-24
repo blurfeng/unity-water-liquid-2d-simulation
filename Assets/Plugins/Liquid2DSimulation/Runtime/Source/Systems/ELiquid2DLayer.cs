@@ -45,9 +45,9 @@ namespace Fs.Liquid2D
         Magma = 1 << 2,
 
         /// <summary>
-        /// 沼泽。
+        /// 水。可以混合颜色。 // Water that can mix colors. // 色を混ぜることができる水。
         /// </summary>
-        Marsh = 1 << 3,
+        WaterMix = 1 << 3,
         
         // 添加你需要的更多层。
     }
