@@ -188,6 +188,8 @@ namespace Seb.Helpers
 		/// Releases supplied buffer/s if not null
 		public static void Release(params ComputeBuffer[] buffers)
 		{
+			if (buffers == null) return;
+			
 			for (int i = 0; i < buffers.Length; i++)
 			{
 				if (buffers[i] != null)
@@ -200,6 +202,8 @@ namespace Seb.Helpers
 		/// Releases supplied render textures/s if not null
 		public static void Release(params RenderTexture[] textures)
 		{
+			if (textures == null) return;
+			
 			for (int i = 0; i < textures.Length; i++)
 			{
 				if (textures[i] != null)

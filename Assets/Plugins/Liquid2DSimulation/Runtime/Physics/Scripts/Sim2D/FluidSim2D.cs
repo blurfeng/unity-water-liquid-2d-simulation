@@ -1,7 +1,9 @@
+using System;
 using Seb.Fluid2D.Rendering;
 using Seb.Helpers;
 using UnityEngine;
 using Unity.Mathematics;
+using UnityEngine.Rendering;
 using UnityEngine.Serialization;
 
 namespace Seb.Fluid2D.Simulation
@@ -36,15 +38,25 @@ namespace Seb.Fluid2D.Simulation
 		public Spawner2D spawner2D;
 
 		// Buffers
-		public ComputeBuffer positionBuffer { get; private set; }
-		public ComputeBuffer velocityBuffer { get; private set; }
-		public ComputeBuffer densityBuffer { get; private set; }
+		public struct Particle
+		{
+			public Vector2 position;
+			public Vector2 predictedPositions;
+			public Vector2 velocity;
+		}
+		public ComputeBuffer Particles { get; private set; }
+		public ComputeBuffer DensityBuffer { get; private set; }
 
-		ComputeBuffer sortTarget_Position;
-		ComputeBuffer sortTarget_PredicitedPosition;
-		ComputeBuffer sortTarget_Velocity;
+		public struct SortTarget
+		{
+			public Vector2 position;
+			public Vector2 predictedPositions;
+			public Vector2 velocity;
+		}
+		
+		public ComputeBuffer SortTargets { get; private set; }
 
-		ComputeBuffer predictedPositionBuffer;
+		
 		SpatialHash spatialHash;
 
 		// Kernel IDs
@@ -58,11 +70,12 @@ namespace Seb.Fluid2D.Simulation
 		const int updatePositionKernel = 7;
 
 		// State
-		bool isPaused;
-		Spawner2D.ParticleSpawnData spawnData;
-		bool pauseNextFrame;
+		private bool _isPaused;
+		private Spawner2D.ParticleSpawnData _spawnData;
+		private bool _pauseNextFrame;
 
-		public int numParticles { get; private set; }
+		public int NumParticles { get; private set; }
+		private int BufferSize { get; set; }
 
 
 		void Start()
@@ -77,57 +90,119 @@ namespace Seb.Fluid2D.Simulation
 			float deltaTime = 1 / 60f;
 			Time.fixedDeltaTime = deltaTime;
 
-			spawnData = spawner2D.GetSpawnData();
-			numParticles = spawnData.positions.Length;
-			spatialHash = new SpatialHash(numParticles);
-
-			// Create buffers
-			positionBuffer = ComputeHelper.CreateStructuredBuffer<float2>(numParticles);
-			predictedPositionBuffer = ComputeHelper.CreateStructuredBuffer<float2>(numParticles);
-			velocityBuffer = ComputeHelper.CreateStructuredBuffer<float2>(numParticles);
-			densityBuffer = ComputeHelper.CreateStructuredBuffer<float2>(numParticles);
-
-			sortTarget_Position = ComputeHelper.CreateStructuredBuffer<float2>(numParticles);
-			sortTarget_PredicitedPosition = ComputeHelper.CreateStructuredBuffer<float2>(numParticles);
-			sortTarget_Velocity = ComputeHelper.CreateStructuredBuffer<float2>(numParticles);
-
-			// Set buffer data
-			SetInitialBufferData(spawnData);
-
-			// Init compute
-			ComputeHelper.SetBuffer(compute, positionBuffer, "Positions", externalForcesKernel, updatePositionKernel, reorderKernel, copybackKernel);
-			ComputeHelper.SetBuffer(compute, predictedPositionBuffer, "PredictedPositions", externalForcesKernel, spatialHashKernel, densityKernel, pressureKernel, viscosityKernel, reorderKernel, copybackKernel);
-			ComputeHelper.SetBuffer(compute, velocityBuffer, "Velocities", externalForcesKernel, pressureKernel, viscosityKernel, updatePositionKernel, reorderKernel, copybackKernel);
-			ComputeHelper.SetBuffer(compute, densityBuffer, "Densities", densityKernel, pressureKernel, viscosityKernel);
-
-			ComputeHelper.SetBuffer(compute, spatialHash.SpatialIndices, "SortedIndices", spatialHashKernel, reorderKernel);
-			ComputeHelper.SetBuffer(compute, spatialHash.SpatialOffsets, "SpatialOffsets", spatialHashKernel, densityKernel, pressureKernel, viscosityKernel);
-			ComputeHelper.SetBuffer(compute, spatialHash.SpatialKeys, "SpatialKeys", spatialHashKernel, densityKernel, pressureKernel, viscosityKernel);
-
-			ComputeHelper.SetBuffer(compute, sortTarget_Position, "SortTarget_Positions", reorderKernel, copybackKernel);
-			ComputeHelper.SetBuffer(compute, sortTarget_PredicitedPosition, "SortTarget_PredictedPositions", reorderKernel, copybackKernel);
-			ComputeHelper.SetBuffer(compute, sortTarget_Velocity, "SortTarget_Velocities", reorderKernel, copybackKernel);
-
-			compute.SetInt("numParticles", numParticles);
+			// Get spawn data.
+			_spawnData = spawner2D.GetSpawnData();
+			
+			// Init compute shader buffers etc.
+			InitComputeOnStart(_spawnData);
 		}
-
-
+		
 		void Update()
 		{
-			if (!isPaused)
+			HandleInput();
+			
+			if (spawnPending)
 			{
-				float maxDeltaTime = maxTimestepFPS > 0 ? 1 / maxTimestepFPS : float.PositiveInfinity; // If framerate dips too low, run the simulation slower than real-time
-				float dt = Mathf.Min(Time.deltaTime * timeScale, maxDeltaTime);
+				SpawnParticleAtMouse();
+				spawnPending = false;
+				_isPaused = false;
+			}
+
+			if (!_isPaused)
+			{
+				float maxDeltaTime = maxTimestepFPS > 0 ? 1 / maxTimestepFPS : float.PositiveInfinity;
+				float dt = Mathf.Min((Time.deltaTime + pendingDeltaTime) * timeScale, maxDeltaTime);
+				pendingDeltaTime = 0f;
 				RunSimulationFrame(dt);
 			}
 
-			if (pauseNextFrame)
+			if (_pauseNextFrame)
 			{
-				isPaused = true;
-				pauseNextFrame = false;
+				_isPaused = true;
+				_pauseNextFrame = false;
 			}
+		}
 
-			HandleInput();
+		/// <summary>
+		/// Set number of particles, resizing buffers if necessary.
+		/// Note: Buffer length is always a power of two, so may be larger than the number of particles.
+		/// If the number of particles exceeds the current buffer length, the buffer length is increased to the next power of two.
+		/// </summary>
+		/// <param name="numParticles"></param>
+		/// <returns> True if buffers were resized, false otherwise. </returns>
+		private bool SetNumParticles(int numParticles)
+		{
+			if (NumParticles == numParticles)
+				return false;
+
+			bool resized = false;
+			
+			NumParticles = numParticles;
+			
+			// Ensure buffer length is a power of two and can fit all particles.
+			if (NumParticles > BufferSize)
+			{
+				BufferSize = NumParticles;//Mathf.NextPowerOfTwo(NumParticles) * 2;
+				Debug.Log($"Set buffer size to {BufferSize} for {NumParticles} particles");
+				
+				// Create buffers when size changes.
+				CreateBuffer(BufferSize);
+				InitCompute();
+				resized = true;
+			}
+			
+			// Spatial hash mast be re-initialised if number of particles changes.
+			ReleaseSpatialHash();
+			spatialHash = new SpatialHash(NumParticles);
+			ComputeHelper.SetBuffer(compute, spatialHash.SpatialIndices, "SortedIndices", spatialHashKernel, reorderKernel);
+			ComputeHelper.SetBuffer(compute, spatialHash.SpatialOffsets, "SpatialOffsets", spatialHashKernel, densityKernel, pressureKernel, viscosityKernel);
+			ComputeHelper.SetBuffer(compute, spatialHash.SpatialKeys, "SpatialKeys", spatialHashKernel, densityKernel, pressureKernel, viscosityKernel);
+			
+			compute.SetInt("numParticles", NumParticles);
+			
+			return resized;
+		}
+
+		/// <summary>
+		/// Initialise compute shader, buffers, and spatial hash.
+		/// </summary>
+		/// <param name="spawnData"></param>
+		private void InitComputeOnStart(Spawner2D.ParticleSpawnData spawnData)
+		{
+			// set number of particles and create buffers.
+			SetNumParticles(spawnData.positions.Length);
+			
+			// Set buffer data.
+			SetInitialBufferData(spawnData);
+		}
+
+		private void CreateBuffer(int length)
+		{
+			// Release existing buffers when changing size.
+			ReleaseBuffer();
+			
+			DensityBuffer = ComputeHelper.CreateStructuredBuffer<float2>(length);
+			Particles = ComputeHelper.CreateStructuredBuffer<Particle>(length);
+			SortTargets = ComputeHelper.CreateStructuredBuffer<SortTarget>(length);
+		}
+		
+		private void InitCompute()
+		{
+			// Init compute
+			ComputeHelper.SetBuffer(compute, Particles, "Particles", externalForcesKernel, spatialHashKernel, densityKernel, pressureKernel, viscosityKernel, updatePositionKernel, reorderKernel, copybackKernel);
+			ComputeHelper.SetBuffer(compute, DensityBuffer, "Densities", densityKernel, pressureKernel, viscosityKernel);
+			
+			ComputeHelper.SetBuffer(compute, SortTargets, "SortTargets", reorderKernel, copybackKernel);
+		}
+		
+		private void ReleaseBuffer()
+		{
+			ComputeHelper.Release(Particles, DensityBuffer, SortTargets);
+		}
+		
+		private void ReleaseSpatialHash()
+		{
+			spatialHash?.Release();
 		}
 
 		void RunSimulationFrame(float frameTime)
@@ -145,23 +220,23 @@ namespace Seb.Fluid2D.Simulation
 
 		void RunSimulationStep()
 		{
-			ComputeHelper.Dispatch(compute, numParticles, kernelIndex: externalForcesKernel);
+			ComputeHelper.Dispatch(compute, NumParticles, kernelIndex: externalForcesKernel);
 
 			RunSpatial();
 
-			ComputeHelper.Dispatch(compute, numParticles, kernelIndex: densityKernel);
-			ComputeHelper.Dispatch(compute, numParticles, kernelIndex: pressureKernel);
-			ComputeHelper.Dispatch(compute, numParticles, kernelIndex: viscosityKernel);
-			ComputeHelper.Dispatch(compute, numParticles, kernelIndex: updatePositionKernel);
+			ComputeHelper.Dispatch(compute, NumParticles, kernelIndex: densityKernel);
+			ComputeHelper.Dispatch(compute, NumParticles, kernelIndex: pressureKernel);
+			ComputeHelper.Dispatch(compute, NumParticles, kernelIndex: viscosityKernel);
+			ComputeHelper.Dispatch(compute, NumParticles, kernelIndex: updatePositionKernel);
 		}
 
 		void RunSpatial()
 		{
-			ComputeHelper.Dispatch(compute, numParticles, kernelIndex: spatialHashKernel);
+			ComputeHelper.Dispatch(compute, NumParticles, kernelIndex: spatialHashKernel);
 			spatialHash.Run();
 
-			ComputeHelper.Dispatch(compute, numParticles, kernelIndex: reorderKernel);
-			ComputeHelper.Dispatch(compute, numParticles, kernelIndex: copybackKernel);
+			ComputeHelper.Dispatch(compute, NumParticles, kernelIndex: reorderKernel);
+			ComputeHelper.Dispatch(compute, NumParticles, kernelIndex: copybackKernel);
 		}
 
 		void UpdateSettings(float deltaTime)
@@ -183,62 +258,65 @@ namespace Seb.Fluid2D.Simulation
 			compute.SetFloat("SpikyPow2ScalingFactor", 6 / (Mathf.PI * Mathf.Pow(smoothingRadius, 4)));
 			compute.SetFloat("SpikyPow3DerivativeScalingFactor", 30 / (Mathf.Pow(smoothingRadius, 5) * Mathf.PI));
 			compute.SetFloat("SpikyPow2DerivativeScalingFactor", 12 / (Mathf.Pow(smoothingRadius, 4) * Mathf.PI));
-
-			// Mouse interaction settings:
-			Vector2 mousePos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-			bool isPullInteraction = Input.GetMouseButton(0);
-			bool isPushInteraction = Input.GetMouseButton(1);
-			float currInteractStrength = 0;
-			if (isPushInteraction || isPullInteraction)
-			{
-				currInteractStrength = isPushInteraction ? -interactionStrength : interactionStrength;
-			}
-
-			compute.SetVector("interactionInputPoint", mousePos);
-			compute.SetFloat("interactionInputStrength", currInteractStrength);
-			compute.SetFloat("interactionInputRadius", interactionRadius);
 		}
 
 		void SetInitialBufferData(Spawner2D.ParticleSpawnData spawnData)
 		{
-			float2[] allPoints = new float2[spawnData.positions.Length]; //
-			System.Array.Copy(spawnData.positions, allPoints, spawnData.positions.Length);
-
-			positionBuffer.SetData(allPoints);
-			predictedPositionBuffer.SetData(allPoints);
-			velocityBuffer.SetData(spawnData.velocities);
+			Particle[] particles = new Particle[spawnData.positions.Length];
+			for (int i = 0; i < particles.Length; i++)
+			{
+				particles[i] = new Particle()
+				{
+					position = spawnData.positions[i],
+					predictedPositions = spawnData.positions[i],
+					velocity = spawnData.velocities[i],
+				};
+			}
+			Particles.SetData(particles);
 		}
 
 		void HandleInput()
 		{
 			if (Input.GetKeyDown(KeyCode.Space))
 			{
-				isPaused = !isPaused;
+				_isPaused = !_isPaused;
 			}
 
 			if (Input.GetKeyDown(KeyCode.RightArrow))
 			{
-				isPaused = false;
-				pauseNextFrame = true;
+				_isPaused = false;
+				_pauseNextFrame = true;
 			}
+			
+			// Mouse interaction settings:
+			Vector2 mousePos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+			bool isPullInteraction = Input.GetMouseButton(0);
+			bool isPushInteraction = Input.GetMouseButton(1);
+			float currInteractStrength = 0;
+			if (isPushInteraction || isPullInteraction)
+				currInteractStrength = isPushInteraction ? -interactionStrength : interactionStrength;
+
+			compute.SetVector("interactionInputPoint", mousePos);
+			compute.SetFloat("interactionInputStrength", currInteractStrength);
+			compute.SetFloat("interactionInputRadius", interactionRadius);
 
 			if (Input.GetKeyDown(KeyCode.R))
 			{
-				isPaused = true;
+				_isPaused = true;
 				// Reset positions, the run single frame to get density etc (for debug purposes) and then reset positions again
-				SetInitialBufferData(spawnData);
+				SetInitialBufferData(_spawnData);
 				RunSimulationStep();
-				SetInitialBufferData(spawnData);
+				SetInitialBufferData(_spawnData);
 			}
-		}
 
+			HandleInputSpawn();
+		}
 
 		void OnDestroy()
 		{
-			ComputeHelper.Release(positionBuffer, predictedPositionBuffer, velocityBuffer, densityBuffer, sortTarget_Position, sortTarget_Velocity, sortTarget_PredicitedPosition);
-			spatialHash.Release();
+			ReleaseBuffer();
+			ReleaseSpatialHash();
 		}
-
 
 		void OnDrawGizmos()
 		{
@@ -259,5 +337,68 @@ namespace Seb.Fluid2D.Simulation
 				}
 			}
 		}
+
+		#region Spawn
+
+		private bool isSpawning = false;
+		private bool spawnPending = false;
+		private float pendingDeltaTime = 0f;
+
+		private void HandleInputSpawn()
+		{
+			// 目前添加粒子功能有bug。偶现在添加粒子时，所有粒子模拟会出问题，直到下一次添加粒子更新数据后又恢复。
+			return;
+			
+			if (Input.GetKeyDown(KeyCode.S) && !_isPaused)
+			{
+				isSpawning = true;
+				spawnPending = true;
+				pendingDeltaTime = Time.deltaTime;
+				_isPaused = true;
+			}
+			if (Input.GetKeyUp(KeyCode.S))
+				isSpawning = false;
+
+			if (isSpawning)
+			{
+				SpawnParticleAtMouse();
+			}
+		}
+
+		private void SpawnParticleAtMouse()
+		{
+			Vector2 mousePos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+			AddParticle(mousePos, Vector2.zero);
+		}
+		
+		// 新增粒子到 spawnData
+		public void AddParticle(Vector2 position, Vector2 velocity)
+		{
+			Particle[] particles = new Particle[NumParticles];
+			Particles.GetData(particles);
+
+			bool resized = SetNumParticles(NumParticles + 1);
+
+			if (resized)
+			{
+				Particle[] newParticles = new Particle[NumParticles];
+				Array.Copy(particles, newParticles, particles.Length);
+				newParticles[NumParticles - 1].position = position;
+				newParticles[NumParticles - 1].predictedPositions = position;
+				newParticles[NumParticles - 1].velocity = velocity;
+				Particles.SetData(newParticles);
+			}
+			else
+			{
+				Particle newParticle = new Particle
+				{
+					position = position,
+					predictedPositions = position,
+					velocity = velocity
+				};
+				Particles.SetData(new[] { newParticle }, 0, NumParticles - 1, 1);
+			}
+		}
+		#endregion
 	}
 }

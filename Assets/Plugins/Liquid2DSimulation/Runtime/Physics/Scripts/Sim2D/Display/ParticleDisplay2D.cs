@@ -36,12 +36,13 @@ namespace Seb.Fluid2D.Rendering
 
 		void UpdateSettings()
 		{
-			
-			material.SetBuffer("Positions2D", sim.positionBuffer);
-			material.SetBuffer("Velocities", sim.velocityBuffer);
-			material.SetBuffer("DensityData", sim.densityBuffer);
+			// material.SetBuffer("Positions2D", sim.positionBuffer);
+			// material.SetBuffer("Velocities", sim.velocityBuffer);
+			material.SetBuffer("Particles", sim.Particles);
+			material.SetBuffer("DensityData", sim.DensityBuffer);
+			material.SetInt("numParticles", sim.NumParticles);
 
-			ComputeHelper.CreateArgsBuffer(ref argsBuffer, mesh, sim.positionBuffer.count);
+			ComputeHelper.CreateArgsBuffer(ref argsBuffer, mesh, sim.Particles.count);
 			bounds = new Bounds(Vector3.zero, Vector3.one * 10000);
 
 			if (needsUpdate)

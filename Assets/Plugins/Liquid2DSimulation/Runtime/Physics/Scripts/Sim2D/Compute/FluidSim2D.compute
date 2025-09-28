@@ -14,9 +14,16 @@
 static const int NumThreads = 64;
 
 // Buffers
-RWStructuredBuffer<float2> Positions;
-RWStructuredBuffer<float2> PredictedPositions;
-RWStructuredBuffer<float2> Velocities;
+struct Particle
+{
+	float2 position;
+	float2 predictedPositions;
+	float2 velocity;
+};
+RWStructuredBuffer<Particle> Particles;
+// RWStructuredBuffer<float2> Positions;
+// RWStructuredBuffer<float2> PredictedPositions;
+// RWStructuredBuffer<float2> Velocities;
 RWStructuredBuffer<float2> Densities; // Density, Near Density
 
 // Spatial hashing
@@ -90,7 +97,7 @@ float2 CalculateDensity(float2 pos)
 			// Exit if no longer looking at correct bin
 			if (neighbourKey != key) break;
 
-			float2 neighbourPos = PredictedPositions[neighbourIndex];
+			float2 neighbourPos = Particles[neighbourIndex].predictedPositions;
 			float2 offsetToNeighbour = neighbourPos - pos;
 			float sqrDstToNeighbour = dot(offsetToNeighbour, offsetToNeighbour);
 
@@ -146,8 +153,8 @@ float2 ExternalForces(float2 pos, float2 velocity)
 
 void HandleCollisions(uint particleIndex)
 {
-	float2 pos = Positions[particleIndex];
-	float2 vel = Velocities[particleIndex];
+	float2 pos = Particles[particleIndex].position;
+	float2 vel = Particles[particleIndex].velocity;
 
 	// Keep particle inside bounds
 	const float2 halfSize = boundsSize * 0.5;
@@ -181,8 +188,8 @@ void HandleCollisions(uint particleIndex)
 	}
 
 	// Update position and velocity
-	Positions[particleIndex] = pos;
-	Velocities[particleIndex] = vel;
+	Particles[particleIndex].position = pos;
+	Particles[particleIndex].velocity = vel;
 }
 
 [numthreads(NumThreads,1,1)]
@@ -191,11 +198,11 @@ void ExternalForces(uint3 id : SV_DispatchThreadID)
 	if (id.x >= numParticles) return;
 
 	// External forces (gravity and input interaction)
-	Velocities[id.x] += ExternalForces(Positions[id.x], Velocities[id.x]) * deltaTime;
+	Particles[id.x].velocity += ExternalForces(Particles[id.x].position, Particles[id.x].velocity) * deltaTime;
 
 	// Predict
 	const float predictionFactor = 1 / 120.0;
-	PredictedPositions[id.x] = Positions[id.x] + Velocities[id.x] * predictionFactor;
+	Particles[id.x].predictedPositions = Particles[id.x].position + Particles[id.x].velocity * predictionFactor;
 }
 
 [numthreads(NumThreads,1,1)]
@@ -204,15 +211,22 @@ void UpdateSpatialHash (uint3 id : SV_DispatchThreadID)
 	if (id.x >= numParticles) return;
 	
 	uint index = id.x;
-	int2 cell = GetCell2D(PredictedPositions[index], smoothingRadius);
+	int2 cell = GetCell2D(Particles[index].predictedPositions, smoothingRadius);
 	uint hash = HashCell2D(cell);
 	uint key = KeyFromHash(hash, numParticles);
 	SpatialKeys[id.x] = key;
 }
 
-RWStructuredBuffer<float2> SortTarget_Positions;
-RWStructuredBuffer<float2> SortTarget_PredictedPositions;
-RWStructuredBuffer<float2> SortTarget_Velocities;
+struct SortTarget
+{
+	float2 position;
+	float2 predictedPositions;
+	float2 velocity;
+};
+RWStructuredBuffer<SortTarget> SortTargets;
+// RWStructuredBuffer<float2> SortTarget_Positions;
+// RWStructuredBuffer<float2> SortTarget_PredictedPositions;
+// RWStructuredBuffer<float2> SortTarget_Velocities;
 
 [numthreads(NumThreads,1,1)]
 void Reorder (uint3 id : SV_DispatchThreadID)
@@ -220,9 +234,9 @@ void Reorder (uint3 id : SV_DispatchThreadID)
 	if (id.x >= numParticles) return;
 
 	uint sortedIndex = SortedIndices[id.x];
-	SortTarget_Positions[id.x] = Positions[sortedIndex];
-	SortTarget_PredictedPositions[id.x] = PredictedPositions[sortedIndex];
-	SortTarget_Velocities[id.x] = Velocities[sortedIndex];
+	SortTargets[id.x].position = Particles[sortedIndex].position;
+	SortTargets[id.x].predictedPositions = Particles[sortedIndex].predictedPositions;
+	SortTargets[id.x].velocity = Particles[sortedIndex].velocity;
 }
 
 
@@ -231,9 +245,9 @@ void ReorderCopyback (uint3 id : SV_DispatchThreadID)
 {
 	if (id.x >= numParticles) return;
 	
-	Positions[id.x] = SortTarget_Positions[id.x];
-	PredictedPositions[id.x] = SortTarget_PredictedPositions[id.x];
-	Velocities[id.x] = SortTarget_Velocities[id.x];
+	Particles[id.x].position = SortTargets[id.x].position;
+	Particles[id.x].predictedPositions = SortTargets[id.x].predictedPositions;
+	Particles[id.x].velocity = SortTargets[id.x].velocity;
 }
 
 
@@ -242,7 +256,7 @@ void CalculateDensities (uint3 id : SV_DispatchThreadID)
 {
 	if (id.x >= numParticles) return;
 
-	float2 pos = PredictedPositions[id.x];
+	float2 pos = Particles[id.x].predictedPositions;
 	Densities[id.x] = CalculateDensity(pos);
 }
 
@@ -257,7 +271,7 @@ void CalculatePressureForce (uint3 id : SV_DispatchThreadID)
 	float nearPressure = NearPressureFromDensity(densityNear);
 	float2 pressureForce = 0;
 	
-	float2 pos = PredictedPositions[id.x];
+	float2 pos = Particles[id.x].predictedPositions;
 	int2 originCell = GetCell2D(pos, smoothingRadius);
 	float sqrRadius = smoothingRadius * smoothingRadius;
 
@@ -280,7 +294,7 @@ void CalculatePressureForce (uint3 id : SV_DispatchThreadID)
 			// Exit if no longer looking at correct bin
 			if (neighbourKey != key) break;
 			
-			float2 neighbourPos = PredictedPositions[neighbourIndex];
+			float2 neighbourPos = Particles[neighbourIndex].predictedPositions;
 			float2 offsetToNeighbour = neighbourPos - pos;
 			float sqrDstToNeighbour = dot(offsetToNeighbour, offsetToNeighbour);
 
@@ -305,7 +319,7 @@ void CalculatePressureForce (uint3 id : SV_DispatchThreadID)
 	}
 
 	float2 acceleration = pressureForce / density;
-	Velocities[id.x] += acceleration * deltaTime;//
+	Particles[id.x].velocity += acceleration * deltaTime;//
 }
 
 
@@ -316,12 +330,12 @@ void CalculateViscosity (uint3 id : SV_DispatchThreadID)
 	if (id.x >= numParticles) return;
 	
 		
-	float2 pos = PredictedPositions[id.x];
+	float2 pos = Particles[id.x].predictedPositions;
 	int2 originCell = GetCell2D(pos, smoothingRadius);
 	float sqrRadius = smoothingRadius * smoothingRadius;
 
 	float2 viscosityForce = 0;
-	float2 velocity = Velocities[id.x];
+	float2 velocity = Particles[id.x].velocity;
 
 	for (int i = 0; i < 9; i ++)
 	{
@@ -341,7 +355,7 @@ void CalculateViscosity (uint3 id : SV_DispatchThreadID)
 			// Exit if no longer looking at correct bin
 			if (neighbourKey != key) break;
 
-			float2 neighbourPos = PredictedPositions[neighbourIndex];
+			float2 neighbourPos = Particles[neighbourIndex].predictedPositions;
 			float2 offsetToNeighbour = neighbourPos - pos;
 			float sqrDstToNeighbour = dot(offsetToNeighbour, offsetToNeighbour);
 
@@ -349,12 +363,12 @@ void CalculateViscosity (uint3 id : SV_DispatchThreadID)
 			if (sqrDstToNeighbour > sqrRadius) continue;
 
 			float dst = sqrt(sqrDstToNeighbour);
-			float2 neighbourVelocity = Velocities[neighbourIndex];
+			float2 neighbourVelocity = Particles[neighbourIndex].velocity;
 			viscosityForce += (neighbourVelocity - velocity) * ViscosityKernel(dst, smoothingRadius);
 		}
 
 	}
-	Velocities[id.x] += viscosityForce * viscosityStrength * deltaTime;
+	Particles[id.x].velocity += viscosityForce * viscosityStrength * deltaTime;
 }
 
 [numthreads(NumThreads, 1, 1)]
@@ -362,6 +376,6 @@ void UpdatePositions(uint3 id : SV_DispatchThreadID)
 {
 	if (id.x >= numParticles) return;
 
-	Positions[id.x] += Velocities[id.x] * deltaTime;
+	Particles[id.x].position += Particles[id.x].velocity * deltaTime;
 	HandleCollisions(id.x);
 }
