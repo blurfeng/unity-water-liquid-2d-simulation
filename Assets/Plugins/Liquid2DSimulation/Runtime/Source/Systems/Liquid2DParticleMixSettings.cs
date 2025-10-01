@@ -18,6 +18,12 @@ namespace Fs.Liquid2D
              "Enable color mixing. If enabled, when different colored fluid particles collide, their colors will mix together. Only particles in the same Liquid2DLayer will mix colors.",
              "色の混合を有効にします。有効にすると、異なる色の流体パーティクルが衝突すると、その色が混ざり合います。同じLiquid2DLayerに属するパーティクルのみが色を混ぜます。")]
         public bool mixColors = false;
+
+        [LocalizationTooltip(
+            "颜色混合半径倍率，基础为CircleCollider2D的半径。",
+            "Color mix radius rate, based on the radius of CircleCollider2D.",
+            "色の混合半径倍率、CircleCollider2Dの半径に基)]づきます。")]
+        public float mixColorsRadiusRate = 2f;
         
         [Range(0f, 1f)]
         [LocalizationTooltip(
@@ -39,21 +45,21 @@ namespace Fs.Liquid2D
         public float mixColorsWithMovementMaxSpeed = 100f;
 
         [LocalizationTooltip(
-             "与接触的流体粒子混合颜色。只开启mixColors时，只在粒子碰撞时混合颜色。所有的粒子相对静止时不会混合颜色。开启此选项后，粒子在接触时也会混合颜色，即使它们没有碰撞。",
-             "Mix colors with contacting fluid particles. When only mixColors is enabled, colors are mixed only when particles collide. Colors will not mix when all particles are relatively stationary. Enabling this option allows particles to mix colors when in contact, even if they are not colliding.",
-             "接触している流体パーティクルと色を混ぜます。mixColorsのみが有効になっている場合、粒子が衝突したときにのみ色が混ざります。すべての粒子が比較的静止している場合、色は混ざりません。このオプションを有効にすると、粒子が接触しているときに衝突していなくても色を混ぜることができます。")]
-        public bool mixWithContactParticles = true;
+             "静止时混合颜色。当仅启用mixColors时，只有运动的粒子才会混合颜色。启用此选项可在自身静止时也与接触的粒子混合颜色。",
+             "Mix colors when stationary. When only mixColors is enabled, only moving particles will mix colors. Enabling this option allows mixing colors with contacting particles even when stationary.",
+             "静止しているときに色を混ぜる。mixColorsのみが有効になっている場合、動いている粒子のみが色を混ぜます。このオプションを有効にすると、静止している場合でも接触している粒子と色を混ぜることができます。")]
+        public bool mixColorsWhenStationary = true;
         
         [LocalizationTooltip(
              "与接触的流体粒子混合颜色的时间间隔（每个接触的粒子单独计时）。",
              "Time interval for mixing)] colors with contacting fluid particles (each contacting particle is timed separately).",
              "接触している流体パーティクルと色を混ぜるための時間間隔（各接触パーティクルは個別にタイミングされます）。")]
-        public float mixWithContactParticlesInternal = 0.1f;
+        public float mixColorsWithContactParticlesInternal = 0.1f;
 
         [LocalizationTooltip(
              "与接触的流体粒子进行混色的确认检查间隔。",
              "Check interval for confirming color mixing with contacting fluid particles.",
              "接触している流体パーティクルとの色の混合を確認するためのチェック間隔。")]
-        public float mixWithContactParticlesCheckInternal = 0.1f;
+        public float mixColorsWithContactParticlesCheckInternal = 0.1f;
     }
 }

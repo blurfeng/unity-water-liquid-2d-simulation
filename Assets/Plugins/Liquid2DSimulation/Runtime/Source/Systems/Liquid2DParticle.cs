@@ -37,29 +37,27 @@ namespace Fs.Liquid2D
         /// 流体粒子レンダラー。
         /// </summary>
         public Liquid2DParticleRenderSettings RenderSettings => renderSettings;
-        
-        private HashSet<Liquid2DParticle> _contactParticles = new();
 
-        public Transform TransformGet
-        {
-            get
-            {
-                if (_transform == null) _transform = transform;
-                return _transform;
-            }
-        }
+        public Transform TransformGet => _transform;
         private Transform _transform;
+
+        public CircleCollider2D CircleCollider2DGet => _circleCollider2D;
+        private CircleCollider2D _circleCollider2D;
         
-        public Collider2D Collider2DGet
+        public Rigidbody2D Rigidbody2DGet => _rigidbody2d;
+        private Rigidbody2D _rigidbody2d;
+        
+        private static readonly Dictionary<Collider2D, Liquid2DParticle> _DicParticlesWithCollider = new Dictionary<Collider2D, Liquid2DParticle>();
+
+        private void Awake()
         {
-            get
-            {
-                if (_collider2D == null) _collider2D = GetComponent<Collider2D>();
-                return _collider2D;
-            }
+            _transform = transform;
+            _circleCollider2D = GetComponent<CircleCollider2D>();
+            _rigidbody2d = GetComponent<Rigidbody2D>();
+
+            AwakeMixColor();
         }
-        private Collider2D _collider2D;
-        
+
         private void Start()
         {
             if (lifetime > 0f)
@@ -75,6 +73,8 @@ namespace Fs.Liquid2D
                 Debug.LogWarning("Liquid2dRenderer is not valid.");
                 return;
             }
+            
+            _DicParticlesWithCollider.Add(CircleCollider2DGet, this);
         
             // 注册到 Liquid2dFeature。 // Register to Liquid2dFeature. // Liquid2dFeatureに登録。
             Liquid2DFeature.RegisterLiquidParticle(this);
@@ -86,6 +86,8 @@ namespace Fs.Liquid2D
     
         private void OnDisable()
         {
+            _DicParticlesWithCollider.Remove(CircleCollider2DGet);
+            
             // 从 Liquid2dFeature 注销。 // Unregister from Liquid2dFeature. // Liquid2dFeatureから登録解除。
             Liquid2DFeature.UnregisterLiquidParticle(this);
             
@@ -96,26 +98,7 @@ namespace Fs.Liquid2D
         
         private void Update()
         {
-            if (CanMixColor)
-            {
-                UpdateMix();
-            }
-        }
-
-        private void OnCollisionEnter2D(Collision2D other)
-        {
-            var otherParticle = other.gameObject.GetComponent<Liquid2DParticle>();
-            if (otherParticle != null && otherParticle != this)
-                _contactParticles.Add(otherParticle);
-            
-            OnCollisionEnter2DMix(other);
-        }
-
-        private void OnCollisionExit2D(Collision2D other)
-        {
-            var otherParticle = other.gameObject.GetComponent<Liquid2DParticle>();
-            if (otherParticle != null && otherParticle != this)
-                _contactParticles.Remove(otherParticle);
+            UpdateMixColor();
         }
 
         /// <summary>
@@ -157,51 +140,88 @@ namespace Fs.Liquid2D
              "流体パーティクルミックス設定。")]
         private Liquid2DParticleMixSettings mixSettings = new Liquid2DParticleMixSettings();
         
-        private readonly Dictionary<Liquid2DParticle, float> _lastStaticMixTimes = new();
-        
         public bool CanMixColor => mixSettings.mixColors && mixSettings.mixColorsSpeed > 0f;
         
         private float _lastContactCheckTime = 0f;
+        
+        private Collider2D[] _mixColorContacts;
 
-        private void UpdateMix()
+        private ContactFilter2D _mixColorContactFilter;
+        
+        private void AwakeMixColor()
         {
-            if (!CanMixColor) return;
-            MixWithContactParticles();
+            _mixColorContacts = new Collider2D[4];
+            
+            _mixColorContactFilter = new ContactFilter2D()
+            {
+                useTriggers = false,
+                useLayerMask = true,
+                layerMask = 1 << gameObject.layer,
+                useDepth = false,
+                useOutsideDepth = false,
+            };
         }
 
-        private void OnCollisionEnter2DMix(Collision2D other)
+        private void UpdateMixColor()
         {
             if (!CanMixColor) return;
             
-            // 当流体粒子碰撞时，它们的颜色混合在一起。
-            // When fluid particles collide, their colors mix together.
-            // 流体パーティクルが衝突すると、その色が混ざり合います。
-            var otherParticle = other.gameObject.GetComponent<Liquid2DParticle>();
-            MixWithParticle(otherParticle);
+            MixWithContactParticles();
         }
         
         /// <summary>
-        /// 在静止状态下接触的粒子混合颜色。
-        /// Mix colors of particles in contact while in static state.
-        /// 静止状態で接触しているパーティクルの色を混ぜる。
+        /// 和接触的粒子混合颜色。
+        /// Mix colors with contact particles.
+        /// 接触しているパーティクルと色を混ぜる。
         /// </summary>
         private void MixWithContactParticles()
         {
-            if (!mixSettings.mixWithContactParticles) return;
+            // 如果粒子静止且未设置为在静止时混合颜色，则跳过混合。
+            // If the particle is stationary and not set to mix colors when stationary, skip mixing.
+            // 粒子が静止していて、静止時に色を混ぜるように設定されていない場合、ミックスをスキップします。
+            if (Rigidbody2DGet.linearVelocity.sqrMagnitude < 0.00000001f && !mixSettings.mixColorsWhenStationary) return;
             
             float now = Time.time;
-            if (now - _lastContactCheckTime < mixSettings.mixWithContactParticlesCheckInternal)
+            if (now - _lastContactCheckTime < mixSettings.mixColorsWithContactParticlesCheckInternal)
                 return;
             _lastContactCheckTime = now;
-
-            foreach (var otherP in _contactParticles)
+            
+            // 获取接触的粒子。 // Get contacting particles. // 接触しているパーティクルを取得します。
+            Vector2 center = (Vector2)TransformGet.position + CircleCollider2DGet.offset;
+            float radius = CircleCollider2DGet.radius * TransformGet.lossyScale.x * mixSettings.mixColorsRadiusRate;
+            int contactNum = Physics2D.OverlapCircle(center, radius, _mixColorContactFilter, _mixColorContacts);
+            if (contactNum == 0) return;
+            
+            // 和接触的粒子混合颜色。 // Mix colors with contacting particles. // 接触しているパーティクルと色を混ぜます。
+            for (int i = 0; i < contactNum; i++)
             {
-                if (!_lastStaticMixTimes.TryGetValue(otherP, out float lastMix) ||
-                    now - lastMix >= mixSettings.mixWithContactParticlesInternal)
-                {
-                    MixWithParticle(otherP);
-                    _lastStaticMixTimes[otherP] = now;
-                }
+                var contact = _mixColorContacts[i];
+                if (!contact || !contact.gameObject.activeSelf) continue;
+                if (contact.gameObject == gameObject) continue;
+                if (!_DicParticlesWithCollider.TryGetValue(contact, out Liquid2DParticle otherP)) continue;
+                if (!otherP) continue;
+                
+                // 偶现的获取到距离过远的粒子，跳过。
+                // Occasionally get particles that are too far away, skip.
+                // 時々、遠すぎるパーティクルが取得されることがあるため、スキップします。
+                if (Vector2.Distance(transform.position, contact.transform.position) > radius * 2f)
+                    continue;
+
+                // Debug.Log($"Self:{name} OtherP: {otherP.name} Radius:{radius} Distance: {Vector2.Distance(transform.position, contact.transform.position)}");
+                // Debug.DrawLine(transform.position, contact.transform.position, Color.red, 0f, false);
+                // if (Vector2.Distance(transform.position, contact.transform.position) > radius * 2f)
+                // {
+                //     var otherCollider = contact as CircleCollider2D;
+                //     float otherRadius = otherCollider ? otherCollider.radius * otherCollider.transform.lossyScale.x : -1f;
+                //     Debug.Log(
+                //         $"Self:{name} OtherP: {otherP?.name} " +
+                //         $"Radius:{radius} Distance:{Vector2.Distance(transform.position, contact.transform.position)} " +
+                //         $"ContactNull:{contact == null} ContactGO:{contact?.gameObject} " +
+                //         $"OtherRadius:{otherRadius} OtherPos:{contact.transform.position}"
+                //     );
+                // }
+
+                MixWithParticle(otherP);
             }
         }
         
@@ -241,8 +261,8 @@ namespace Fs.Liquid2D
             if (mixSpeed < 1f && mixSettings.mixColorsWithMovement && otherParticle.mixSettings.mixColorsWithMovement)
             {
                 // 获取两个粒子的速度平方。 // Get the squared speeds of both particles. // 両方のパーティクルの速度の二乗を取得します。
-                float speedASqr = GetComponent<Rigidbody2D>()?.linearVelocity.sqrMagnitude ?? 0f;
-                float speedBSqr = otherParticle.GetComponent<Rigidbody2D>()?.linearVelocity.sqrMagnitude ?? 0f;
+                float speedASqr = Rigidbody2DGet.linearVelocity.sqrMagnitude;
+                float speedBSqr = otherParticle.Rigidbody2DGet.linearVelocity.sqrMagnitude;
                 float avgSpeedSqr = (speedASqr + speedBSqr) / 2f;
 
                 // 归一化速度（假设最大速度为 maxSpeed，可根据实际情况调整）。
@@ -309,42 +329,14 @@ namespace Fs.Liquid2D
         {
             #region 绘制可在 Scene 中选中的形状 // Draw shapes that can be selected in Scene // Sceneで選択可能な形状を描画
 
-            var cld = Collider2DGet;
-            if (cld == null) return;
-
-            Gizmos.color = Color.clear;
-
-            if (cld is CircleCollider2D circle)
+            if (CircleCollider2DGet)
             {
-                float radius = circle.radius * circle.transform.lossyScale.x;
-                Gizmos.DrawSphere(circle.transform.position + (Vector3)circle.offset, radius);
+                Gizmos.color = Color.clear;
+                float radius = CircleCollider2DGet.radius * CircleCollider2DGet.transform.lossyScale.x;
+                Gizmos.DrawSphere(CircleCollider2DGet.transform.position + (Vector3)CircleCollider2DGet.offset, radius);
                 // UnityEditor.Handles.Label(circle.transform.position, $"Circle r={circle.radius:F2}");
             }
-            else if (cld is BoxCollider2D box)
-            {
-                var size = Vector3.Scale(box.size, box.transform.lossyScale);
-                Gizmos.DrawCube(box.transform.position + (Vector3)box.offset, size);
-            }
-            else if (cld is PolygonCollider2D poly)
-            {
-                var pos = poly.transform.position;
-                for (int i = 0; i < poly.pathCount; i++)
-                {
-                    var path = poly.GetPath(i);
-                    for (int j = 0; j < path.Length; j++)
-                    {
-                        var a = pos + (Vector3)path[j];
-                        var b = pos + (Vector3)path[(j + 1) % path.Length];
-                        Gizmos.DrawLine(a, b);
-                    }
-                }
-            }
-            else if (cld is CapsuleCollider2D capsule)
-            {
-                var size = Vector3.Scale(capsule.size, capsule.transform.lossyScale);
-                Gizmos.DrawCube(capsule.transform.position + (Vector3)capsule.offset, size);
-            }
-
+            
             #endregion
         }
 #endif
