@@ -119,7 +119,7 @@ PrefabInstance:
     - target: {fileID: 5961824672208803902, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
       propertyPath: m_Material
       value: 
-      objectReference: {fileID: 6200000, guid: 0b1f83d3dafc3a8459aa94f9e877327d, type: 2}
+      objectReference: {fileID: 6200000, guid: 87177ccd6e65c1249bc3decd37b00274, type: 2}
     - target: {fileID: 6359955899863538535, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
       propertyPath: m_Name
       value: Liquid2DParticleWater2
@@ -131,7 +131,7 @@ PrefabInstance:
     - target: {fileID: 7884424366146339886, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
       propertyPath: m_Material
       value: 
-      objectReference: {fileID: 6200000, guid: 0b1f83d3dafc3a8459aa94f9e877327d, type: 2}
+      objectReference: {fileID: 6200000, guid: 87177ccd6e65c1249bc3decd37b00274, type: 2}
     - target: {fileID: 7884424366146339886, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
       propertyPath: m_GravityScale
       value: 2
