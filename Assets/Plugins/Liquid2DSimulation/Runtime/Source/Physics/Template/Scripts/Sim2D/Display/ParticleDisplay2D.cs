@@ -39,7 +39,7 @@ namespace Seb.Fluid2D.Rendering
 			// material.SetBuffer("Positions2D", sim.positionBuffer);
 			// material.SetBuffer("Velocities", sim.velocityBuffer);
 			material.SetBuffer("Particles", sim.Particles);
-			material.SetBuffer("DensityData", sim.DensityBuffer);
+			// material.SetBuffer("DensityData", sim.DensityBuffer);
 			material.SetInt("numParticles", sim.NumParticles);
 
 			ComputeHelper.CreateArgsBuffer(ref argsBuffer, mesh, sim.Particles.count);

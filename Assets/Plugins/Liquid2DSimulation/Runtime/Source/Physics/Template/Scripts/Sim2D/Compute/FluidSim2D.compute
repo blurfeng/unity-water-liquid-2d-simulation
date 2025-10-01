@@ -6,6 +6,7 @@
 #pragma kernel CalculatePressureForce
 #pragma kernel CalculateViscosity
 #pragma kernel UpdatePositions
+#pragma kernel ParticlesHandle
 
 // Includes
 #include "./FluidMaths2D.hlsl"
@@ -19,12 +20,13 @@ struct Particle
 	float2 position;
 	float2 predictedPositions;
 	float2 velocity;
+	float2 density;
 };
 RWStructuredBuffer<Particle> Particles;
 // RWStructuredBuffer<float2> Positions;
 // RWStructuredBuffer<float2> PredictedPositions;
 // RWStructuredBuffer<float2> Velocities;
-RWStructuredBuffer<float2> Densities; // Density, Near Density
+// RWStructuredBuffer<float2> Densities; // Density, Near Density
 
 // Spatial hashing
 RWStructuredBuffer<uint> SpatialKeys;
@@ -33,6 +35,7 @@ StructuredBuffer<uint> SortedIndices;
 
 // Settings
 const uint numParticles;
+const uint numParticlesSize;
 const float gravity;
 const float deltaTime;
 const float collisionDamping;
@@ -257,7 +260,7 @@ void CalculateDensities (uint3 id : SV_DispatchThreadID)
 	if (id.x >= numParticles) return;
 
 	float2 pos = Particles[id.x].predictedPositions;
-	Densities[id.x] = CalculateDensity(pos);
+	Particles[id.x].density = CalculateDensity(pos);
 }
 
 [numthreads(NumThreads,1,1)]
@@ -265,8 +268,8 @@ void CalculatePressureForce (uint3 id : SV_DispatchThreadID)
 {
 	if (id.x >= numParticles) return;
 
-	float density = Densities[id.x][0];
-	float densityNear = Densities[id.x][1];
+	float density = Particles[id.x].density[0];
+	float densityNear = Particles[id.x].density[1];
 	float pressure = PressureFromDensity(density);
 	float nearPressure = NearPressureFromDensity(densityNear);
 	float2 pressureForce = 0;
@@ -305,8 +308,8 @@ void CalculatePressureForce (uint3 id : SV_DispatchThreadID)
 			float dst = sqrt(sqrDstToNeighbour);
 			float2 dirToNeighbour = dst > 0 ? offsetToNeighbour / dst : float2(0, 1);
 
-			float neighbourDensity = Densities[neighbourIndex][0];
-			float neighbourNearDensity = Densities[neighbourIndex][1];
+			float neighbourDensity = Particles[neighbourIndex].density[0];
+			float neighbourNearDensity = Particles[neighbourIndex].density[1];
 			float neighbourPressure = PressureFromDensity(neighbourDensity);
 			float neighbourNearPressure = NearPressureFromDensity(neighbourNearDensity);
 
@@ -378,4 +381,10 @@ void UpdatePositions(uint3 id : SV_DispatchThreadID)
 
 	Particles[id.x].position += Particles[id.x].velocity * deltaTime;
 	HandleCollisions(id.x);
+}
+
+[numthreads(NumThreads,1,1)]
+void ParticlesHandle(uint3 id : SV_DispatchThreadID)
+{
+	
 }

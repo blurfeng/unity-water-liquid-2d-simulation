@@ -25,10 +25,11 @@ Shader "Instanced/Particle2D" {
 				float2 position;
 				float2 predictedPositions;
 				float2 velocity;
+				float2 density;
 			};
 			StructuredBuffer<Particle> Particles;
+			// StructuredBuffer<float2> DensityData;
 			
-			StructuredBuffer<float2> DensityData;
 			float scale;
 			float4 colA;
 			Texture2D<float4> ColourMap;

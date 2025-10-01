@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Seb.Fluid2D.Rendering;
 using Seb.Helpers;
 using UnityEngine;
@@ -43,9 +44,10 @@ namespace Seb.Fluid2D.Simulation
 			public Vector2 position;
 			public Vector2 predictedPositions;
 			public Vector2 velocity;
+			public Vector2 density;
 		}
 		public ComputeBuffer Particles { get; private set; }
-		public ComputeBuffer DensityBuffer { get; private set; }
+		//public ComputeBuffer DensityBuffer { get; private set; }
 
 		public struct SortTarget
 		{
@@ -75,7 +77,7 @@ namespace Seb.Fluid2D.Simulation
 		private bool _pauseNextFrame;
 
 		public int NumParticles { get; private set; }
-		private int BufferSize { get; set; }
+		private int NumParticlesSize { get; set; }
 
 
 		void Start()
@@ -100,19 +102,11 @@ namespace Seb.Fluid2D.Simulation
 		void Update()
 		{
 			HandleInput();
-			
-			if (spawnPending)
-			{
-				SpawnParticleAtMouse();
-				spawnPending = false;
-				_isPaused = false;
-			}
 
 			if (!_isPaused)
 			{
 				float maxDeltaTime = maxTimestepFPS > 0 ? 1 / maxTimestepFPS : float.PositiveInfinity;
-				float dt = Mathf.Min((Time.deltaTime + pendingDeltaTime) * timeScale, maxDeltaTime);
-				pendingDeltaTime = 0f;
+				float dt = Mathf.Min(Time.deltaTime * timeScale, maxDeltaTime);
 				RunSimulationFrame(dt);
 			}
 
@@ -140,20 +134,22 @@ namespace Seb.Fluid2D.Simulation
 			NumParticles = numParticles;
 			
 			// Ensure buffer length is a power of two and can fit all particles.
-			if (NumParticles > BufferSize)
+			if (NumParticles > NumParticlesSize)
 			{
-				BufferSize = NumParticles;//Mathf.NextPowerOfTwo(NumParticles) * 2;
-				Debug.Log($"Set buffer size to {BufferSize} for {NumParticles} particles");
+				NumParticlesSize = Mathf.NextPowerOfTwo(NumParticles) * 2;
+				Debug.Log($"Set buffer size to {NumParticlesSize} for {NumParticles} particles");
 				
 				// Create buffers when size changes.
-				CreateBuffer(BufferSize);
+				CreateBuffer(NumParticlesSize);
 				InitCompute();
 				resized = true;
 			}
 			
 			// Spatial hash mast be re-initialised if number of particles changes.
-			ReleaseSpatialHash();
-			spatialHash = new SpatialHash(NumParticles);
+			if (spatialHash == null)
+				spatialHash = new SpatialHash(NumParticles);
+			else
+				spatialHash.Resize(NumParticles);
 			ComputeHelper.SetBuffer(compute, spatialHash.SpatialIndices, "SortedIndices", spatialHashKernel, reorderKernel);
 			ComputeHelper.SetBuffer(compute, spatialHash.SpatialOffsets, "SpatialOffsets", spatialHashKernel, densityKernel, pressureKernel, viscosityKernel);
 			ComputeHelper.SetBuffer(compute, spatialHash.SpatialKeys, "SpatialKeys", spatialHashKernel, densityKernel, pressureKernel, viscosityKernel);
@@ -181,7 +177,7 @@ namespace Seb.Fluid2D.Simulation
 			// Release existing buffers when changing size.
 			ReleaseBuffer();
 			
-			DensityBuffer = ComputeHelper.CreateStructuredBuffer<float2>(length);
+			// DensityBuffer = ComputeHelper.CreateStructuredBuffer<float2>(length);
 			Particles = ComputeHelper.CreateStructuredBuffer<Particle>(length);
 			SortTargets = ComputeHelper.CreateStructuredBuffer<SortTarget>(length);
 		}
@@ -190,19 +186,14 @@ namespace Seb.Fluid2D.Simulation
 		{
 			// Init compute
 			ComputeHelper.SetBuffer(compute, Particles, "Particles", externalForcesKernel, spatialHashKernel, densityKernel, pressureKernel, viscosityKernel, updatePositionKernel, reorderKernel, copybackKernel);
-			ComputeHelper.SetBuffer(compute, DensityBuffer, "Densities", densityKernel, pressureKernel, viscosityKernel);
+			// ComputeHelper.SetBuffer(compute, DensityBuffer, "Densities", densityKernel, pressureKernel, viscosityKernel);
 			
 			ComputeHelper.SetBuffer(compute, SortTargets, "SortTargets", reorderKernel, copybackKernel);
 		}
 		
 		private void ReleaseBuffer()
 		{
-			ComputeHelper.Release(Particles, DensityBuffer, SortTargets);
-		}
-		
-		private void ReleaseSpatialHash()
-		{
-			spatialHash?.Release();
+			ComputeHelper.Release(Particles, SortTargets);
 		}
 
 		void RunSimulationFrame(float frameTime)
@@ -315,7 +306,7 @@ namespace Seb.Fluid2D.Simulation
 		void OnDestroy()
 		{
 			ReleaseBuffer();
-			ReleaseSpatialHash();
+			spatialHash?.Release();
 		}
 
 		void OnDrawGizmos()
@@ -339,65 +330,154 @@ namespace Seb.Fluid2D.Simulation
 		}
 
 		#region Spawn
-
-		private bool isSpawning = false;
-		private bool spawnPending = false;
-		private float pendingDeltaTime = 0f;
+		
+		private bool _isSpawning = false;
+		private bool _isKernelRunning = false;
+		private readonly List<Particle> _particleSpawnList = new List<Particle>();
 
 		private void HandleInputSpawn()
 		{
-			// 目前添加粒子功能有bug。偶现在添加粒子时，所有粒子模拟会出问题，直到下一次添加粒子更新数据后又恢复。
-			return;
-			
-			if (Input.GetKeyDown(KeyCode.S) && !_isPaused)
+			if (Input.GetKeyDown(KeyCode.S))
 			{
-				isSpawning = true;
-				spawnPending = true;
-				pendingDeltaTime = Time.deltaTime;
-				_isPaused = true;
+				_isSpawning = true;
 			}
+			
 			if (Input.GetKeyUp(KeyCode.S))
-				isSpawning = false;
+				_isSpawning = false;
 
-			if (isSpawning)
+			if (_isSpawning)
 			{
 				SpawnParticleAtMouse();
 			}
-		}
 
+			ParticlesHandleCheck();
+		}
+		
 		private void SpawnParticleAtMouse()
 		{
 			Vector2 mousePos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-			AddParticle(mousePos, Vector2.zero);
+			AddSpawnParticle(mousePos, Vector2.zero);
 		}
 		
-		// 新增粒子到 spawnData
-		public void AddParticle(Vector2 position, Vector2 velocity)
+		private void AddSpawnParticle(Vector2 position, Vector2 velocity)
 		{
+			_particleSpawnList.Add(new Particle()
+			{
+				position = position,
+				predictedPositions = position,
+				velocity = velocity
+			});
+		}
+		
+		private bool _particlesReady, _sortTargetsReady, _indicesReady, _offsetsReady, _keysReady;
+
+		private void ParticlesHandleCheck()
+		{
+			if (_particleSpawnList.Count == 0)
+				return;
+
+			_particlesReady = _sortTargetsReady = _indicesReady = _offsetsReady = _keysReady = false;
+
+			void CheckAllReady()
+			{
+				if (_particlesReady && _sortTargetsReady && _indicesReady && _offsetsReady && _keysReady)
+				{
+					SpawnParticlesExecute();
+				}
+			}
+
+			AsyncGPUReadback.Request(Particles, (req) =>
+			{
+				_particlesReady = !req.hasError;
+				CheckAllReady();
+			});
+
+			AsyncGPUReadback.Request(SortTargets, (req) =>
+			{
+				_sortTargetsReady = !req.hasError;
+				CheckAllReady();
+			});
+
+			AsyncGPUReadback.Request(spatialHash.SpatialIndices, (req) =>
+			{
+				_indicesReady = !req.hasError;
+				CheckAllReady();
+			});
+
+			AsyncGPUReadback.Request(spatialHash.SpatialOffsets, (req) =>
+			{
+				_offsetsReady = !req.hasError;
+				CheckAllReady();
+			});
+
+			AsyncGPUReadback.Request(spatialHash.SpatialKeys, (req) =>
+			{
+				_keysReady = !req.hasError;
+				CheckAllReady();
+			});
+		}
+
+		private void SpawnParticlesExecute()
+		{
+			// 读回现有粒子
 			Particle[] particles = new Particle[NumParticles];
 			Particles.GetData(particles);
 
-			bool resized = SetNumParticles(NumParticles + 1);
+			// 新数组，包含旧粒子和新粒子
+			int newCount = NumParticles + _particleSpawnList.Count;
+			Particle[] newParticles = new Particle[newCount];
+			Array.Copy(particles, newParticles, NumParticles);
 
-			if (resized)
+			// 添加新粒子
+			for (int i = 0; i < _particleSpawnList.Count; i++)
 			{
-				Particle[] newParticles = new Particle[NumParticles];
-				Array.Copy(particles, newParticles, particles.Length);
-				newParticles[NumParticles - 1].position = position;
-				newParticles[NumParticles - 1].predictedPositions = position;
-				newParticles[NumParticles - 1].velocity = velocity;
-				Particles.SetData(newParticles);
+				newParticles[NumParticles + i] = _particleSpawnList[i];
 			}
-			else
+
+			// 更新 buffer 大小并写入新数据
+			SetNumParticles(newCount);
+			Particles.SetData(newParticles);
+
+			// 清空 spawnList
+			_particleSpawnList.Clear();
+		}
+
+		// 新增粒子到 spawnData
+		public void AddParticle(Vector2 position, Vector2 velocity)
+		{
+			AsyncGPUReadback.Request(Particles, (req) =>
 			{
-				Particle newParticle = new Particle
+				if (req.hasError)
 				{
-					position = position,
-					predictedPositions = position,
-					velocity = velocity
-				};
-				Particles.SetData(new[] { newParticle }, 0, NumParticles - 1, 1);
-			}
+					Debug.LogError("GPU readback error when adding particle.");
+					return;
+				}
+
+				Particle[] particles = new Particle[NumParticles];
+				Particles.GetData(particles);
+
+				bool resized = SetNumParticles(NumParticles + 1);
+
+				if (resized)
+				{
+					Particle[] newParticles = new Particle[NumParticles];
+					Array.Copy(particles, newParticles, particles.Length);
+					newParticles[NumParticles - 1].position = position;
+					newParticles[NumParticles - 1].predictedPositions = position;
+					newParticles[NumParticles - 1].velocity = velocity;
+					Particles.SetData(newParticles);
+				}
+				else
+				{
+					Particle newParticle = new Particle
+					{
+						position = position,
+						predictedPositions = position,
+						velocity = velocity
+					};
+					Particles.SetData(new[] { newParticle }, 0, NumParticles - 1, 1);
+				}
+			});
 		}
 		#endregion
 	}
