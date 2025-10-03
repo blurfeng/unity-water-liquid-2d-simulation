@@ -170,6 +170,22 @@ namespace Fs.Liquid2D
         }
         
         /// <summary>
+        /// 检查混合颜色间隔。
+        /// Check mix color interval.
+        /// 色の混合間隔をチェックします。
+        /// </summary>
+        /// <param name="force">是否强制通过检查，确认时间也将更新。 // Whether to force pass the check, the confirmation time will also be updated. // チェックを強制的に通過するかどうか、確認時間も更新されます。</param>
+        /// <returns></returns>
+        private bool CheckMixColorInterval(bool force = false)
+        {
+            float now = Time.time;
+            if (now - _lastContactCheckTime < mixSettings.mixColorsWithContactParticlesInternal && !force)
+                return false;
+            _lastContactCheckTime = now;
+            return true;
+        }
+        
+        /// <summary>
         /// 和接触的粒子混合颜色。
         /// Mix colors with contact particles.
         /// 接触しているパーティクルと色を混ぜる。
@@ -181,10 +197,8 @@ namespace Fs.Liquid2D
             // 粒子が静止していて、静止時に色を混ぜるように設定されていない場合、ミックスをスキップします。
             if (Rigidbody2DGet.linearVelocity.sqrMagnitude < 0.00000001f && !mixSettings.mixColorsWhenStationary) return;
             
-            float now = Time.time;
-            if (now - _lastContactCheckTime < mixSettings.mixColorsWithContactParticlesCheckInternal)
-                return;
-            _lastContactCheckTime = now;
+            // 检查混合颜色间隔。 // Check mix color interval. // 色の混合間隔をチェックします。
+            if (!CheckMixColorInterval()) return;
             
             // 获取接触的粒子。 // Get contacting particles. // 接触しているパーティクルを取得します。
             Vector2 center = (Vector2)TransformGet.position + CircleCollider2DGet.offset;
@@ -292,15 +306,42 @@ namespace Fs.Liquid2D
                 new Vector4(otherColor.r, otherColor.g, otherColor.b, otherColor.a)
             );
 
+            // 如果颜色差异很小，则直接设置为平均色，否则按混合速度插值。
+            // If color difference is very small, set to average color directly, otherwise interpolate according to mix speed.
+            // 色の違いが非常に小さい場合は平均色に直接設定し、そうでない場合はミックス速度に応じて補間します。
             if (colorDiff < 0.01f) {
-                RenderSettings.color = avgColor;
-                otherParticle.RenderSettings.color = avgColor;
-            } else {
-                RenderSettings.color = Color.Lerp(thisColor, avgColor, mixSpeed);
-                otherParticle.RenderSettings.color = Color.Lerp(otherColor, avgColor, mixSpeed);
+                SetMixColor(avgColor);
+                otherParticle.SetMixColor(avgColor);
+            } 
+            // 如果混合速度接近 1，则直接设置为平均色，否则按混合速度插值。
+            // If mix speed is close to 1, set to average color directly, otherwise interpolate according to mix speed.
+            // ミックス速度が1に近い場合は平均色に直接設定し、そうでない場合はミックス速度に応じて補間します。
+            else
+            {
+                SetMixColor(mixSpeed >= 1 ? avgColor : Color.Lerp(thisColor, avgColor, mixSpeed));
+                otherParticle.SetMixColor(mixSpeed >= 1 ? avgColor : Color.Lerp(otherColor, avgColor, mixSpeed));
             }
         }
-        
+
+        /// <summary>
+        /// 设置混合颜色。
+        /// Set mix color.
+        /// 色を混ぜる。
+        /// </summary>
+        /// <param name="color"></param>
+        /// <param name="resetInterval">是否重置混合颜色间隔计时。 // Whether to reset the mix color interval timer. // 色の混合間隔タイマーをリセットするかどうか。</param>
+        private void SetMixColor(Color color, bool resetInterval = true)
+        {
+            RenderSettings.color = color;
+
+            // 重置混合颜色间隔计时。如果为被检测到的粒子设置颜色时重置间隔，那么次粒子之后将不会进行主动的混色检测，可以提高性能。
+            // Reset mix color interval timer. If the interval is reset when setting the color for detected particles, then the particle will not actively check for color mixing afterwards, which can improve performance.
+            // 色の混合間隔タイマーをリセットします。検出されたパーティクルの色を設定するときに間隔がリセットされる場合、その後、パーティクルは色の混合を積極的にチェックしなくなり、パフォーマンスが向上します。
+            if (resetInterval)
+            {
+                CheckMixColorInterval(true);
+            }
+        }
         #endregion
         
 #if UNITY_EDITOR
