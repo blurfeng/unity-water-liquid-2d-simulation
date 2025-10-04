@@ -350,11 +350,19 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 1236614623622671160, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
       propertyPath: duration
-      value: 5
+      value: 10
+      objectReference: {fileID: 0}
+    - target: {fileID: 1236614623622671160, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
+      propertyPath: flowRate
+      value: 20
       objectReference: {fileID: 0}
     - target: {fileID: 1236614623622671160, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
       propertyPath: ejectForce
       value: 80
+      objectReference: {fileID: 0}
+    - target: {fileID: 1236614623622671160, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
+      propertyPath: swingAngleRange
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 1236614623622671160, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
       propertyPath: liquidParticles.Array.size
@@ -559,11 +567,19 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 1236614623622671160, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
       propertyPath: duration
-      value: 5
+      value: 10
+      objectReference: {fileID: 0}
+    - target: {fileID: 1236614623622671160, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
+      propertyPath: flowRate
+      value: 20
       objectReference: {fileID: 0}
     - target: {fileID: 1236614623622671160, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
       propertyPath: ejectForce
       value: 80
+      objectReference: {fileID: 0}
+    - target: {fileID: 1236614623622671160, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
+      propertyPath: swingAngleRange
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 1236614623622671160, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
       propertyPath: liquidParticles.Array.size
