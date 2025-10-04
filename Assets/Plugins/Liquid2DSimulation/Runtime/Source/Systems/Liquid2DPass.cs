@@ -22,7 +22,7 @@ namespace Fs.Liquid2D
             internal static readonly int ColorIntensityId = Shader.PropertyToID("_ColorIntensity");
             internal static readonly int BlurOffsetId = Shader.PropertyToID("_BlurOffset");
             internal static readonly int Cutoff = Shader.PropertyToID("_Cutoff");
-            internal static readonly int ObstructionTex = Shader.PropertyToID("_ObstructionTex");
+            internal static readonly int ObstructorTex = Shader.PropertyToID("_ObstructorTex");
             internal static readonly int OccluderTex = Shader.PropertyToID("_OccluderTex");
             internal static readonly int OpacityValue = Shader.PropertyToID("_OpacityValue");
             internal static readonly int CoverColorId = Shader.PropertyToID("_CoverColor");
@@ -87,7 +87,7 @@ namespace Fs.Liquid2D
 
             _quadMesh = GenerateQuadMesh();
             
-            SetObstructionFilteringSettings();
+            SetObstructorFilteringSettings();
             SetOccluderFilteringSettings();
             
             // 设置 Pass 执行时机。 // Set the execution timing of the Pass. // パスの実行タイミングを設定します。
@@ -131,9 +131,9 @@ namespace Fs.Liquid2D
             public TextureHandle blurSource;
             public int blurIteration;
             
-            // 流体阻挡 Pass 相关。 // Fluid obstruction Pass related. // 流体阻挡Pass関連。
-            public RendererListHandle obstructionRendererListHandle;
-            public TextureHandle obstructionTh;
+            // 流体阻挡 Pass 相关。 // Fluid Obstructor Pass related. // 流体オブストラクターパス関連。
+            public RendererListHandle obstructorRendererListHandle;
+            public TextureHandle obstructorTh;
             
             // 流体遮挡 Pass 相关。 // Fluid occluder Pass related. // 流体オクルーダーパス関連。
             public bool isHaveOccluder;
@@ -371,44 +371,44 @@ namespace Fs.Liquid2D
             // return;
             #endregion
 
-            #region 流体阻挡物 // Fluid obstruction // 流体障害物
+            #region 流体阻挡物 // Fluid obstructor // 流体障害物
             
             // 创建阻挡纹理。用于之后的水体效果处理Shader。一般是挡板、管道、地形、容器等。
-            // Create obstruction texture. Used for subsequent water effect processing shaders. Generally for baffles, pipes, terrain, containers, etc.
+            // Create obstructor texture. Used for subsequent water effect processing shaders. Generally for baffles, pipes, terrain, containers, etc.
             // 阻挡纹理一般不需要模糊处理。
 
-            // ---- 创建流体阻挡纹理 // Create fluid obstruction texture // 流体阻挡テクスチャを作成 ---- //
-            TextureDesc liquidObstructionDesc = mainDesc;
-            liquidObstructionDesc.name = GetName("liquid 2d Obstruction");
-            TextureHandle liquidObstructionTh = renderGraph.CreateTexture(liquidObstructionDesc);
+            // ---- 创建流体阻挡纹理 // Create fluid obstructor texture // 流体阻挡テクスチャを作成 ---- //
+            TextureDesc liquidObstructorDesc = mainDesc;
+            liquidObstructorDesc.name = GetName("liquid 2d Obstructor");
+            TextureHandle liquidObstructorTh = renderGraph.CreateTexture(liquidObstructorDesc);
 
-            using (var builder = renderGraph.AddRasterRenderPass<PassData>(GetName("liquid 2d Obstruction"), out PassData passData))
+            using (var builder = renderGraph.AddRasterRenderPass<PassData>(GetName("liquid 2d Obstructor"), out PassData passData))
             {
-                // 设置渲染目标纹理为流体阻挡纹理。 // Set render target texture to fluid obstruction texture. // レンダーターゲットテクスチャを流体阻挡テクスチャに設定します。
-                builder.SetRenderAttachment(liquidObstructionTh, 0, AccessFlags.Write);
+                // 设置渲染目标纹理为流体阻挡纹理。 // Set render target texture to fluid obstructor texture. // レンダーターゲットテクスチャを流体阻挡テクスチャに設定します。
+                builder.SetRenderAttachment(liquidObstructorTh, 0, AccessFlags.Write);
 
-                // 获取所有 Liquid Obstruction Layer Mask层的 Renderer 列表。
-                // Get the Renderer list of all Liquid Obstruction Layer Mask layers.
-                // Liquid Obstruction Layer Mask レイヤーのすべてのレンダラーリストを取得します。
+                // 获取所有 Liquid Obstructor Layer Mask层的 Renderer 列表。
+                // Get the Renderer list of all Liquid Obstructor Layer Mask layers.
+                // Liquid Obstructor Layer Mask レイヤーのすべてのレンダラーリストを取得します。
                 var drawSettings = RenderingUtils.CreateDrawingSettings(_shaderTagId, renderingData, cameraData, lightData, cameraData.defaultOpaqueSortFlags);
-                var param = new RendererListParams(renderingData.cullResults, drawSettings, _obstructionFilteringSettings);
-                passData.obstructionRendererListHandle = renderGraph.CreateRendererList(param);
-                builder.UseRendererList(passData.obstructionRendererListHandle);
+                var param = new RendererListParams(renderingData.cullResults, drawSettings, _obstructorFilteringSettings);
+                passData.obstructorRendererListHandle = renderGraph.CreateRendererList(param);
+                builder.UseRendererList(passData.obstructorRendererListHandle);
                 
                 builder.SetRenderFunc(
                     (PassData data, RasterGraphContext context) => 
                     {
                         // context.cmd.ClearRenderTarget(RTClearFlags.Color, Color.clear, 1, 0);
-                        context.cmd.DrawRendererList(data.obstructionRendererListHandle);
+                        context.cmd.DrawRendererList(data.obstructorRendererListHandle);
                     }
                 );
             }
             
             // TEST: 直接将最后一个 RT 拷贝回当前源纹理句柄。
-            // PassClone(renderGraph, liquidObstructionTh, sourceTextureHandle);
+            // PassClone(renderGraph, liquidObstructorTh, sourceTextureHandle);
             // renderGraph.AddBlitPass(
-            //     liquidObstructionTh, sourceTextureHandle, 
-            //     Vector2.one, Vector2.zero, passName: GetName("obstructionTh to sourceTextureHandle"));
+            //     liquidObstructorTh, sourceTextureHandle, 
+            //     Vector2.one, Vector2.zero, passName: GetName("obstructorTh to sourceTextureHandle"));
             // return;
 
             #endregion
@@ -460,7 +460,7 @@ namespace Fs.Liquid2D
                 passData.materialEffect = _materialEffect;
                 passData.sourceTh = grabAsBgSourceTh; // 当前相机纹理作为背景图。 // Current camera texture as background image. // 現在のカメラテクスチャを背景画像として。
                 passData.blurFinalTh = blurThFinal; // 最终模糊纹理。 // Final blur texture. // 最終ブラーテクスチャ。
-                passData.obstructionTh = liquidObstructionTh; // 流体阻挡纹理。 // Fluid obstruction texture. // 流体阻挡テクスチャ。
+                passData.obstructorTh = liquidObstructorTh; // 流体阻挡纹理。 // Fluid obstructor texture. // 流体阻挡テクスチャ。
 
                 passData.isHaveOccluder = isHaveOccluder;
                 if (isHaveOccluder)
@@ -474,7 +474,7 @@ namespace Fs.Liquid2D
                 builder.SetRenderAttachment(sourceTextureHandle, 0, AccessFlags.Write);
                 builder.UseTexture(passData.sourceTh, AccessFlags.Read);
                 builder.UseTexture(passData.blurFinalTh, AccessFlags.Read);
-                builder.UseTexture(passData.obstructionTh, AccessFlags.Read);
+                builder.UseTexture(passData.obstructorTh, AccessFlags.Read);
                 if (isHaveOccluder)
                 {
                     builder.UseTexture(passData.occluderTh, AccessFlags.Read);
@@ -623,7 +623,7 @@ namespace Fs.Liquid2D
             // アウライン材質プロパティブロックを設定し、描画RTを渡します。
             MaterialPropertyBlock mpb = new MaterialPropertyBlock();
             mpb.SetTexture(ShaderIds.MainTexId, data.blurFinalTh); // 流体纹理。 //Fluid texture. //流体テクスチャ。
-            mpb.SetTexture(ShaderIds.ObstructionTex, data.obstructionTh); // 流体阻挡纹理。 //Fluid obstruction texture. //流体阻害テクスチャ。
+            mpb.SetTexture(ShaderIds.ObstructorTex, data.obstructorTh); // 流体阻挡纹理。 //Fluid obstructor texture. //流体阻害テクスチャ。
             mpb.SetFloat(ShaderIds.Cutoff, data.settings.cutoff); // 裁剪阈值。 //Cutoff threshold. //カットオフ閾値。
             mpb.SetTexture(ShaderIds.BackgroundTex, data.sourceTh); // 背景纹理。用于扰动采样。 //Background texture. Used for distortion sampling. //背景テクスチャ。歪みサンプリングに使用。
 
@@ -811,20 +811,20 @@ namespace Fs.Liquid2D
 
         #region Layer
 
-        private FilteringSettings _obstructionFilteringSettings;
+        private FilteringSettings _obstructorFilteringSettings;
         
         private FilteringSettings _occluderFilteringSettings;
         
         /// <summary>
         /// 设置阻挡层过滤设置。
         /// </summary>
-        private void SetObstructionFilteringSettings()
+        private void SetObstructorFilteringSettings()
         {
-            _obstructionFilteringSettings = new FilteringSettings
+            _obstructorFilteringSettings = new FilteringSettings
             ( 
                 RenderQueueRange.all,
                 ~0,
-                _settings.obstructionRenderingLayerMask
+                _settings.obstructorRenderingLayerMask
             );
         }
         
@@ -903,11 +903,11 @@ namespace Fs.Liquid2D
             // 2D流体レイヤーマスク。設定された流体レイヤーの粒子のみがレンダリングされます。
             _settings.liquid2DLayerMask = isActive ? VolumeData.liquid2DLayerMask : _settingsDefault.liquid2DLayerMask;
             
-            // 阻挡层遮罩。 // Obstruction layer mask. // 阻害レイヤーマスク。
-            _settings.obstructionRenderingLayerMask = isActive ? VolumeData.obstructionRenderingLayerMask : _settingsDefault.obstructionRenderingLayerMask;
-            if (_obstructionFilteringSettings.layerMask != _settings.obstructionRenderingLayerMask)
+            // 阻挡层遮罩。 // Obstructor layer mask. // 阻害レイヤーマスク。
+            _settings.obstructorRenderingLayerMask = isActive ? VolumeData.obstructorRenderingLayerMask : _settingsDefault.obstructorRenderingLayerMask;
+            if (_obstructorFilteringSettings.layerMask != _settings.obstructorRenderingLayerMask)
             {
-                SetObstructionFilteringSettings();
+                SetObstructorFilteringSettings();
             }
             // 遮挡层遮罩。 // Occlusion layer mask. // オクルージョンレイヤーマスク。
             _settings.occluderRenderingLayerMask = isActive ? VolumeData.occluderRenderingLayerMask : _settingsDefault.occluderRenderingLayerMask;

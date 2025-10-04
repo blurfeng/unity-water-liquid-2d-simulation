@@ -18,7 +18,7 @@ MonoBehaviour:
   renderFeatureSettings:
     nameTag: Milk
     liquid2DLayerMask: 16
-    obstructionRenderingLayerMask:
+    obstructorRenderingLayerMask:
       serializedVersion: 0
       m_Bits: 2
     occluderRenderingLayerMask:
@@ -132,7 +132,7 @@ MonoBehaviour:
   renderFeatureSettings:
     nameTag: Magma
     liquid2DLayerMask: 4
-    obstructionRenderingLayerMask:
+    obstructorRenderingLayerMask:
       serializedVersion: 0
       m_Bits: 2
     occluderRenderingLayerMask:
@@ -186,7 +186,7 @@ MonoBehaviour:
   renderFeatureSettings:
     nameTag: WaterMix
     liquid2DLayerMask: 8
-    obstructionRenderingLayerMask:
+    obstructorRenderingLayerMask:
       serializedVersion: 0
       m_Bits: 2
     occluderRenderingLayerMask:
@@ -240,7 +240,7 @@ MonoBehaviour:
   renderFeatureSettings:
     nameTag: Water
     liquid2DLayerMask: 2
-    obstructionRenderingLayerMask:
+    obstructorRenderingLayerMask:
       serializedVersion: 0
       m_Bits: 2
     occluderRenderingLayerMask:

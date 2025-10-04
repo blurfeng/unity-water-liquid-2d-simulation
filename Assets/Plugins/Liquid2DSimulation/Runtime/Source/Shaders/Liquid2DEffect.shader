@@ -68,8 +68,8 @@ Shader "Custom/URP/2D/Liquid2DEffect"
             // https://docs.unity3d.com/Manual/SL-SamplerStates.html
             SAMPLER(sampler_linear_clamp_MainTex);
             
-            TEXTURE2D_X(_ObstructionTex);
-            SAMPLER(sampler_linear_clamp_ObstructionTex);
+            TEXTURE2D_X(_ObstructorTex);
+            SAMPLER(sampler_linear_clamp_ObstructorTex);
             
             // 背景纹理。当需要扰动或像素化背景时使用。将处理后的背景作为流体的背景。
             // 否则流体是透明的，可以看到真正的背景。
@@ -201,14 +201,14 @@ CBUFFER_END
 
                 #endif
 
-                // ---- 阻挡纹理处理 // Obstruction texture processing // 阻害テクスチャ処理 ---- //
+                // ---- 阻挡纹理处理 // Obstructor texture processing // 阻害テクスチャ処理 ---- //
                 // 阻挡纹理完全阻挡流体颜色。一般是挡板、管道、瓶子的横截面等。
-                // Obstruction texture completely blocks fluid color. Usually cross-sections of barriers, pipes, bottles, etc.
+                // Obstructor texture completely blocks fluid color. Usually cross-sections of barriers, pipes, bottles, etc.
                 // 阻害テクスチャは流体カラーを完全にブロック。通常はバリア、パイプ、ボトルの断面など。
-                half4 colObstructionTex = SAMPLE_TEXTURE2D_X(_ObstructionTex, sampler_linear_clamp_ObstructionTex, uvDefault);
-                clip(1 - colObstructionTex.a);
-                // 阻挡物挡住流体颜色。 // Obstructions block fluid color. // 阻害物が流体カラーをブロック。
-                col = lerp(col, colObstructionTex, step(0.001, colObstructionTex.a));
+                half4 colObstructorTex = SAMPLE_TEXTURE2D_X(_ObstructorTex, sampler_linear_clamp_ObstructorTex, uvDefault);
+                clip(1 - colObstructorTex.a);
+                // 阻挡物挡住流体颜色。 // Obstructor block fluid color. // 阻害物が流体カラーをブロック。
+                col = lerp(col, colObstructorTex, step(0.001, colObstructorTex.a));
                 
                 // Tips:
                 // 我们只是裁剪掉了阻挡纹理的透明部分，阻挡纹理本身的颜色并没有参与混合。
@@ -217,9 +217,9 @@ CBUFFER_END
                 // 但是正面盖在流体上的玻璃瓶部分的渲染，应当由用户自行处理。比如创建新的 Renderer Feature 来渲染玻璃瓶。
                 // 这个玻璃瓶的 Renderer Feature 应当在流体 Renderer Feature 之后执行。
 
-                // We only clipped the transparent parts of the obstruction texture, the obstruction texture's color itself doesn't participate in blending.
+                // We only clipped the transparent parts of the obstructor texture, the obstructor texture's color itself doesn't participate in blending.
                 // Because the fluid system only focuses on processing fluid effects themselves.
-                // For objects that obstruct fluid, like a glass bottle, you should set the glass bottle's cross-section Rendering Layer to the obstruction layer.
+                // For objects that obstruct fluid, like a glass bottle, you should set the glass bottle's cross-section Rendering Layer to the obstructor layer.
                 // But the rendering of the glass bottle parts that cover the fluid should be handled by the user. For example, create a new Renderer Feature to render the glass bottle.
                 // This glass bottle Renderer Feature should execute after the fluid Renderer Feature.
 
@@ -311,10 +311,10 @@ CBUFFER_END
 
                 // ---- 遮挡纹理处理 // Occluder texture processing // 遮蔽テクスチャ処理 ---- //
                 #if defined(_OCCLUDER_ENABLE)
-                half4 colOccluder = SAMPLE_TEXTURE2D_X(_OccluderTex, sampler_linear_clamp_OccluderTex, uvDefault);
+                half4 colOccluderTex = SAMPLE_TEXTURE2D_X(_OccluderTex, sampler_linear_clamp_OccluderTex, uvDefault);
                 half4 occluderBlendColor;
-                occluderBlendColor.rgb = colOccluder.rgb * colOccluder.a + col.rgb * (1 - colOccluder.a);
-                occluderBlendColor.a = colOccluder.a + col.a * (1 - colOccluder.a);
+                occluderBlendColor.rgb = colOccluderTex.rgb * colOccluderTex.a + col.rgb * (1 - colOccluderTex.a);
+                occluderBlendColor.a = colOccluderTex.a + col.a * (1 - colOccluderTex.a);
                 col = occluderBlendColor;
                 #endif
 

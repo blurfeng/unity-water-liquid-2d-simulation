@@ -228,9 +228,9 @@ namespace Fs.Liquid2D
         
         [LocalizationTooltip(
              "液体阻挡层遮罩。指定哪些层的物体会阻挡液体效果。一般是挡板或容器等，他们会完全阻挡液体及时自身是透明的。相当于阻挡物的横截面。",
-             "Liquid obstruction layer mask. Specifies which layers of objects will block liquid effects. Usually barriers or containers that completely block liquid even if they are transparent. Equivalent to the cross-section of obstructions.",
+             "Liquid obstructor layer mask. Specifies which layers of objects will block liquid effects. Usually barriers or containers that completely block liquid even if they are transparent. Equivalent to the cross-section of obstructor.",
              "液体障害物レイヤーマスク。どのレイヤーのオブジェクトが液体効果をブロックするかを指定します。通常は障壁やコンテナなどで、自身が透明であっても液体を完全にブロックします。障害物の断面に相当します。")]
-        public RenderingLayerMask obstructionRenderingLayerMask;
+        public RenderingLayerMask obstructorRenderingLayerMask;
 
         [LocalizationTooltip(
              "液体遮挡层遮罩。指定哪些层的物体会遮挡液体效果，但不会阻挡流体流动。一般是地形、墙壁、玻璃瓶的正面等。",
@@ -241,7 +241,7 @@ namespace Fs.Liquid2D
         
         // Tips: 这里的遮挡物只会简单的渲染覆盖在流体上方，不会对背后的画面进行扭曲等效果处理。
         // 如果你希望实现更复杂的遮挡效果，应当实现自定义的 Renderer Feature 并添加到 URP 的 Renderer 的流体渲染之后。
-        // Tips: The obstructions here will only be simply rendered over the fluid and will not apply distortion effects to the background.
+        // Tips: The obstructor here will only be simply rendered over the fluid and will not apply distortion effects to the background.
         // If you want to achieve more complex occlusion effects, you should implement a custom Renderer Feature and add it after the fluid rendering in URP's Renderer.
         // ヒント：ここでの障害物は流体の上に単純にレンダリングされ、背景に歪み効果を適用しません。
         // より複雑な遮蔽効果を実現したい場合は、カスタムレンダラーフィーチャーを実装し、URPのレンダラーの流体レンダリングの後に追加する必要があります。
