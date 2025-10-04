@@ -44,3 +44,4 @@ TagManager:
   m_RenderingLayers:
   - Default
   - LiquidObstruction
+  - LiquidOccluder

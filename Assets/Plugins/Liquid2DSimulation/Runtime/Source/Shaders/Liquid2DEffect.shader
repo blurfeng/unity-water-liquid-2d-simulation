@@ -22,6 +22,9 @@ Shader "Custom/URP/2D/Liquid2DEffect"
             HLSLPROGRAM
             
             // ---- Keywords ------------------------------------- Start
+            // 开启遮挡纹理功能。 // Enable occluder texture feature. // 遮蔽テクスチャ機能を有効化。
+            #pragma shader_feature_local _OCCLUDER_ENABLE
+            
             // 透明度倍率使用乘法方式。 // Opacity multiplier using multiplication method. // 透明度倍率は乗算方式を使用。
             #pragma shader_feature_local _OPACITY_MULTIPLY
             // 透明度倍率使用覆盖方式，而不是乘法方式。 // Opacity multiplier using override method instead of multiplication. // 透明度倍率は乗算ではなく上書き方式を使用。
@@ -64,6 +67,7 @@ Shader "Custom/URP/2D/Liquid2DEffect"
             TEXTURE2D_X(_MainTex);
             // https://docs.unity3d.com/Manual/SL-SamplerStates.html
             SAMPLER(sampler_linear_clamp_MainTex);
+            
             TEXTURE2D_X(_ObstructionTex);
             SAMPLER(sampler_linear_clamp_ObstructionTex);
             
@@ -77,6 +81,12 @@ Shader "Custom/URP/2D/Liquid2DEffect"
             TEXTURE2D_X(_BackgroundTex);
             SAMPLER(sampler_linear_clamp_BackgroundTex);
             #endif
+
+            #if defined(_OCCLUDER_ENABLE)
+            TEXTURE2D_X(_OccluderTex);
+            SAMPLER(sampler_linear_clamp_OccluderTex);
+            #endif
+            
             
 CBUFFER_START(UnityPerMaterial)
 
@@ -249,16 +259,16 @@ CBUFFER_END
                 float2 uvDistorted = saturate(uvDistortGet + distort_sum);
                 
                 // 采样背景纹理。 // Sample background texture. // 背景テクスチャをサンプリング。
-				        half4 colBg = SAMPLE_TEXTURE2D_X(_BackgroundTex, sampler_linear_clamp_BackgroundTex, uvDistorted);
+				half4 colBg = SAMPLE_TEXTURE2D_X(_BackgroundTex, sampler_linear_clamp_BackgroundTex, uvDistorted);
                 // 混合流体颜色和背景颜色。 // Blend fluid color and background color. // 流体カラーと背景カラーをブレンド。
-                half4 finalColor;
-                finalColor.rgb = col.rgb * col.a + colBg.rgb * (1 - col.a);
+                half4 distortBlendColor;
+                distortBlendColor.rgb = col.rgb * col.a + colBg.rgb * (1 - col.a);
                 // 正常混合是 col.a + colBg.a * (1 - col.a) 但是 colBg.a 是1，所以简化了。
                 // Normal blending is col.a + colBg.a * (1 - col.a) but colBg.a is 1, so it's simplified.
                 // 通常のブレンドはcol.a + colBg.a * (1 - col.a)ですが、colBg.aは1なので簡略化されました。
-                finalColor.a = 1.0; // 混合以后已经包含了背景色，不需要和原有背景混合了，直接不透明。 // After blending already contains background color, no need to blend with original background, directly opaque. // ブレンド後は既に背景色が含まれているため、元の背景とブレンドする必要はなく、直接不透明。
-                return finalColor;
-
+                distortBlendColor.a = 1.0; // 混合以后已经包含了背景色，不需要和原有背景混合了，直接不透明。 // After blending already contains background color, no need to blend with original background, directly opaque. // ブレンド後は既に背景色が含まれているため、元の背景とブレンドする必要はなく、直接不透明。
+                col = distortBlendColor;
+                
                 // ---- 使用贴图控制扰动效果的方式 // Method using texture to control distortion effects // テクスチャを使用して歪み効果を制御する方法 ---- //
                 // float2 distortUv = uvDefault;
                 // distortUv.x *= _AspectRatio;
@@ -271,7 +281,6 @@ CBUFFER_END
                 // float2 uvDistorted = saturate(uvDefault + distort * _DistortIntensity);
                 // half4 bg = SAMPLE_TEXTURE2D_X(_BackgroundTex, sampler_linear_clamp_BackgroundTex, uvDistorted);
                 // half4 finalCol = lerp(bg, col, col.a);
-                // return finalCol;
                 
                 #else
 
@@ -282,24 +291,34 @@ CBUFFER_END
                 // 采样背景纹理。 // Sample background texture. // 背景テクスチャをサンプリング。
                 half4 colBg = SAMPLE_TEXTURE2D_X(_BackgroundTex, sampler_linear_clamp_BackgroundTex, uvProcess);
                 // 混合流体颜色和背景颜色。 // Blend fluid color and background color. // 流体カラーと背景カラーをブレンド。
-                half4 finalColor;
-                finalColor.rgb = col.rgb * col.a + colBg.rgb * (1 - col.a);
+                half4 pixelBlendColor;
+                pixelBlendColor.rgb = col.rgb * col.a + colBg.rgb * (1 - col.a);
                 // 正常混合是 col.a + colBg.a * (1 - col.a) 但是 colBg.a 是1，所以简化了。
                 // 混合以后已经包含了背景色，不需要和原有背景混合了，直接不透明。 
                 // Normal blending is col.a + colBg.a * (1 - col.a) but colBg.a is 1, so it's simplified.
                 // After blending already contains background color, no need to blend with original background, directly opaque. 
                 // 通常のブレンドはcol.a + colBg.a * (1 - col.a)ですが、colBg.aは1なので簡略化されました。
                 // ブレンド後は既に背景色が含まれているため、元の背景とブレンドする必要はなく、直接不透明。
-                finalColor.a = 1.0;
-                return finalColor;
+                pixelBlendColor.a = 1.0;
+                col = pixelBlendColor;
                 #else
                 // 直接返回流体颜色。此时水体是透明的，可以看到真正的背景。
                 // Directly return fluid color. At this time the water is transparent and you can see the real background.
                 // 流体カラーを直接返します。この時水体は透明で、実際の背景が見えます。
-                return col;
                 #endif
                 
                 #endif
+
+                // ---- 遮挡纹理处理 // Occluder texture processing // 遮蔽テクスチャ処理 ---- //
+                #if defined(_OCCLUDER_ENABLE)
+                half4 colOccluder = SAMPLE_TEXTURE2D_X(_OccluderTex, sampler_linear_clamp_OccluderTex, uvDefault);
+                half4 occluderBlendColor;
+                occluderBlendColor.rgb = colOccluder.rgb * colOccluder.a + col.rgb * (1 - colOccluder.a);
+                occluderBlendColor.a = colOccluder.a + col.a * (1 - colOccluder.a);
+                col = occluderBlendColor;
+                #endif
+
+                return col;
             }
             ENDHLSL
         }

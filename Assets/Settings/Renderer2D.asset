@@ -1,5 +1,59 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
+--- !u!114 &-9061980609469922955
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 58ccafab4e6e1e74fb8316d4c2cc72de, type: 3}
+  m_Name: Liquid2DFeature Milk
+  m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DFeature
+  m_Active: 1
+  shaderBlur: {fileID: 4800000, guid: ba2a65ae22134d45b98c9bead0df1a34, type: 3}
+  shaderEffect: {fileID: 4800000, guid: 22ec51fd89bf43c799b2934514998e2d, type: 3}
+  renderFeatureSettings:
+    nameTag: Milk
+    liquid2DLayerMask: 16
+    obstructionRenderingLayerMask:
+      serializedVersion: 0
+      m_Bits: 2
+    occluderRenderingLayerMask:
+      serializedVersion: 0
+      m_Bits: 4
+    cutoff: 0.45
+    opacityMode: 0
+    opacityValue: 1
+    coverColor: {r: 0, g: 0, b: 0, a: 0}
+    blur:
+      iterations: 7
+      blurSpread: 0.6
+      coreKeepIntensity: 0.4
+      scaleFactor: 4
+      ignoreBgColor: 0
+      blurBgColor: {r: 0, g: 0, b: 0, a: 0}
+      blurBgColorIntensity: 0
+    distort:
+      enable: 0
+      magnitude: 0.1
+      frequency: 380
+      amplitude: 0.008
+      distortSpeed: {x: 0.1, y: 1}
+      distortTimeFactors: {x: 0.3, y: -0.4, z: 0.1, w: 0.5}
+      noiseCoordOffset: 4
+    edge:
+      enable: 0
+      edgeRange: 0.6
+      edgeIntensity: 0.1
+      edgeColor: {r: 1, g: 1, b: 1, a: 0.8}
+      blendType: 0
+    pixel:
+      enable: 1
+      pixelSize: 6
+      pixelBg: 1
 --- !u!114 &11400000
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -28,7 +82,8 @@ MonoBehaviour:
   - {fileID: 8380843845757841626}
   - {fileID: 4213133728103814185}
   - {fileID: 7169886000912180024}
-  m_RendererFeatureMap: da306af812bd4e742954d8b6cd0e783a38a36a84548d8063
+  - {fileID: -9061980609469922955}
+  m_RendererFeatureMap: da306af812bd4e742954d8b6cd0e783a38a36a84548d8063754111eba5603d82
   m_UseNativeRenderPass: 0
   m_LayerMask:
     serializedVersion: 2
@@ -80,6 +135,9 @@ MonoBehaviour:
     obstructionRenderingLayerMask:
       serializedVersion: 0
       m_Bits: 2
+    occluderRenderingLayerMask:
+      serializedVersion: 0
+      m_Bits: 0
     cutoff: 0.14
     opacityMode: 0
     opacityValue: 1
@@ -131,6 +189,9 @@ MonoBehaviour:
     obstructionRenderingLayerMask:
       serializedVersion: 0
       m_Bits: 2
+    occluderRenderingLayerMask:
+      serializedVersion: 0
+      m_Bits: 0
     cutoff: 0.45
     opacityMode: 0
     opacityValue: 1
@@ -182,6 +243,9 @@ MonoBehaviour:
     obstructionRenderingLayerMask:
       serializedVersion: 0
       m_Bits: 2
+    occluderRenderingLayerMask:
+      serializedVersion: 0
+      m_Bits: 0
     cutoff: 0.6
     opacityMode: 1
     opacityValue: 0.3
@@ -211,4 +275,4 @@ MonoBehaviour:
     pixel:
       enable: 0
       pixelSize: 6
-      pixelBg: 1
+      pixelBg: 0

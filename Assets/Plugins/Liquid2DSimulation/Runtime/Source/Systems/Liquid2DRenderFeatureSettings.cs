@@ -232,26 +232,19 @@ namespace Fs.Liquid2D
              "液体障害物レイヤーマスク。どのレイヤーのオブジェクトが液体効果をブロックするかを指定します。通常は障壁やコンテナなどで、自身が透明であっても液体を完全にブロックします。障害物の断面に相当します。")]
         public RenderingLayerMask obstructionRenderingLayerMask;
 
-        // Tips:
-        // 在2D游戏中，假设你有一个玻璃瓶用于装流体。玻璃瓶的横截面是阻挡层，这样流体就不会渲染在玻璃瓶的外面。
-        // 但是本流体系统不会处理盖在流体上的正面玻璃瓶部分的渲染，因为流体系统只专注于处理流体效果自身。
-        // 你应当将玻璃瓶的横截面的 Rendering Layer 设置为阻挡层。
-        // 但是正面盖在流体上的玻璃瓶部分的渲染，应当由用户自行处理。比如创建新的 Renderer Feature 来渲染玻璃瓶。
-        // 这个玻璃瓶的 Renderer Feature 应当在流体 Renderer Feature 之后执行。
-
-        // Tips:
-        // In a 2D game, suppose you have a glass bottle for holding fluid. The cross-section of the glass bottle is the obstruction layer, so the fluid will not be rendered outside the glass bottle.
-        // However, the fluid system does not handle the rendering of the front part of the glass bottle that covers the fluid, as the fluid system focuses only on handling the fluid effect itself.
-        // You should set the Rendering Layer of the cross-section of the glass bottle to the obstruction layer.
-        // However, the rendering of the front part of the glass bottle that covers the fluid should be handled by the user. For example, create a new Renderer Feature to render the glass bottle.
-        // This glass bottle Renderer Feature should be executed after the fluid Renderer Feature. 
-
-        // Tips:
-        // 2Dゲームでは、流体を保持するためのガラス瓶があるとします。ガラス瓶の断面は障害物レイヤーであり、流体はガラス瓶の外側にレンダリングされません。
-        // ただし、流体を覆うガラス瓶の前面部分のレンダリングは流体システムでは処理されません。流体システムは流体効果自体の処理にのみ焦点を当てているためです。
-        // ガラス瓶の断面のレンダリングレイヤーを障害物レイヤーに設定する必要があります。
-        // ただし、流体を覆うガラス瓶の前面部分のレンダリングはユーザーが処理する必要があります。たとえば、ガラス瓶をレンダリングするための新しいレンダラーフィーチャーを作成します。
-        // このガラス瓶のレンダラーフィーチャーは、流体レンダラーフィーチャーの後に実行する必要があります。
+        [LocalizationTooltip(
+             "液体遮挡层遮罩。指定哪些层的物体会遮挡液体效果，但不会阻挡流体流动。一般是地形、墙壁、玻璃瓶的正面等。",
+             "Liquid occlusion layer mask. Specifies which layers of objects will occlude liquid effects but will not block fluid flow. Usually terrain, walls, the front of glass bottles, etc.",
+             "液体遮蔽レイヤーマスク。どのレイヤーのオブジェクトが液体効果を遮蔽するかを指定しますが、流体の流れをブロックしません。通常は地形、壁、ガラス瓶の前面などです。"
+             )]
+        public RenderingLayerMask occluderRenderingLayerMask;
+        
+        // Tips: 这里的遮挡物只会简单的渲染覆盖在流体上方，不会对背后的画面进行扭曲等效果处理。
+        // 如果你希望实现更复杂的遮挡效果，应当实现自定义的 Renderer Feature 并添加到 URP 的 Renderer 的流体渲染之后。
+        // Tips: The obstructions here will only be simply rendered over the fluid and will not apply distortion effects to the background.
+        // If you want to achieve more complex occlusion effects, you should implement a custom Renderer Feature and add it after the fluid rendering in URP's Renderer.
+        // ヒント：ここでの障害物は流体の上に単純にレンダリングされ、背景に歪み効果を適用しません。
+        // より複雑な遮蔽効果を実現したい場合は、カスタムレンダラーフィーチャーを実装し、URPのレンダラーの流体レンダリングの後に追加する必要があります。
         
         [Range(0f, 1f), LocalizationTooltip(
               "流体透明边缘的裁剪阈值，越大边缘越锐利，水体范围膨胀越少。",
@@ -306,7 +299,7 @@ namespace Fs.Liquid2D
             // 先序列化再反序列化，得到一个全新的对象。
             // First serialize and then deserialize to get a completely new object.
             // 最初にシリアル化し、次に逆シリアル化して、完全に新しいオブジェクトを取得します。
-            return JsonUtility.FromJson<Liquid2DRenderFeatureSettings>(JsonUtility.ToJson(this));
+            return JsonUtility.FromJson<Liquid2DRenderFeatureSettings>(JsonUtility.ToJson(this)); 
         }
     }
 }

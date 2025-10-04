@@ -23,6 +23,7 @@ namespace Fs.Liquid2D
             internal static readonly int BlurOffsetId = Shader.PropertyToID("_BlurOffset");
             internal static readonly int Cutoff = Shader.PropertyToID("_Cutoff");
             internal static readonly int ObstructionTex = Shader.PropertyToID("_ObstructionTex");
+            internal static readonly int OccluderTex = Shader.PropertyToID("_OccluderTex");
             internal static readonly int OpacityValue = Shader.PropertyToID("_OpacityValue");
             internal static readonly int CoverColorId = Shader.PropertyToID("_CoverColor");
             internal static readonly int EdgeStart = Shader.PropertyToID("_EdgeStart");
@@ -87,6 +88,7 @@ namespace Fs.Liquid2D
             _quadMesh = GenerateQuadMesh();
             
             SetObstructionFilteringSettings();
+            SetOccluderFilteringSettings();
             
             // 设置 Pass 执行时机。 // Set the execution timing of the Pass. // パスの実行タイミングを設定します。
             renderPassEvent = RenderPassEvent.AfterRenderingTransparents;
@@ -132,6 +134,11 @@ namespace Fs.Liquid2D
             // 流体阻挡 Pass 相关。 // Fluid obstruction Pass related. // 流体阻挡Pass関連。
             public RendererListHandle obstructionRendererListHandle;
             public TextureHandle obstructionTh;
+            
+            // 流体遮挡 Pass 相关。 // Fluid occluder Pass related. // 流体オクルーダーパス関連。
+            public bool isHaveOccluder;
+            public RendererListHandle occluderRendererListHandle;
+            public TextureHandle occluderTh;
             
             // 水体效果 Pass 相关。 // Water effect Pass related. // 水体エフェクトPass関連。
             public Material materialEffect;
@@ -227,7 +234,7 @@ namespace Fs.Liquid2D
             // return;
             #endregion
             
-            #region 模糊处理
+            #region 模糊处理 // Blur processing // ブラー処理
             
             // 最终模糊纹理句柄，给到之后的处理步骤。
             // Final blur texture handle for subsequent processing steps.
@@ -364,7 +371,7 @@ namespace Fs.Liquid2D
             // return;
             #endregion
 
-            #region 流体阻挡
+            #region 流体阻挡物 // Fluid obstruction // 流体障害物
             
             // 创建阻挡纹理。用于之后的水体效果处理Shader。一般是挡板、管道、地形、容器等。
             // Create obstruction texture. Used for subsequent water effect processing shaders. Generally for baffles, pipes, terrain, containers, etc.
@@ -405,8 +412,42 @@ namespace Fs.Liquid2D
             // return;
 
             #endregion
+
+            #region 流体遮挡物 // Fluid occluder // 流体オクルーダー
+
+            // 创建遮挡纹理。用于之后的水体效果处理Shader。一般是正面的遮挡物，但不会阻碍流体的流动。
+            // Create cloner texture. Used for subsequent water effect processing shaders. Generally for front cloners, but will not hinder fluid flow.
+            // クローンターテクスチャを作成します。後で水エフェクト処理シェーダーに使用されます。一般的には前面のクローンですが、流体の流れを妨げることはありません。
             
-            #region 水体效果处理
+            // ---- 创建流体遮挡纹理 // Create fluid occluder texture // 流体オクルーダーテクスチャを作成 ---- //
+            TextureDesc liquidOccluderDesc = mainDesc;
+            liquidOccluderDesc.name = GetName("liquid 2d Occluder");
+            TextureHandle liquidOccluderTh = renderGraph.CreateTexture(liquidOccluderDesc);
+            
+            bool isHaveOccluder = _occluderFilteringSettings.layerMask != 0;
+            if (isHaveOccluder)
+            {
+                using (var builder = renderGraph.AddRasterRenderPass<PassData>(GetName("liquid 2d Occluder"), out PassData passData))
+                {
+                    builder.SetRenderAttachment(liquidOccluderTh, 0, AccessFlags.Write);
+                
+                    var drawSettings = RenderingUtils.CreateDrawingSettings(_shaderTagId, renderingData, cameraData, lightData, cameraData.defaultOpaqueSortFlags);
+                    var param = new RendererListParams(renderingData.cullResults, drawSettings, _occluderFilteringSettings);
+                    passData.occluderRendererListHandle = renderGraph.CreateRendererList(param);
+                    builder.UseRendererList(passData.occluderRendererListHandle);
+                
+                    builder.SetRenderFunc(
+                        (PassData data, RasterGraphContext context) => 
+                        {
+                            context.cmd.DrawRendererList(data.occluderRendererListHandle);
+                        }
+                    );
+                }
+            }
+            
+            #endregion
+            
+            #region 水体效果处理 // Water effect processing // 水エフェクト処理
 
             // ---- 添加绘制到 Pass // Add drawing to Pass // パスに描画を追加 ---- //
             using (var builder = renderGraph.AddRasterRenderPass<PassData>(GetName("liquid 2d Effect"), out var passData))
@@ -421,6 +462,12 @@ namespace Fs.Liquid2D
                 passData.blurFinalTh = blurThFinal; // 最终模糊纹理。 // Final blur texture. // 最終ブラーテクスチャ。
                 passData.obstructionTh = liquidObstructionTh; // 流体阻挡纹理。 // Fluid obstruction texture. // 流体阻挡テクスチャ。
 
+                passData.isHaveOccluder = isHaveOccluder;
+                if (isHaveOccluder)
+                {
+                    passData.occluderTh = liquidOccluderTh;
+                }
+
                 // 设置渲染目标纹理句柄和声明使用纹理句柄。
                 // Set render target texture handle and declare usage texture handle.
                 // レンダーターゲットテクスチャハンドルを設定し、使用テクスチャハンドルを宣言します。
@@ -428,6 +475,10 @@ namespace Fs.Liquid2D
                 builder.UseTexture(passData.sourceTh, AccessFlags.Read);
                 builder.UseTexture(passData.blurFinalTh, AccessFlags.Read);
                 builder.UseTexture(passData.obstructionTh, AccessFlags.Read);
+                if (isHaveOccluder)
+                {
+                    builder.UseTexture(passData.occluderTh, AccessFlags.Read);
+                }
                 
                 // 设置绘制方法。 // Set drawing method. // 描画メソッドを設定します。
                 builder.SetRenderFunc((PassData data, RasterGraphContext context) => ExecutePassEffect(data, context));
@@ -576,6 +627,17 @@ namespace Fs.Liquid2D
             mpb.SetFloat(ShaderIds.Cutoff, data.settings.cutoff); // 裁剪阈值。 //Cutoff threshold. //カットオフ閾値。
             mpb.SetTexture(ShaderIds.BackgroundTex, data.sourceTh); // 背景纹理。用于扰动采样。 //Background texture. Used for distortion sampling. //背景テクスチャ。歪みサンプリングに使用。
 
+            // 流体遮挡纹理。 // Fluid occluder texture. // 流体オクルーダーテクスチャ。
+            if (data.isHaveOccluder)
+            {
+                data.materialEffect.EnableKeyword("_OCCLUDER_ENABLE");
+                mpb.SetTexture(ShaderIds.OccluderTex, data.occluderTh); 
+            }
+            else
+            {
+                data.materialEffect.DisableKeyword("_OCCLUDER_ENABLE");
+            }
+            
             // 透明度调整参数。 // Opacity adjustment parameters. // 透明度調整パラメータ。
             if (data.settings.opacityMode == EOpacityMode.Multiply)
             {
@@ -751,16 +813,29 @@ namespace Fs.Liquid2D
 
         private FilteringSettings _obstructionFilteringSettings;
         
+        private FilteringSettings _occluderFilteringSettings;
+        
         /// <summary>
         /// 设置阻挡层过滤设置。
         /// </summary>
         private void SetObstructionFilteringSettings()
         {
-            _obstructionFilteringSettings = 
-                new FilteringSettings(
-                    RenderQueueRange.all,
-                    ~0,
-                    _settings.obstructionRenderingLayerMask);
+            _obstructionFilteringSettings = new FilteringSettings
+            ( 
+                RenderQueueRange.all,
+                ~0,
+                _settings.obstructionRenderingLayerMask
+            );
+        }
+        
+        private void SetOccluderFilteringSettings()
+        {
+            _occluderFilteringSettings = new FilteringSettings 
+            (
+                RenderQueueRange.all,
+                ~0,
+                _settings.occluderRenderingLayerMask
+            );
         }
 
         #endregion
@@ -833,6 +908,12 @@ namespace Fs.Liquid2D
             if (_obstructionFilteringSettings.layerMask != _settings.obstructionRenderingLayerMask)
             {
                 SetObstructionFilteringSettings();
+            }
+            // 遮挡层遮罩。 // Occlusion layer mask. // オクルージョンレイヤーマスク。
+            _settings.occluderRenderingLayerMask = isActive ? VolumeData.occluderRenderingLayerMask : _settingsDefault.occluderRenderingLayerMask;
+            if (_occluderFilteringSettings.layerMask != _settings.occluderRenderingLayerMask)
+            {
+                SetOccluderFilteringSettings();
             }
             
             _settings.cutoff = isActive ? VolumeData.cutoff : _settingsDefault.cutoff;

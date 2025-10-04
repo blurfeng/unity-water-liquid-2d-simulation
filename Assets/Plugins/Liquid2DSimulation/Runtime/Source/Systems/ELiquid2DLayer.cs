@@ -49,6 +49,11 @@ namespace Fs.Liquid2D
         /// </summary>
         WaterMix = 1 << 3,
         
+        /// <summary>
+        /// 牛奶。 // Milk. // ミルク。
+        /// </summary>
+        Milk = 1 << 4,
+        
         // 添加你需要的更多层。
     }
 }
