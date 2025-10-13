@@ -221,7 +221,7 @@ MonoBehaviour:
   m_RequiresOpaqueTextureOption: 2
   m_CameraType: 0
   m_Cameras: []
-  m_RendererIndex: 2
+  m_RendererIndex: 1
   m_VolumeLayerMask:
     serializedVersion: 2
     m_Bits: 1
@@ -752,10 +752,6 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
-    - target: {fileID: 2179229704097792271, guid: 7a7349acb6a73ee488cd372af710c8c8, type: 3}
-      propertyPath: m_Name
-      value: GameInstance
-      objectReference: {fileID: 0}
     - target: {fileID: 2126508291929749396, guid: 7a7349acb6a73ee488cd372af710c8c8, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -795,6 +791,10 @@ PrefabInstance:
     - target: {fileID: 2126508291929749396, guid: 7a7349acb6a73ee488cd372af710c8c8, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2179229704097792271, guid: 7a7349acb6a73ee488cd372af710c8c8, type: 3}
+      propertyPath: m_Name
+      value: GameInstance
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -994,7 +994,7 @@ SpriteRenderer:
   m_SmallMeshCulling: 1
   m_ForceMeshLod: -1
   m_MeshLodSelectionBias: 0
-  m_RenderingLayerMask: 4
+  m_RenderingLayerMask: 2
   m_RendererPriority: 0
   m_Materials:
   - {fileID: 2100000, guid: a97c105638bdf8b4a8650670310a4cd3, type: 2}
