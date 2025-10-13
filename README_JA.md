@@ -1,9 +1,10 @@
 ![](Documents/samples_1.gif)
 
 <p align="center">
-  📥
-  <a href="#upmを使用">インストール</a> |
-  <a href="#パッケージをダウンロード">ダウンロード</a>
+  <img alt="GitHub Release" src="https://img.shields.io/github/v/release/blurfeng/unity-water-liquid-2d-simulation?color=blue">
+  <img alt="GitHub Downloads (all assets, all releases)" src="https://img.shields.io/github/downloads/blurfeng/unity-water-liquid-2d-simulation/total?color=green">
+  <img alt="GitHub Repo License" src="https://img.shields.io/github/license/blurfeng/unity-water-liquid-2d-simulation?color=blueviolet">
+  <img alt="GitHub Repo Issues" src="https://img.shields.io/github/issues/blurfeng/unity-water-liquid-2d-simulation?color=yellow">
 </p>
 
 <p align="center">
@@ -11,6 +12,12 @@
   <a href="./README.md">中文</a> |
   <a href="./README_EN.md">English</a> |
   日本語
+</p>
+
+<p align="center">
+  📥
+  <a href="#upmを使用">インストール</a> |
+  <a href="#パッケージをダウンロード">ダウンロード</a>
 </p>
 
 # Liquid 2D Simulation - 2D流体シミュレーション
@@ -25,11 +32,11 @@ Liquid 2D Simulation は `Unity` 向けの2D流体シミュレーションシス
 - [🌳 ブランチ](#-ブランチ)
 - [🌱 クイックスタート](#-クイックスタート)
   - [1. プラグインのインストール](#1-プラグインのインストール)
-  - [2. Rendering Layerの設定](#2-rendering-layerの設定)
-  - [3. Renderer Featureの追加](#3-renderer-featureの追加)
-  - [4. 流体粒子プレハブの作成](#4-流体粒子プレハブの作成)
-  - [5. パーティクルスポナーの作成](#5-パーティクルスポナーの作成)
+  - [2. Renderer Featureの追加](#2-renderer-featureの追加)
+  - [3. 流体粒子プレハブの作成](#3-流体粒子プレハブの作成)
+  - [4. パーティクルスポナーの作成](#4-パーティクルスポナーの作成)
 - [🌊 Renderer Feature 設定ガイド](#-renderer-feature-設定ガイド)
+  - [Rendering Layerの設定](#rendering-layerの設定)
   - [Cover Color カバー色](#cover-color-カバー色)
   - [Opacity 不透明度](#opacity-不透明度)
   - [Blur ブラー](#blur-ブラー)
@@ -40,6 +47,7 @@ Liquid 2D Simulation は `Unity` 向けの2D流体シミュレーションシス
   - [Sprite テクスチャ](#sprite-テクスチャ)
   - [Collider](#collider)
   - [Rigidbody 2D](#rigidbody-2d)
+  - [Mix Colors 色の混合](#mix-colors-色の混合)
 - [⛲ 流体スポナー設定ガイド](#-流体スポナー設定ガイド)
   - [スポーンの制御](#スポーンの制御)
 - [📋 Todoリスト](#-todo-リスト)
@@ -66,10 +74,10 @@ Liquid 2D Simulation は `Unity` 向けの2D流体シミュレーションシス
 
 
 ## 💻 システム要件
-- `Unity6000.2` 以降のバージョン。
-- 2022.3 ブランチは `Unity2022.3` をサポートしていますが、このブランチの更新はメインブランチより遅くなります。
-- URP 2D レンダリングパイプライン。Unity6 バージョンでは Renderer Graph フレームワークを使用してレンダリングを行います。
-- シェーダーと互換性のあるプラットフォーム。
+- `Unity 6000.2` 以降のバージョン
+- 2022.3 ブランチは `Unity 2022.3` をサポートしていますが、このブランチの更新はメインブランチより遅くなります
+- URP 2D レンダリングパイプライン。Unity 6 バージョンでは Render Graph フレームワークを使用してレンダリングを行います
+- シェーダーと互換性のあるプラットフォーム
 
 
 ## 🌳 ブランチ
@@ -102,59 +110,82 @@ UPMを通じてプラグインをプロジェクトにインストールしま�
 ![](Documents/qs_1_5.png)
 
 #### パッケージをダウンロード
-インストールパッケージを使用してプラグインをプロジェクトにインストールします。
+インストールパッケージを使用してプラグインをプロジェクトにインストールします。\
 [Releases](https://github.com/blurfeng/unity-water-liquid-2d-simulation/releases) ページから最新のインストールパッケージをダウンロードします。\
-次に、パッケージをプロジェクトにインポートします。\
-プラグインには、デモシーンを含むSamplesフォルダが含まれています。ここから直接このシステムの使用方法を学び始めることができます。\
+次に、パッケージをプロジェクトにインポートします。
+
+> [!TIP]
+> プラグインには、デモシーンを含むSamplesフォルダが含まれています。ここから直接このシステムの使用方法を学び始めることができます。\
+> または、以下の手順に従って段階的に流体粒子システムをシーンに追加してください。\
 ![](Documents/qs_2_1.png)
 
-### 2. Rendering Layerの設定
-Liquid FeatureはRendering Layerを使用して、流体粒子を遮ることができるオブジェクト（バリア、パイプ、コンテナ、地形など）を区別します。\
-Obstruction Rendering Layer Maskで遮蔽に使用するレイヤーを設定し、オブジェクトにも同じレイヤーを設定する必要があります。\
-そうしないと、流体粒子のレンダリング順序がRenderPassEvent.AfterRenderingTransparentsであるため、流体粒子がこれらのオブジェクトの上に重なって表示されることがわかります。
-![](Documents/rl_1.png)
-
-しかし、デモシーンでは、障害物が流体粒子をうまく遮断していることがわかります。これは、正しいRendering Layer Maskがすでに設定されているためです。\
-エンジンのキャッシュとメカニズムにより、これらは正常に機能し続けることができます。しかし、あなたのプロジェクトでは、これらのRendering Layerは実際には存在しません。\
-デモシーンのLiquid2DRenderer2DのLiquid2DFeatureで、Obstruction Rendering Layer Maskの設定は `Unnamed Layer 1` として表示されます。\
-![](Documents/rl_2.png)
-
-シーンの障害物のSprite Rendererで、Additional SettingsのRendering Layer Maskが `Everything` に設定されています。\
-![](Documents/rl_3.png)
-
-#### 障害物Rendering Layerの追加
-1. `Edit -> Project Settings -> Tags and Layers` を開きます。
-2. `Rendering Layers` に新しいレイヤー（例：`LiquidObstruction`）を追加します。
-![](Documents/rl_4.png)
-3. 障害物のSprite Rendererコンポーネントで、`Additional Settings -> Rendering Layer Mask` を見つけ、作成した `LiquidObstruction` レイヤーを選択します。
-4. Liquid2DRenderer2DのLiquid2DFeatureで、`Obstruction Rendering Layer Mask` を見つけ、作成した `LiquidObstruction` レイヤーを選択します。
-
-これで、流体粒子が障害物によって正しく遮断されます。
-
-### 3. Renderer Featureの追加
-デモシーンにはすでにRenderer Featureが追加されています。\
-自分のシーンでこのシステムを使用したい場合は、現在のRenderer 2D DataにLiquid2D Featureを追加する必要があります。\
+### 2. Renderer Featureの追加
+デモシーンではすでにRenderer Featureが追加されています。\
+独自のシーンでこのシステムを使用したい場合は、現在のRenderer 2D DataにLiquid2D Featureを追加する必要があります。\
 ![](Documents/rf_1.png)
 
-### 4. 流体粒子プレハブの作成
+### 3. 流体粒子プレハブの作成
 `./Liquid2DSimulation/Runtime/Resources/Prefabs/` ディレクトリで流体粒子プレハブ `Liquid2DParticle` を見つけることができます。\
-このプレハブからバリアントプレハブを作成し、マテリアルとパラメータを変更して希望する流体粒子を作成することをお勧めします。\
-自分で流体粒子プレハブを直接作成し、`Liquid2DParticle` コンポーネント、`Circle Collider 2D` コンポーネント、`Rigidbody 2D` コンポーネントを追加することもできます。\
+このプレハブからバリアントプレハブを作成し、マテリアルとパラメータを変更して希望の流体粒子を作成することをお勧めします。\
+独自の流体粒子プレハブを直接作成し、`Liquid2DParticle` コンポーネント、`Circle Collider 2D` コンポーネント、`Rigidbody 2D` コンポーネントを追加することもできます。\
 ![](Documents/lp_1.png)
 
-流体粒子の動作を調整するために、`Liquid2DParticle` コンポーネントのパラメータを設定する必要があります。Spriteテクスチャ、マテリアル、色、流体レイヤーなどが含まれます。\
+流体粒子の動作を調整するために `Liquid2DParticle` コンポーネントのパラメータを設定する必要があります。Sprite テクスチャ、マテリアル、色、流体レイヤーなどが含まれます。\
 プラグインの `./Liquid2DSimulation/Runtime/Resources/Materials/` と `./Liquid2DSimulation/Runtime/Resources/Textures` ディレクトリにマテリアルとテクスチャが提供されており、直接使用できます。
 
-### 5. パーティクルスポナーの作成
+### 4. パーティクルスポナーの作成
 `./Liquid2DSimulation/Runtime/Resources/Prefabs/` ディレクトリでパーティクルスポナープレハブ `LiquidSpawner` を見つけることができます。\
-このプレハブからバリアントプレハブを作成し、パラメータを変更して希望するパーティクルスポナーを作成することをお勧めします。\
-自分でパーティクルスポナープレハブを直接作成し、`Liquid2DSpawner` コンポーネントを追加することもできます。\
+このプレハブからバリアントプレハブを作成し、パラメータを変更して希望のパーティクルスポナーを作成することをお勧めします。\
+独自のパーティクルスポナープレハブを直接作成し、`Liquid2DSpawner` コンポーネントを追加することもできます。\
 ![](Documents/ls_1.png)
+
+> [!TIP]
+> ここまでで、流体粒子システムは動作準備が整いました。\
+> ただし、流体粒子がシーン内のオブジェクトによって正しく遮断および隠蔽されるように、遮断と隠蔽レイヤーを設定する必要があります。
 
 
 ## 🌊 Renderer Feature 設定ガイド
 `Liquid2DFeature` Renderer Featureは流体粒子をレンダリングし、最終的に流体効果を実現するために使用されます。\
 以下では主に重要な機能やパラメータについて説明します。より詳細なパラメータは、Inspectorパネルのツールチップで直接確認できます。
+
+### Rendering Layerの設定
+Liquid FeatureはRendering Layerを使用して、流体粒子を遮断または隠蔽できるオブジェクトを区別します。
+#### 障害物Rendering Layerの追加
+1. `Edit -> Project Settings -> Tags and Layers` を開きます。
+2. `Rendering Layers` に新しいレイヤー（例：`LiquidObstructor`）を追加します。
+![](Documents/rl_4.png)
+3. 障害物のSprite Rendererコンポーネントで、`Additional Settings -> Rendering Layer Mask` を見つけ、作成した `LiquidObstructor` レイヤーを選択します。
+4. Liquid2DRenderer2DのLiquid2DFeatureで、`Obstructor Rendering Layer Mask` を見つけ、作成した `LiquidObstructor` レイヤーを選択します。
+
+> [!TIP]
+> GitHubのプロジェクトでは、正しいRendering Layer Maskを設定しています。\
+> しかし、プラグインをプロジェクトにインポートする際、プロジェクトにはこれらのRendering Layerが存在しません。\
+> しかし、デモシーンでは障害物が流体粒子をうまく遮断していることがわかります。これは、元々正しいRendering Layer Maskが設定されていたためです。\
+> エンジンのキャッシュとメカニズムにより、これらは正常に機能し続けることができます。しかし、あなたのプロジェクトでは、これらのRendering Layerは実際には存在しません。\
+> デモシーンのLiquid2DRenderer2DのLiquid2DFeatureで、Obstructor Rendering Layer Maskの設定は `Unnamed Layer 1` として表示されます。\
+> ![](Documents/rl_2.png)
+
+#### 遮断
+`遮断`とは、バリア、パイプ、コンテナ、地形など、流体粒子の流れを妨げることができるオブジェクトを指します。\
+`Renderer Feature`の`ObstructorRenderingLayerMask`で遮断に使用するレイヤーを設定する必要があります。\
+![](Documents/rl_5.png)
+
+次に、シーン内の流体粒子を遮断する必要があるすべてのオブジェクトの`Sprite Renderer`コンポーネントの`Additional Settings`で`Rendering Layer Mask`を設定します。\
+![](Documents/rl_3.png)
+
+そうしないと、流体粒子がこれらのオブジェクトの上に重なって表示されることがわかります。\
+![](Documents/rl_1.png)
+
+流体粒子のレンダリング順序は`RenderPassEvent.AfterRenderingTransparents`で、透明オブジェクトがレンダリングされた後です。\
+そのため、遮断レイヤーを正しく設定しない場合、流体粒子は不透明および透明オブジェクトの上にレンダリングされます。
+
+#### 隠蔽
+`隠蔽`とは、流体粒子の上に覆うことができるが、流体粒子の流れを遮断しないオブジェクト（ガラス瓶の前面、地形の前面など）を指します。\
+隠蔽の設定プロセスは遮断と似ています。\
+`Renderer Feature`の`OccluderRenderingLayerMask`で隠蔽に使用するレイヤーを設定する必要があります。\
+次に、シーン内の流体粒子を隠蔽する必要があるすべてのオブジェクトの`Sprite Renderer`コンポーネントの`Additional Settings`で`Rendering Layer Mask`を設定します。\
+ただし、隠蔽オブジェクトは流体粒子の流れを遮断せず（物理設定を通じて）、流体粒子の上に覆います。\
+![](Documents/occ_1.gif)
 
 ### Cover Color カバー色
 `Cover Color` を設定し、この色のアルファが1（ここでアルファはカバー強度を表す）の場合、この色は元の色を完全にカバーします。
@@ -229,6 +260,14 @@ Unityの物理システムを使用して流体粒子の物理効果をシミュ
 ![](Documents/pm_1.png)
 ![](Documents/pm_2.png)
 
+### Mix Colors 色の混合
+`Mix Colors` を有効にすることで、異なる色の流体粒子間で色を混合させることができます。\
+両方のパーティクルが `Mix Colors` を有効にしている必要があり、接触時に混合して自身の色を変化させます。\
+![](Documents/mc_1.gif)
+
+設定に基づいて、混合の速度と範囲を制御できます。\
+![](Documents/mc_2.png)
+
 ## ⛲ 流体スポナー設定ガイド
 `LiquidSpawner` 流体スポナーは流体粒子を生成するために使用され、パイプや噴水のようなものです。\
 以下では主に重要な機能やパラメータについて説明します。より詳細なパラメータは、Inspectorパネルのツールチップで直接確認できます。
@@ -247,8 +286,6 @@ Unityの物理システムを使用して流体粒子の物理効果をシミュ
 
 
 ## 📋 Todo リスト
-- **流体粒子**
-  - 色の混合：異なる色の融合可能な流体色の混合をシミュレーションします。例えば、黄色と青色が混合して緑色になる。
 - **物理システム**
   - 最適化：大量のパーティクルを生成する場合、Unity の物理システムはすぐにパフォーマンスのボトルネックになる可能性があります。物理システムを最適化し、流体物理を手動で計算するか、DOTS システムを使用してパフォーマンスを向上させる必要があります。
   - 流体粒子間の相互物理作用：粘性と張力などの物理効果をシミュレーションし、石油、蜂蜜、泡などの異なるタイプの流体を表現します。

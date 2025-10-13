@@ -1,9 +1,10 @@
 ![](Documents/samples_1.gif)
 
 <p align="center">
-  📥
-  <a href="#using-upm">Install</a> |
-  <a href="#download-package">Download</a>
+  <img alt="GitHub Release" src="https://img.shields.io/github/v/release/blurfeng/unity-water-liquid-2d-simulation?color=blue">
+  <img alt="GitHub Downloads (all assets, all releases)" src="https://img.shields.io/github/downloads/blurfeng/unity-water-liquid-2d-simulation/total?color=green">
+  <img alt="GitHub Repo License" src="https://img.shields.io/github/license/blurfeng/unity-water-liquid-2d-simulation?color=blueviolet">
+  <img alt="GitHub Repo Issues" src="https://img.shields.io/github/issues/blurfeng/unity-water-liquid-2d-simulation?color=yellow">
 </p>
 
 <p align="center">
@@ -11,6 +12,12 @@
   <a href="./README.md">中文</a> |
   English |
   <a href="./README_JA.md">日本語</a>
+</p>
+
+<p align="center">
+  📥
+  <a href="#using-upm">Install</a> |
+  <a href="#download-package">Download</a>
 </p>
 
 # Liquid 2D Simulation
@@ -25,11 +32,11 @@ With its extensive configuration options, you can freely create fluids with a va
 - [🌳 Branches](#-branches)
 - [🌱 Quick Start](#-quick-start)
   - [1. Install Plugin](#1-install-plugin)
-  - [2. Configure Rendering Layer](#2-configure-rendering-layer)
-  - [3. Add Renderer Feature](#3-add-renderer-feature)
-  - [4. Create Fluid Particle Prefab](#4-create-fluid-particle-prefab)
-  - [5. Create Particle Spawner](#5-create-particle-spawner)
+  - [2. Add Renderer Feature](#2-add-renderer-feature)
+  - [3. Create Fluid Particle Prefab](#3-create-fluid-particle-prefab)
+  - [4. Create Particle Spawner](#4-create-particle-spawner)
 - [🌊 Renderer Feature Settings Guide](#-renderer-feature-settings-guide)
+  - [Configure Rendering Layer](#configure-rendering-layer)
   - [Cover Color](#cover-color)
   - [Opacity](#opacity)
   - [Blur](#blur)
@@ -40,6 +47,7 @@ With its extensive configuration options, you can freely create fluids with a va
   - [Sprite Texture](#sprite-texture)
   - [Collider](#collider)
   - [Rigidbody 2D](#rigidbody-2d)
+  - [Mix Colors](#mix-colors)
 - [⛲ Particle Spawner Settings Guide](#-particle-spawner-settings-guide)
   - [Control Spawning](#control-spawning)
 - [📋 Todo List](#-todo-list)
@@ -66,10 +74,10 @@ In the actual process, particle fusion effects are achieved through alpha blendi
 
 
 ## 💻 System Requirements
-- `Unity6000.2` or later versions.
-- The 2022.3 branch supports `Unity2022.3`, but updates for this branch are slower than the main branch.
-- URP 2D rendering pipeline. The Unity6 version uses the Renderer Graph framework for rendering.
-- Platforms compatible with shaders.
+- `Unity 6000.2` or newer version
+- The 2022.3 branch supports `Unity 2022.3` version, but this branch updates slower than the main branch
+- URP 2D rendering pipeline. Unity 6 version uses Render Graph framework for rendering
+- Platforms compatible with shaders
 
 
 ## 🌳 Branches
@@ -102,59 +110,82 @@ Install the plugin to your project through UPM. If you need demo scenes, import 
 ![](Documents/qs_1_5.png)
 
 #### Download Package
-Install the plugin to your project using the installation package.
+Install the plugin to your project using the installation package.\
 Download the latest installation package from the [Releases](https://github.com/blurfeng/unity-water-liquid-2d-simulation/releases) page.\
-Then import the package into your project.\
-The plugin includes a Samples folder with demo scenes. You can start learning how to use this system directly from here.\
+Then import the package into your project.
+
+> [!TIP]
+> The plugin includes a Samples folder with demo scenes. You can start learning how to use this system directly from here.\
+> Or follow the steps below step by step to add the fluid particle system to your scene.\
 ![](Documents/qs_2_1.png)
 
-### 2. Configure Rendering Layer
-Liquid Feature uses Rendering Layer to distinguish which objects can block fluid particles, such as barriers, pipes, containers, terrain, etc.\
-You need to configure the layers used for blocking in the Obstruction Rendering Layer Mask and assign the same layers to objects.\
-Otherwise, you'll find that fluid particles will overlay on top of these objects because the rendering order of fluid particles is RenderPassEvent.AfterRenderingTransparents.
-![](Documents/rl_1.png)
-
-But in the demo scene, you'll find that obstructions block fluid particles well. This is because the correct Rendering Layer Mask was already configured.\
-Due to engine caching and mechanisms, they can still work normally. But in your project, these Rendering Layers don't actually exist.\
-In the demo scene's Liquid2DRenderer2D's Liquid2DFeature, the Obstruction Rendering Layer Mask configuration shows as `Unnamed Layer 1`.\
-![](Documents/rl_2.png)
-
-On the obstruction's Sprite Renderer in the scene, the Additional Settings' Rendering Layer Mask is configured as `Everything`.\
-![](Documents/rl_3.png)
-
-#### Add Obstruction Rendering Layer
-1. Open `Edit -> Project Settings -> Tags and Layers`.
-2. Add a new layer in `Rendering Layers`, such as `LiquidObstruction`.
-![](Documents/rl_4.png)
-3. In your obstruction's Sprite Renderer component, find `Additional Settings -> Rendering Layer Mask` and select the `LiquidObstruction` layer you just created.
-4. In Liquid2DRenderer2D's Liquid2DFeature, find `Obstruction Rendering Layer Mask` and select the `LiquidObstruction` layer you just created.
-
-This way, fluid particles will be correctly blocked by obstructions.
-
-### 3. Add Renderer Feature
+### 2. Add Renderer Feature
 The demo scene already has the Renderer Feature added.\
 If you want to use this system in your own scene, you need to add Liquid2D Feature to the current Renderer 2D Data.\
 ![](Documents/rf_1.png)
 
-### 4. Create Fluid Particle Prefab
+### 3. Create Fluid Particle Prefab
 You can find the fluid particle prefab `Liquid2DParticle` in the `./Liquid2DSimulation/Runtime/Resources/Prefabs/` directory.\
 It's recommended to create a variant prefab from this prefab, then modify materials and parameters to create the fluid particles you want.\
-You can also directly create a fluid particle prefab yourself, then add `Liquid2DParticle` component, `Circle Collider 2D` component and `Rigidbody 2D` component.\
+You can also directly create your own fluid particle prefab and add the `Liquid2DParticle` component, `Circle Collider 2D` component, and `Rigidbody 2D` component.\
 ![](Documents/lp_1.png)
 
-You need to configure the parameters of the `Liquid2DParticle` component to adjust the behavior of fluid particles. Including Sprite texture, material, color and fluid layer, etc.\
-Materials and textures are provided in the plugin's `./Liquid2DSimulation/Runtime/Resources/Materials/` and `./Liquid2DSimulation/Runtime/Resources/Textures` directories that you can use directly.
+You need to configure the parameters of the `Liquid2DParticle` component to adjust the behavior of fluid particles. Including Sprite texture, material, color, and fluid layer, etc.\
+Materials and textures are provided in the `./Liquid2DSimulation/Runtime/Resources/Materials/` and `./Liquid2DSimulation/Runtime/Resources/Textures` directories of the plugin, which you can use directly.
 
-### 5. Create Particle Spawner
+### 4. Create Particle Spawner
 You can find the particle spawner prefab `LiquidSpawner` in the `./Liquid2DSimulation/Runtime/Resources/Prefabs/` directory.\
 It's recommended to create a variant prefab from this prefab, then modify parameters to create the particle spawner you want.\
-You can also directly create a particle spawner prefab yourself, then add the `Liquid2DSpawner` component.\
+You can also directly create your own particle spawner prefab and add the `Liquid2DSpawner` component.\
 ![](Documents/ls_1.png)
+
+> [!TIP]
+> Up to this point, the fluid particle system is ready to work.\
+> However, you still need to configure obstruction and occlusion layers so that fluid particles are correctly blocked and occluded by objects in the scene.
 
 
 ## 🌊 Renderer Feature Settings Guide
 `Liquid2DFeature` Renderer Feature is used to render fluid particles and ultimately achieve fluid effects.\
 The following mainly explains important features or parameters. More detailed parameters can be viewed directly in the Inspector panel tooltips.
+
+### Configure Rendering Layer
+Liquid Feature uses Rendering Layer to distinguish which objects can block or occlude fluid particles.
+#### Add Obstructor Rendering Layer
+1. Open `Edit -> Project Settings -> Tags and Layers`.
+2. Add a new layer in `Rendering Layers`, such as `LiquidObstructor`.
+![](Documents/rl_4.png)
+3. In your obstructor's Sprite Renderer component, find `Additional Settings -> Rendering Layer Mask` and select the `LiquidObstructor` layer you just created.
+4. In Liquid2DRenderer2D's Liquid2DFeature, find `Obstructor Rendering Layer Mask` and select the `LiquidObstructor` layer you just created.
+
+> [!TIP]
+> In the GitHub project, I have configured the correct Rendering Layer Mask.\
+> However, when you import the plugin into your project, these Rendering Layers do not exist in the project.\
+> But in the demo scene, you'll find that obstructors block fluid particles well. This is because the correct Rendering Layer Mask was originally configured.\
+> Due to engine caching and mechanisms, they can still work normally. But in your project, these Rendering Layers don't actually exist.\
+> In the demo scene's Liquid2DRenderer2D's Liquid2DFeature, the Obstructor Rendering Layer Mask configuration shows as `Unnamed Layer 1`.\
+> ![](Documents/rl_2.png)
+
+#### Obstruction
+`Obstruction` refers to objects that can hinder fluid particle flow, such as barriers, pipes, containers, terrain, etc.\
+You need to configure the layers used for obstruction in the `Renderer Feature`'s `ObstructorRenderingLayerMask`.\
+![](Documents/rl_5.png)
+
+Then configure `Rendering Layer Mask` in the `Additional Settings` of the `Sprite Renderer` component for all objects in the scene that need to obstruct fluid particles.\
+![](Documents/rl_3.png)
+
+Otherwise, you'll find that fluid particles will overlay on top of these objects.\
+![](Documents/rl_1.png)
+
+Because the rendering order of fluid particles is `RenderPassEvent.AfterRenderingTransparents`, after transparent objects are rendered.\
+So if you don't configure the obstruction layer correctly, fluid particles will render on top of opaque and transparent objects.
+
+#### Occlusion
+`Occlusion` refers to objects that can cover fluid particles but don't block fluid particle flow, such as the front of glass bottles, the front of terrain, etc.\
+The configuration process for occlusion is similar to obstruction.\
+You need to configure the layers used for occlusion in the `Renderer Feature`'s `OccluderRenderingLayerMask`.\
+Then configure `Rendering Layer Mask` in the `Additional Settings` of the `Sprite Renderer` component for all objects in the scene that need to occlude fluid particles.\
+But occluding objects don't block fluid particle flow (through physics settings), they cover over the fluid particles.\
+![](Documents/occ_1.gif)
 
 ### Cover Color
 If you set `Cover Color` and this color's alpha is 1 (here alpha represents coverage intensity), then this color will completely cover the original color.
@@ -229,6 +260,14 @@ Physics materials also affect the behavior of fluid particles. By adjusting fric
 ![](Documents/pm_1.png)
 ![](Documents/pm_2.png)
 
+### Mix Colors
+By enabling `Mix Colors`, you can make colors mix between different colored fluid particles.\
+Both particles need to have `Mix Colors` enabled to mix when they come into contact and change their own colors.\
+![](Documents/mc_1.gif)
+
+Based on configuration, you can control the speed and range of mixing.\
+![](Documents/mc_2.png)
+
 ## ⛲ Particle Spawner Settings Guide
 `LiquidSpawner` is used to generate fluid particles, like a pipe or fountain.\
 The following mainly explains important features or parameters. More detailed parameters can be viewed directly in the Inspector panel tooltips.
@@ -247,8 +286,6 @@ Then enable the `Distort` effect. This way you'll see the background near the tr
 
 
 ## 📋 Todo List
-- **Fluid Particles**
-  - Color mixing: Simulate mixing of different colored fusible fluid colors, such as yellow and blue mixing to become green.
 - **Physics System**
   - Optimization: When generating a large number of particles, Unity's physics system can quickly become a performance bottleneck. It is necessary to optimize the physics system, calculate fluid physics manually, or use the DOTS framework to improve performance.
   - Inter-fluid particle physical interactions: Through simulating physical effects like viscosity and tension, represent different types of fluids, such as oil, honey, foam, etc.

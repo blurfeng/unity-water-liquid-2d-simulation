@@ -1,9 +1,10 @@
 ![](Documents/samples_1.gif)
 
 <p align="center">
-  📥
-  <a href="#使用-upm">安装</a> |
-  <a href="#下载安装包">下载</a>
+  <img alt="GitHub Release" src="https://img.shields.io/github/v/release/blurfeng/unity-water-liquid-2d-simulation?color=blue">
+  <img alt="GitHub Downloads (all assets, all releases)" src="https://img.shields.io/github/downloads/blurfeng/unity-water-liquid-2d-simulation/total?color=green">
+  <img alt="GitHub Repo License" src="https://img.shields.io/github/license/blurfeng/unity-water-liquid-2d-simulation?color=blueviolet">
+  <img alt="GitHub Repo Issues" src="https://img.shields.io/github/issues/blurfeng/unity-water-liquid-2d-simulation?color=yellow">
 </p>
 
 <p align="center">
@@ -11,6 +12,12 @@
   中文 |
   <a href="./README_EN.md">English</a> |
   <a href="./README_JA.md">日本語</a>
+</p>
+
+<p align="center">
+  📥
+  <a href="#使用-upm">安装</a> |
+  <a href="#下载安装包">下载</a>
 </p>
 
 # Liquid 2D Simulation - 2D流体模拟
@@ -24,14 +31,14 @@ Liquid 2D Simulation 是一款面向 `Unity` 的 2D 流体模拟系统，开箱�
 - [🌳 分支](#-分支)
 - [🌱 快速开始](#-快速开始)
   - [1.安装插件](#1安装插件)
-  - [2.配置 Rendering Layer](#2配置-rendering-layer)
-  - [3.添加 Renderer Feature](#3添加-renderer-feature)
-  - [4.创建流体粒子预制体](#4创建流体粒子预制体)
-  - [5.创建粒子生成器](#5创建粒子生成器)
+  - [2.添加 Renderer Feature](#2添加-renderer-feature)
+  - [3.创建流体粒子预制体](#3创建流体粒子预制体)
+  - [4.创建粒子生成器](#4创建粒子生成器)
 - [🌊 Renderer Feature 设置指南](#-renderer-feature-设置指南)
+  - [配置 Rendering Layer](#配置-rendering-layer)
   - [Cover Color 覆盖颜色](#cover-color-覆盖颜色)
   - [Opacity 不透明度](#opacity-不透明度)
-  - [BLur 模糊](#blur-模糊)
+  - [Blur 模糊](#blur-模糊)
   - [Distort 扭曲](#distort-扭曲)
   - [Edge 边缘](#edge-边缘)
   - [Pixel 像素化](#pixel-像素化)
@@ -39,6 +46,7 @@ Liquid 2D Simulation 是一款面向 `Unity` 的 2D 流体模拟系统，开箱�
   - [Sprite 贴图](#sprite-贴图)
   - [Collider](#collider)
   - [Rigidbody 2D 刚体](#rigidbody-2d-刚体)
+  - [Mix Colors 混合颜色](#mix-colors-混合颜色)
 - [⛲ 粒子生成器设置指南](#-粒子生成器设置指南)
   - [控制喷射](#控制喷射)
 - [📋 待办事项列表](#-待办事项列表)
@@ -64,10 +72,10 @@ Liquid 2D Simulation 是一款面向 `Unity` 的 2D 流体模拟系统，开箱�
 | 粒子物理计算 ⚠️TODO                | 高性能的粒子物理算法，可支持数千粒子依然流畅运行。                                               |
 
 ## 💻 环境要求
-- `Unity6000.2`或更新的版本。
-- 2022.3分支支持`Unity2022.3`版本，但是此分支的更新慢与主分支。
-- URP 2D 渲染管线。Unity6版本使用 Renderer Graph 框架进行渲染。
-- 与着色器兼容的平台。
+- `Unity 6000.2` 或更新的版本
+- 2022.3分支支持 `Unity 2022.3` 版本，但是此分支的更新慢于主分支
+- URP 2D 渲染管线。Unity 6 版本使用 Render Graph 框架进行渲染
+- 与着色器兼容的平台
 
 
 ## 🌳 分支
@@ -100,41 +108,21 @@ https://github.com/blurfeng/unity-water-liquid-2d-simulation.git?path=Assets/Plu
 ![](Documents/qs_1_5.png)
 
 #### 下载安装包
-使用安装包将插件安装到你的项目中。
+使用安装包将插件安装到你的项目中。\
 在 [Releases](https://github.com/blurfeng/unity-water-liquid-2d-simulation/releases) 页面下载最新的安装包。\
-然后将包导入到你的项目中。\
-插件包含了 Samples 文件夹，里面有演示场景。你可以直接从这里开始学习如何使用此系统。\
+然后将包导入到你的项目中。
+
+> [!TIP]
+> 插件包含了 Samples 文件夹，里面有演示场景。你可以直接从这里开始学习如何使用此系统。\
+> 或者按下面的步骤一步步操作来将流体粒子系统添加到你的场景中。\
 ![](Documents/qs_2_1.png)
 
-### 2.配置 Rendering Layer
-在 Liquid Feature 中使用了 Rendering Layer 来区分哪些可以阻挡流体粒子的物体，比如挡板、管道、容器、地形等。\
-你需要在 Obstruction Rendering Layer Mask 中配置用于阻挡的层级，并且给对象也配置相同的层级。\
-否则，你会发现流体粒子会覆盖在这些对象的上面，因为流体粒子的渲染顺序是 RenderPassEvent.AfterRenderingTransparents。
-![](Documents/rl_1.png)
-
-但是在演示场景中，你会发现阻挡物很好地阻挡了流体粒子。这是因为原本已经配置了正确的 Rendering Layer Mask。\
-因为引擎的缓存和机制，它们依旧能够正常工作。但是在你的项目中，这些 Rendering Layer 实际上并不存在。\
-在演示场景的 Liquid2DRenderer2D 的 Liquid2DFeature 上，Obstruction Rendering Layer Mask 配置显示为 `Unnamed Layer 1`。\
-![](Documents/rl_2.png)
-
-在场景的阻挡物的 Sprite Renderer 上，Additional Settings 的 Rendering Layer Mask 被配置为 `Everything`。\
-![](Documents/rl_3.png)
-
-#### 添加阻挡层 Rendering Layer
-1. 打开 `Edit -> Project Settings -> Tags and Layers`。
-2. 在 `Rendering Layers` 中添加一个新的层，比如 `LiquidObstruction`。
-![](Documents/rl_4.png)
-3. 在你的阻挡物的 Sprite Renderer 组件中，找到 `Additional Settings -> Rendering Layer Mask`，并选择你刚刚创建的 `LiquidObstruction` 层。
-4. 在 Liquid2DRenderer2D 的 Liquid2DFeature 上，找到 `Obstruction Rendering Layer Mask`，并选择你刚刚创建的 `LiquidObstruction` 层。
-
-这样，流体粒子就会正确地被阻挡物遮挡。
-
-### 3.添加 Renderer Feature
+### 2.添加 Renderer Feature
 演示场景中已经添加好了 Renderer Feature。\
 如果你想在自己的场景中使用此系统，你需要在当前的 Renderer 2D Data 中添加 Liquid2D Feature。\
 ![](Documents/rf_1.png)
 
-### 4.创建流体粒子预制体
+### 3.创建流体粒子预制体
 你可以从 `./Liquid2DSimulation/Runtime/Resources/Prefabs/` 目录下找到流体粒子预制体 `Liquid2DParticle`。\
 建议你从这个预制体创建一个变体预制体，然后修改材质和参数来创建你想要的流体粒子。\
 你也可以直接自己创建一个流体粒子预制体，然后添加 `Liquid2DParticle` 组件、`Circle Collider 2D` 组件和 `Rigidbody 2D` 组件。\
@@ -143,16 +131,58 @@ https://github.com/blurfeng/unity-water-liquid-2d-simulation.git?path=Assets/Plu
 你需要配置 `Liquid2DParticle` 组件的参数来调整流体粒子的行为。包括 Sprite 纹理，材质，颜色和流体层等等。\
 在插件的 `./Liquid2DSimulation/Runtime/Resources/Materials/` 和 `./Liquid2DSimulation/Runtime/Resources/Textures` 目录下提供了材质和纹理，你可以直接使用。
 
-### 5.创建粒子生成器
+### 4.创建粒子生成器
 你可以从 `./Liquid2DSimulation/Runtime/Resources/Prefabs/` 目录下找到粒子生成器预制体 `LiquidSpawner`。\
 建议你从这个预制体创建一个变体预制体，然后修改参数来创建你想要的粒子生成器。\
 你也可以直接自己创建一个粒子生成器预制体，然后添加 `Liquid2DSpawner` 组件。\
 ![](Documents/ls_1.png)
 
+> [!TIP]
+> 到这里为止，流体粒子系统已经可以工作了。\
+> 但你还需要设置阻挡和遮挡层，来让流体粒子正确地被场景中的物体阻挡和遮挡。
 
 ## 🌊 Renderer Feature 设置指南
 `Liquid2DFeature` Renderer Feature 用于渲染流体粒子，并最终实现流体效果。\
 以下主要讲解重要的特性或参数，更详细的参数可以直接查看 Inspector 面板的 Tooltip。
+
+### 配置 Rendering Layer
+在 Liquid Feature 中使用了 Rendering Layer 来区分指定可以阻挡或遮挡流体粒子的物体。
+#### 添加阻挡层 Rendering Layer
+1. 打开 `Edit -> Project Settings -> Tags and Layers`。
+2. 在 `Rendering Layers` 中添加一个新的层，比如 `LiquidObstructor`。
+![](Documents/rl_4.png)
+3. 在你的阻挡物的 Sprite Renderer 组件中，找到 `Additional Settings -> Rendering Layer Mask`，并选择你刚刚创建的 `LiquidObstructor` 层。
+4. 在 Liquid2DRenderer2D 的 Liquid2DFeature 上，找到 `Obstructor Rendering Layer Mask`，并选择你刚刚创建的 `LiquidObstructor` 层。
+
+> [!TIP]
+> 在 GitHub 的项目中，我配置好了正确的 Rendering Layer Mask。\
+> 但你将插件导入你的项目时，项目中并不存在这些 Rendering Layer。\
+> 但是在演示场景中，你会发现阻挡物很好地阻挡了流体粒子。这是因为原本已经配置了正确的 Rendering Layer Mask。\
+> 因为引擎的缓存和机制，它们依旧能够正常工作。但是在你的项目中，这些 Rendering Layer 实际上并不存在。\
+> 在演示场景的 Liquid2DRenderer2D 的 Liquid2DFeature 上，Obstructor Rendering Layer Mask 配置显示为 `Unnamed Layer 1`。\
+> ![](Documents/rl_2.png)
+
+#### 阻挡
+`阻挡`指的是可以阻碍流体粒子流动的物体，比如挡板、管道、容器、地形等。\
+你需要在 `Renderer Feature` 的 `ObstructorRenderingLayerMask` 中配置用于阻挡的层级。\
+![](Documents/rl_5.png)
+
+然后在场景中所有需要阻挡流体粒子的物体的 `Sprite Renderer` 组件的 `Additional Settings` 中配置 `Rendering Layer Mask`。\
+![](Documents/rl_3.png)
+
+否则，你会发现流体粒子会覆盖在这些对象的上面。\
+![](Documents/rl_1.png)
+
+因为流体粒子的渲染顺序是 `RenderPassEvent.AfterRenderingTransparents`，在透明物体渲染之后。\
+所以如果你没有正确配置阻挡层，流体粒子会渲染在不透明和透明物体的上面。
+
+#### 遮挡
+`遮挡`指的是可以覆盖在流体粒子上面，但不会阻挡流体粒子流动的物体，比如玻璃瓶的正面、地形的正面等。\
+遮挡的配置流程和阻挡类似。\
+你需要在 `Renderer Feature` 的 `OccluderRenderingLayerMask` 中配置用于遮挡的层级。\
+然后在场景中所有需要遮挡流体粒子的物体的 `Sprite Renderer` 组件的 `Additional Settings` 中配置 `Rendering Layer Mask`。\
+但遮挡的物体不会阻挡流体粒子流动（通过物理设置），覆盖在流体粒子之上。\
+![](Documents/occ_1.gif)
 
 ### Cover Color 覆盖颜色
 如果你设置了 `Cover Color`，并且这个颜色的透明度为1（这里透明度代表覆盖强度），那么这个颜色将完全覆盖原有的颜色。
@@ -165,7 +195,7 @@ Replace 模式会将不透明度直接应用到粒子上。这也会覆盖粒子
 使用覆盖颜色和不透明度设置，你可以得到均匀的流体颜色。\
 ![](Documents/coverColorAndOpacity_1.png)
 
-### BLur 模糊
+### Blur 模糊
 模糊效果可以让粒子间的融合更自然。\
 如果你的粒子贴图本身融合效果已经很好，可以关闭模糊来提升性能。\
 模糊的迭代次数和偏移量决定模糊的强度。更多的迭代次数和较小的偏移量可以获得更好的模糊效果。\
@@ -227,6 +257,14 @@ Replace 模式会将不透明度直接应用到粒子上。这也会覆盖粒子
 ![](Documents/pm_1.png)
 ![](Documents/pm_2.png)
 
+### Mix Colors 混合颜色
+通过启用 `Mix Colors`，你可以让不同颜色的流体粒子间的颜色进行混合。\
+两个粒子都需要开启 `Mix Colors`，才会在接触时混合，并改变自身的颜色。\
+![](Documents/mc_1.gif)
+
+根据配置，你可以控制混合的速度和混合的范围。\
+![](Documents/mc_2.png)
+
 ## ⛲ 粒子生成器设置指南
 `LiquidSpawner` 粒子生成器用于生成流体粒子，类似一个水管或喷泉。\
 以下主要讲解重要的特性或参数，更详细的参数可以直接查看 Inspector 面板的 Tooltip。
@@ -245,8 +283,6 @@ Replace 模式会将不透明度直接应用到粒子上。这也会覆盖粒子
 
 
 ## 📋 待办事项列表
-- **流体粒子**
-  - 颜色混合：模拟不同颜色的可相融流体颜色的混合，比如黄色和蓝色混合成绿色。
 - **物理系统**
   - 优化：目前在生成大量粒子时，Unity物理系统会很快到达瓶颈。物理系统待优化，自行计算流体物理，或使用 DOTS 系统。
   - 流体粒子间的相互物理作用：通过模拟粘性和张力等物理效果，表现不同类型的流体，比如石油、蜂蜜、泡沫等。
