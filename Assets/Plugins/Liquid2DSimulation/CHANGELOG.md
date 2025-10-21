@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.9.1] - 2025-10-21
+### Fixed
+- Fix the issue where the GUIDs in the .meta files of IRandomData and Random are identical to those in the .meta files of the Random utility scripts under Fs.Utility, causing a conflict.
+
 ## [0.9.0] - 2025-10-13
 ### Changed
 - Fluid particle color mixing.
