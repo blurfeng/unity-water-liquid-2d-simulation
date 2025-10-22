@@ -166,7 +166,7 @@ namespace Fs.Liquid2D
                 Lerp,
             }
             
-            public bool enable = false;
+            public bool enable;
             
             [Range(0f, 1f), LocalizationTooltip(
                   "液体边缘范围，越大边缘越宽。",
@@ -199,7 +199,7 @@ namespace Fs.Liquid2D
         [Serializable]
         public class Pixel
         {
-            public bool enable = false;
+            public bool enable;
             
             [Range(1, 32), LocalizationTooltip(
                   "像素化尺寸，值越大像素化效果越明显。",
@@ -215,16 +215,10 @@ namespace Fs.Liquid2D
         }
         
         [LocalizationTooltip(
-             "2D流体 Renderer Feature 名称标签，用于区分不同的 Renderer Feature 配置。如果你要使用 Volume 来控制流体效果，请确保名称标签唯一且和 Volume Profile 中的标签一致。",
-             "2D fluid Renderer Feature name tag, used to distinguish different Renderer Feature configurations. If you want to use Volume to control fluid effects, please ensure the name tag is unique and matches the tag in the Volume Profile.",
-             "2D流体レンダラーフィーチャーの名前タグ、異なるレンダラーフィーチャー設定を区別するために使用されます。ボリュームで流体効果を制御したい場合は、名前タグが一意であり、ボリュームプロファイルのタグと一致していることを確認してください。")]
+             "2D流体 Renderer Feature 名称标签，用于区分不同的 Renderer Feature 配置对应的流体粒子。如果你要使用 Volume 来控制流体效果，请确保名称标签唯一且和 Volume Profile 中的标签一致。",
+             "2D fluid Renderer Feature name tag, used to distinguish fluid particles corresponding to different Renderer Feature configurations. If you want to use Volume to control fluid effects, please ensure that the name tag is unique and consistent with the tag in the Volume Profile.",
+             "2D流体レンダラーフィーチャーの名前タグ。異なるレンダラーフィーチャー構成に対応する流体パーティクルを区別するために使用されます。ボリュームを使用して流体効果を制御する場合は、名前タグが一意であり、ボリュームプロファイルのタグと一致していることを確認してください。")]
         public string nameTag = "Liquid2D";
-        
-        [LocalizationTooltip(
-             "2D流体层遮罩。只会渲染设定的流体层的粒子。",
-             "2D fluid layer mask. Only particles from specified fluid layers will be rendered.",
-             "2D流体レイヤーマスク。指定された流体レイヤーからのパーティクルのみがレンダリングされます。")]
-        public ELiquid2DLayer liquid2DLayerMask = ELiquid2DLayer.Water;
         
         [LocalizationTooltip(
              "液体阻挡层遮罩。指定哪些层的物体会阻挡液体效果。一般是挡板或容器等，他们会完全阻挡液体及时自身是透明的。相当于阻挡物的横截面。",

@@ -135,7 +135,7 @@ namespace Fs.Liquid2D
         /// <param name="particle"></param>
         public static void RegisterLiquidParticle(Liquid2DParticle particle)
         {
-            if (particle == null || particle.RenderSettings == null) return;
+            if (!particle || particle.RenderSettings == null) return;
 
             if (!_particlesDic.TryGetValue(particle.RenderSettings, out var list))
             {

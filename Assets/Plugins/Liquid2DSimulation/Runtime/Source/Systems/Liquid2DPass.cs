@@ -502,7 +502,7 @@ namespace Fs.Liquid2D
             // 绘制所有流体粒子到 流体绘制RT。这里使用 GPU Instancing 来批量绘制。
             // Draw all fluid particles to fluid rendering RT. Here we use GPU Instancing for batch drawing.
             // すべての流体粒子を流体レンダリングRTに描画します。ここではGPUインスタンシングを使用してバッチ描画を行います。
-            ELiquid2DLayer targetLayerMask = data.settings.liquid2DLayerMask;
+            string nameTag = data.settings.nameTag;
             foreach (var kvp in Liquid2DFeature.ParticlesDic)
             {
                 var settings = kvp.Key;
@@ -519,10 +519,10 @@ namespace Fs.Liquid2D
                     var item = list[i];
                     
                     // 跳过无效或禁用的粒子。 // Skip invalid or disabled particles. // 無効または無効になっている粒子をスキップします。
-                    if (item == null || !item.isActiveAndEnabled) continue;
+                    if (!item || !item.isActiveAndEnabled) continue;
                     
-                    // 使用层遮罩过滤粒子。只渲染需要的粒子。 // Use layer mask to filter particles. Only render required particles. // レイヤーマスクを使用して粒子をフィルタリングします。必要な粒子のみをレンダリングします。
-                    if ((item.RenderSettings.liquid2DLayerMask & targetLayerMask) == 0) continue;
+                    // 只渲染指定 Name Tag 的粒子。 // Only render particles with the specified Name Tag. // 指定されたName Tagを持つ粒子のみをレンダリングします。
+                    if (!item.RenderSettings.nameTag.Equals(nameTag)) continue;
                     
                     var ts = item.TransformGet;
                     
@@ -901,7 +901,7 @@ namespace Fs.Liquid2D
             // 2D流体层遮罩。只会渲染设定的流体层的粒子。
             // 2D Liquid layer mask. Only particles of the set fluid layer will be rendered.
             // 2D流体レイヤーマスク。設定された流体レイヤーの粒子のみがレンダリングされます。
-            _settings.liquid2DLayerMask = isActive ? VolumeData.liquid2DLayerMask : _settingsDefault.liquid2DLayerMask;
+            _settings.nameTag = isActive ? VolumeData.nameTag : _settingsDefault.nameTag;
             
             // 阻挡层遮罩。 // Obstructor layer mask. // 阻害レイヤーマスク。
             _settings.obstructorRenderingLayerMask = isActive ? VolumeData.obstructorRenderingLayerMask : _settingsDefault.obstructorRenderingLayerMask;

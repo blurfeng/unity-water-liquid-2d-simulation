@@ -23,7 +23,7 @@ namespace Fs.Liquid2D
              "粒子生命时间（秒），到时间后自动销毁。",
              "Particle lifetime (seconds), automatically destroy after time.",
              "粒子の寿命（秒）を設定し、時間後に自動破棄。" )]
-        private float lifetime = 0f;
+        private float lifetime;
         
         [SerializeField, LocalizationTooltip(
              "流体粒子渲染器设置。",
@@ -47,7 +47,7 @@ namespace Fs.Liquid2D
         public Rigidbody2D Rigidbody2DGet => _rigidbody2d;
         private Rigidbody2D _rigidbody2d;
         
-        private static readonly Dictionary<Collider2D, Liquid2DParticle> _DicParticlesWithCollider = new Dictionary<Collider2D, Liquid2DParticle>();
+        private static readonly Dictionary<Collider2D, Liquid2DParticle> _dicParticlesWithCollider = new Dictionary<Collider2D, Liquid2DParticle>();
 
         private void Awake()
         {
@@ -74,7 +74,7 @@ namespace Fs.Liquid2D
                 return;
             }
             
-            _DicParticlesWithCollider.Add(CircleCollider2DGet, this);
+            _dicParticlesWithCollider.Add(CircleCollider2DGet, this);
         
             // 注册到 Liquid2dFeature。 // Register to Liquid2dFeature. // Liquid2dFeatureに登録。
             Liquid2DFeature.RegisterLiquidParticle(this);
@@ -86,7 +86,7 @@ namespace Fs.Liquid2D
     
         private void OnDisable()
         {
-            _DicParticlesWithCollider.Remove(CircleCollider2DGet);
+            _dicParticlesWithCollider.Remove(CircleCollider2DGet);
             
             // 从 Liquid2dFeature 注销。 // Unregister from Liquid2dFeature. // Liquid2dFeatureから登録解除。
             Liquid2DFeature.UnregisterLiquidParticle(this);
@@ -142,7 +142,7 @@ namespace Fs.Liquid2D
         
         public bool CanMixColor => mixSettings.mixColors && mixSettings.mixColorsSpeed > 0f;
         
-        private float _lastContactCheckTime = 0f;
+        private float _lastContactCheckTime;
         
         private Collider2D[] _mixColorContacts;
 
@@ -212,7 +212,7 @@ namespace Fs.Liquid2D
                 var contact = _mixColorContacts[i];
                 if (!contact || !contact.gameObject.activeSelf) continue;
                 if (contact.gameObject == gameObject) continue;
-                if (!_DicParticlesWithCollider.TryGetValue(contact, out Liquid2DParticle otherP)) continue;
+                if (!_dicParticlesWithCollider.TryGetValue(contact, out Liquid2DParticle otherP)) continue;
                 if (!otherP) continue;
                 
                 // 偶现的获取到距离过远的粒子，跳过。
@@ -262,7 +262,7 @@ namespace Fs.Liquid2D
             // 只有相同 Liquid2DLayer 流体层的粒子才会混合颜色。
             // Only particles in the same Liquid2DLayer will mix colors.
             // 同じLiquid2DLayerに属するパーティクルのみが色を混ぜます。
-            if (otherParticle.RenderSettings.liquid2DLayerMask != RenderSettings.liquid2DLayerMask)
+            if (!otherParticle.RenderSettings.nameTag.Equals(RenderSettings.nameTag))
                 return;
             
             // 计算混合速度。 // Calculate mix speed. // ミックス速度を計算します。
@@ -347,7 +347,7 @@ namespace Fs.Liquid2D
 #if UNITY_EDITOR
         private static readonly bool _debugEnable = false;
 
-        private static int _liquidParticleCount = 0;
+        private static int _liquidParticleCount;
         private void OnEnableEditor()
         {
             if (_debugEnable)

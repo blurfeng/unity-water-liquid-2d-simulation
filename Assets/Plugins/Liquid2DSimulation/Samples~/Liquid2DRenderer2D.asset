@@ -17,7 +17,6 @@ MonoBehaviour:
   shaderEffect: {fileID: 4800000, guid: 22ec51fd89bf43c799b2934514998e2d, type: 3}
   renderFeatureSettings:
     nameTag: Milk
-    liquid2DLayerMask: 16
     obstructorRenderingLayerMask:
       serializedVersion: 0
       m_Bits: 2
@@ -131,7 +130,6 @@ MonoBehaviour:
   shaderEffect: {fileID: 4800000, guid: 22ec51fd89bf43c799b2934514998e2d, type: 3}
   renderFeatureSettings:
     nameTag: Magma
-    liquid2DLayerMask: 4
     obstructorRenderingLayerMask:
       serializedVersion: 0
       m_Bits: 2
@@ -185,7 +183,6 @@ MonoBehaviour:
   shaderEffect: {fileID: 4800000, guid: 22ec51fd89bf43c799b2934514998e2d, type: 3}
   renderFeatureSettings:
     nameTag: WaterMix
-    liquid2DLayerMask: 8
     obstructorRenderingLayerMask:
       serializedVersion: 0
       m_Bits: 2
@@ -239,7 +236,6 @@ MonoBehaviour:
   shaderEffect: {fileID: 4800000, guid: 22ec51fd89bf43c799b2934514998e2d, type: 3}
   renderFeatureSettings:
     nameTag: Water
-    liquid2DLayerMask: 2
     obstructorRenderingLayerMask:
       serializedVersion: 0
       m_Bits: 2

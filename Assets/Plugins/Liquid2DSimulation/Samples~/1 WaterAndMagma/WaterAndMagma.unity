@@ -6934,14 +6934,6 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
-    - target: {fileID: 2765530974570106031, guid: 39713df22c6a2c84c93f3946fff6ccb1, type: 3}
-      propertyPath: flowRate
-      value: 20
-      objectReference: {fileID: 0}
-    - target: {fileID: 2765530974570106031, guid: 39713df22c6a2c84c93f3946fff6ccb1, type: 3}
-      propertyPath: ejectForce
-      value: 6
-      objectReference: {fileID: 0}
     - target: {fileID: 3072058163048296559, guid: 39713df22c6a2c84c93f3946fff6ccb1, type: 3}
       propertyPath: m_Name
       value: LiquidSpawnerMagma
