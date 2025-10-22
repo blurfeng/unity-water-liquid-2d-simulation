@@ -133,6 +133,7 @@ https://github.com/blurfeng/unity-water-liquid-2d-simulation.git?path=Assets/Plu
 
 ### 4.创建粒子生成器
 你可以从 `./Liquid2DSimulation/Runtime/Resources/Prefabs/` 目录下找到粒子生成器预制体 `LiquidSpawner`。\
+通过 UPM 安装的情况下，预制体位于 `Packages/Liquid 2D Simulation/Runtime/Resources/Prefabs/` 目录下。\
 建议你从这个预制体创建一个变体预制体，然后修改参数来创建你想要的粒子生成器。\
 你也可以直接自己创建一个粒子生成器预制体，然后添加 `Liquid2DSpawner` 组件。\
 ![](Documents/ls_1.png)

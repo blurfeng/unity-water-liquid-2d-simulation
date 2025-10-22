@@ -135,6 +135,7 @@ Materials and textures are provided in the `./Liquid2DSimulation/Runtime/Resourc
 
 ### 4. Create Particle Spawner
 You can find the particle spawner prefab `LiquidSpawner` in the `./Liquid2DSimulation/Runtime/Resources/Prefabs/` directory.\
+When installed via UPM, the prefabs are located in the `Packages/Liquid 2D Simulation/Runtime/Resources/Prefabs/` directory.\
 It's recommended to create a variant prefab from this prefab, then modify parameters to create the particle spawner you want.\
 You can also directly create your own particle spawner prefab and add the `Liquid2DSpawner` component.\
 ![](Documents/ls_1.png)

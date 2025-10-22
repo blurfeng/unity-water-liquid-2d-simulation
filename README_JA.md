@@ -135,6 +135,7 @@ UPMを通じてプラグインをプロジェクトにインストールしま�
 
 ### 4. パーティクルスポナーの作成
 `./Liquid2DSimulation/Runtime/Resources/Prefabs/` ディレクトリでパーティクルスポナープレハブ `LiquidSpawner` を見つけることができます。\
+UPM経由でインストールした場合、プリファブは`Packages/Liquid 2D Simulation/Runtime/Resources/Prefabs/`ディレクトリに配置されます。\
 このプレハブからバリアントプレハブを作成し、パラメータを変更して希望のパーティクルスポナーを作成することをお勧めします。\
 独自のパーティクルスポナープレハブを直接作成し、`Liquid2DSpawner` コンポーネントを追加することもできます。\
 ![](Documents/ls_1.png)
