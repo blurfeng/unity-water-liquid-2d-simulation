@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Fs.Liquid2D.Localization;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
+using System.Reflection;
 
 namespace Fs.Liquid2D
 {
@@ -174,5 +175,62 @@ namespace Fs.Liquid2D
         }
 
         #endregion
+        
+#if UNITY_EDITOR
+        /// <summary>
+        /// 检查指定 Camera 使用的 ScriptableRenderer 上，是否存在 renderFeatureSettings.nameTag 与 nameTag 相同的 Liquid2DFeature。
+        /// Check if the ScriptableRenderer used by the specified Camera has a Liquid2DFeature with renderFeatureSettings.nameTag same as nameTag.
+        /// 指定されたカメラが使用するScriptableRendererに、renderFeatureSettings.nameTagがnameTagと同じLiquid2DFeatureが存在するかどうかを確認します。
+        /// </summary>
+        /// <param name="nameTag"></param>
+        /// <param name="camera"></param>
+        /// <returns></returns>
+        public static bool HasFeatureWithNameTag(string nameTag, Camera camera)
+        {
+            if (string.IsNullOrEmpty(nameTag) || camera == null) return false;
+
+            var additional = camera.GetUniversalAdditionalCameraData();
+            if (!additional) return false;
+
+            var renderer = additional.scriptableRenderer;
+            if (renderer == null) return false;
+
+            // 通过反射尝试获取 renderer 的 rendererFeatures（支持不同 URP 版本的命名）。
+            object featuresObj =
+                renderer.GetType().GetProperty("rendererFeatures", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                    ?.GetValue(renderer)
+                ?? renderer.GetType().GetField("m_RendererFeatures", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                    ?.GetValue(renderer)
+                ?? renderer.GetType().GetField("rendererFeatures", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                    ?.GetValue(renderer);
+
+            if (featuresObj is IEnumerable<ScriptableRendererFeature> features)
+            {
+                foreach (var f in features)
+                {
+                    if (f is Liquid2DFeature feature)
+                    {
+                        var settings = feature.renderFeatureSettings;
+                        if (settings != null && string.Equals(settings.nameTag, nameTag, System.StringComparison.Ordinal))
+                            return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// 检查主相机使用的 ScriptableRenderer 上，是否存在 renderFeatureSettings.nameTag 与 nameTag 相同的 Liquid2DFeature。
+        /// Check if the ScriptableRenderer used by the main Camera has a Liquid2DFeature with renderFeatureSettings.nameTag same as nameTag.
+        /// 主カメラが使用するScriptableRendererに、renderFeatureSettings.nameTagがnameTagと同じLiquid2DFeatureが存在するかどうかを確認します。
+        /// </summary>
+        /// <param name="nameTag"></param>
+        /// <returns></returns>
+        public static bool HasFeatureWithNameTag(string nameTag)
+        {
+            return HasFeatureWithNameTag(nameTag, Camera.main);
+        }
+#endif
     }
 }

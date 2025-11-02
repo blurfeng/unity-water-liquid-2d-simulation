@@ -259,10 +259,10 @@ namespace Fs.Liquid2D
             if (thisColor == otherColor)
                 return;
             
-            // 只有相同 Liquid2DLayer 流体层的粒子才会混合颜色。
-            // Only particles in the same Liquid2DLayer will mix colors.
-            // 同じLiquid2DLayerに属するパーティクルのみが色を混ぜます。
-            if (!otherParticle.RenderSettings.nameTag.Equals(RenderSettings.nameTag))
+            // 当其他粒子的名称标签不为空且与自己的名称标签不同时，不进行混合。
+            // When the other particle's name tag is not empty and different from its own name tag, do not mix.
+            // 他のパーティクルの名前タグが空でなく、自分の名前タグと異なる場合、混ぜません。
+            if (!string.IsNullOrEmpty(otherParticle.RenderSettings.nameTag) && !otherParticle.RenderSettings.nameTag.Equals(RenderSettings.nameTag))
                 return;
             
             // 计算混合速度。 // Calculate mix speed. // ミックス速度を計算します。
@@ -346,6 +346,7 @@ namespace Fs.Liquid2D
         
 #if UNITY_EDITOR
         private static readonly bool _debugEnable = false;
+        private string _lastValidatedNameTag;
 
         private static int _liquidParticleCount;
         private void OnEnableEditor()
@@ -366,7 +367,7 @@ namespace Fs.Liquid2D
             }
         }
         
-        void OnDrawGizmos()
+        private void OnDrawGizmos()
         {
             #region 绘制可在 Scene 中选中的形状 // Draw shapes that can be selected in Scene // Sceneで選択可能な形状を描画
 
@@ -379,6 +380,40 @@ namespace Fs.Liquid2D
             }
             
             #endregion
+        }
+
+        private void OnValidate()
+        {
+            // 不在编辑模式检查时退出（避免运行时重复检查）。
+            if (Application.isPlaying) return;
+            if (renderSettings == null) return;
+
+            string current = renderSettings.nameTag;
+            
+            // 名称标签为空时不检查，因为这样的流体粒子会被所有 Renderer Feature 影响。
+            if (string.IsNullOrEmpty(current)) return;
+            
+            // 如果尚未初始化过 _lastValidatedNameTag（可能是域重载/打开 Inspector 导致的首次 OnValidate）。
+            // 则把当前值记录并跳过本次校验（视为“只是界面被打开”）。
+            if (_lastValidatedNameTag == null)
+            {
+                _lastValidatedNameTag = current;
+                return;
+            }
+
+            // 避免重复日志。
+            if (string.Equals(current, _lastValidatedNameTag, StringComparison.Ordinal)) return;
+            _lastValidatedNameTag = current;
+
+            // 检查当前 Renderer 上是否有匹配的 Feature。
+            if (Liquid2DFeature.HasFeatureWithNameTag(current))
+            {
+                Debug.Log($"✅Liquid2DParticle: Found matching Liquid2DFeature on current Renderer with nameTag = '{current}'.", this);
+            }
+            else
+            {
+                Debug.LogWarning($"⚠️Liquid2DParticle: No Liquid2DFeature on current Renderer has nameTag = '{current}'.", this);
+            }
         }
 #endif
     }

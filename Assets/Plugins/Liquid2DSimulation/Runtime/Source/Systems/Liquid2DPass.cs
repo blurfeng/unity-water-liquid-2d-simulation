@@ -57,7 +57,7 @@ namespace Fs.Liquid2D
         {
             get
             {
-                if (_materialBlurCombineTwo == null)
+                if (!_materialBlurCombineTwo)
                 {
                     _materialBlurCombineTwo = CoreUtils.CreateEngineMaterial(ShaderPathBlurCombineTwo);
                 }
@@ -67,7 +67,7 @@ namespace Fs.Liquid2D
         
         private Material _materialBlur; // 流体模糊材质。 // Fluid blur material. // 流体ブラー材。
         private Material _materialEffect; // 流体效果材质。 // Fluid effect material. // 流体エフェクトマテリアル。
-        private bool IsValidMat => _materialBlur != null && _materialEffect != null;
+        private bool IsValidMat => _materialBlur && _materialEffect;
         
         private readonly Mesh _quadMesh; // 用于绘制流体粒子的四边形网格。 // Quad mesh for drawing fluid particles. // 流体粒子を描画するためのクアッドメッシュ。
         
@@ -507,7 +507,7 @@ namespace Fs.Liquid2D
             {
                 var settings = kvp.Key;
                 var list = kvp.Value;
-                if (list.Count == 0 || settings.sprite == null) continue;
+                if (list.Count == 0 || !settings.sprite) continue;
              
                 // 扩容渲染数据缓存数组。 // Expand the rendering data cache array. // レンダリングデータキャッシュ配列を拡張します。
                 EnsureCacheSize(data, list.Count);
@@ -521,8 +521,10 @@ namespace Fs.Liquid2D
                     // 跳过无效或禁用的粒子。 // Skip invalid or disabled particles. // 無効または無効になっている粒子をスキップします。
                     if (!item || !item.isActiveAndEnabled) continue;
                     
-                    // 只渲染指定 Name Tag 的粒子。 // Only render particles with the specified Name Tag. // 指定されたName Tagを持つ粒子のみをレンダリングします。
-                    if (!item.RenderSettings.nameTag.Equals(nameTag)) continue;
+                    // 当粒子 NameTag 不为空时，渲染相同 NameTag 的对象。
+                    // When the particle NameTag is not empty, render objects with the same NameTag.
+                    // 粒子のNameTagが空でない場合、同じNameTagを持つオブジェクトをレンダリングします。
+                    if (!string.IsNullOrEmpty(item.RenderSettings.nameTag) && !item.RenderSettings.nameTag.Equals(nameTag)) continue;
                     
                     var ts = item.TransformGet;
                     
@@ -753,7 +755,7 @@ namespace Fs.Liquid2D
         {
             get
             {
-                if (_materialGrabAsBg == null)
+                if (!_materialGrabAsBg)
                 {
                     _materialGrabAsBg = CoreUtils.CreateEngineMaterial(ShaderPathGrabAsBg);
                 }
@@ -857,7 +859,7 @@ namespace Fs.Liquid2D
                 if (_volumeData == null)
                 {
                     Liquid2DVolume volumeComponent = VolumeManager.instance.stack.GetComponent<Liquid2DVolume>();
-                    if (volumeComponent != null)
+                    if (volumeComponent)
                     {
                         volumeComponent.GetData(_settings.nameTag, out _volumeData);
                     }
@@ -892,7 +894,7 @@ namespace Fs.Liquid2D
             // Check if Volume is enabled and current component is enabled and data is valid.
             // Volumeが有効で、現在のコンポーネントが有効で、データが有効かを判断。
             bool isActive =
-                volumeComponent != null
+                volumeComponent
                 && volumeComponent.isActive.value
                 && volumeComponent.liquid2DVolumeDataList.overrideState
                 && VolumeData != null && VolumeData.isActive;
@@ -974,7 +976,7 @@ namespace Fs.Liquid2D
         {
             get
             {
-                if (_materialClone == null)
+                if (!_materialClone)
                 {
                     _materialClone = CoreUtils.CreateEngineMaterial(ShaderPathClone);
                 }
