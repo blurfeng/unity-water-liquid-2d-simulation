@@ -265,21 +265,21 @@ namespace Fs.Liquid2D
         public Color coverColor = Color.clear;
         
         [LocalizationTooltip(
-             "流体模糊设置。",
-             "Fluid blur settings.",
-             "流体ブラー設定。")]
+             "流体模糊设置。过强的模糊会让流体粒子尺寸变小，建议适当调整流体粒子尺寸或材质边缘不透明度以获得更好的效果。",
+             "Fluid blur settings. Excessive blur can make fluid particles appear smaller, it is recommended to adjust fluid particle size or material edge opacity for better results.",
+             "流体ブラー設定。過度なブラーは流体パーティクルのサイズを小さく見せる可能性があるため、より良い結果を得るために流体パーティクルのサイズやマテリアルのエッジ不透明度を調整することをお勧めします。")]
         public Blur blur;
         
         [LocalizationTooltip(
-             "流体扭曲设置。",
-             "Fluid distortion settings.",
-             "流体歪み設定。")]
+             "流体扭曲设置。可以让流体后面的画面产生扭曲效果。",
+             "Fluid distortion settings. Can create distortion effects for the scene behind the fluid.",
+             "流体歪み設定。流体の後ろのシーンに歪み効果を作成できます。")]
         public Distort distort;
         
         [LocalizationTooltip(
-             "流体边缘设置。",
-             "Fluid edge settings.",
-             "流体エッジ設定。")]
+             "流体边缘设置。模拟流体边缘的高光效果，近似菲涅尔反射。",
+             "Fluid edge settings. Simulates highlight effects on fluid edges, approximating Fresnel reflection.",
+             "流体エッジ設定。流体エッジのハイライト効果をシミュレートし、フレネル反射を近似します。")]
         public Edge edge;
         
         [LocalizationTooltip(

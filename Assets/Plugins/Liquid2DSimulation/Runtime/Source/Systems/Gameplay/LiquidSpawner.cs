@@ -496,7 +496,6 @@ namespace Fs.Liquid2D
             // 将像素长度转换为世界单位。 // Convert pixel length to world units. // ピクセル長をワールドユニットに変換します。
             float lineLengthWorld = Mathf.Max(lineLengthPixels * worldPerPixel, 0.001f);
             float arrowHeadWorld = Mathf.Max(arrowHeadPixels * worldPerPixel, 0.001f);
-            float cubeSizeWorld = Mathf.Max(cubeSizePixels * worldPerPixel, 0.001f);
 
             // 绘制主线与箭头（使用世界单位长度）。
             // Draw main line and arrowhead (using world unit length).
@@ -516,11 +515,25 @@ namespace Fs.Liquid2D
             // 绘制固定屏幕尺寸的方块（只应用位置和旋转）。
             // Draw fixed screen size cube (only apply position and rotation).
             // 固定画面サイズのキューブを描画します（位置と回転のみを適用します）。
+            float cubeSizeWorld = Mathf.Max(cubeSizePixels * worldPerPixel, 0.001f);
             Gizmos.color = _gizmosBodyColor;
             Matrix4x4 oldMatrix = Gizmos.matrix;
             Gizmos.matrix = Matrix4x4.TRS(TransformGet.position, TransformGet.rotation, Vector3.one);
             Gizmos.DrawCube(Vector3.zero, new Vector3(cubeSizeWorld, cubeSizeWorld, Mathf.Max(cubeSizeWorld * 0.1f, 0.01f)));
             Gizmos.matrix = oldMatrix;
+            
+            // 绘制喷嘴宽度线（真实世界单位，不随相机变化）
+            Vector2 normal2D = new Vector2(-dir2D.y, dir2D.x).normalized;
+            Vector3 normal = (Vector3)normal2D;
+            Vector3 leftPos = start + normal * (nozzleWidth * 0.5f);
+            Vector3 rightPos = start - normal * (nozzleWidth * 0.5f);
+
+            Gizmos.color = Color.magenta;
+            Gizmos.DrawLine(leftPos, rightPos); // 喷嘴宽度主线
+            // 两端的短向外标记，便于视觉判断方向
+            float endCapLen = Mathf.Min(0.1f, nozzleWidth * 0.1f);
+            Gizmos.DrawLine(leftPos, leftPos + dir * endCapLen);
+            Gizmos.DrawLine(rightPos, rightPos + dir * endCapLen);
         }
         #endif
     }
