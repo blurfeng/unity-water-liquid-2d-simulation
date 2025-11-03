@@ -373,7 +373,7 @@ namespace Fs.Liquid2D
 
             if (CircleCollider2DGet)
             {
-                Gizmos.color = Color.clear;
+                Gizmos.color = renderSettings.color;
                 float radius = CircleCollider2DGet.radius * CircleCollider2DGet.transform.lossyScale.x;
                 Gizmos.DrawSphere(CircleCollider2DGet.transform.position + (Vector3)CircleCollider2DGet.offset, radius);
                 // UnityEditor.Handles.Label(circle.transform.position, $"Circle r={circle.radius:F2}");

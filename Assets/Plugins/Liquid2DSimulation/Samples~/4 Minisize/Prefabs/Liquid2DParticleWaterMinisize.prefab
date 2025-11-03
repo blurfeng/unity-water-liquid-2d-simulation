@@ -73,14 +73,6 @@ PrefabInstance:
       value: 0.26586103
       objectReference: {fileID: 0}
     - target: {fileID: 5143337698038929875, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
-      propertyPath: mixSettings.mixSpeed
-      value: 0.8
-      objectReference: {fileID: 0}
-    - target: {fileID: 5143337698038929875, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
-      propertyPath: mixSettings.mixColors
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 5143337698038929875, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
       propertyPath: renderSettings.sprite
       value: 
       objectReference: {fileID: 21300000, guid: 474aa5d06b976c5449aa374d5c77d9aa, type: 3}
@@ -93,20 +85,8 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 21300000, guid: 474aa5d06b976c5449aa374d5c77d9aa, type: 3}
     - target: {fileID: 5143337698038929875, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
-      propertyPath: mixSettings.mixColorsSpeed
-      value: 0.2
-      objectReference: {fileID: 0}
-    - target: {fileID: 5143337698038929875, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
       propertyPath: renderSettings.liquid2DLayerMask
       value: 8
-      objectReference: {fileID: 0}
-    - target: {fileID: 5143337698038929875, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
-      propertyPath: mixSettings.mixColorsWithMovement
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 5143337698038929875, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
-      propertyPath: mixSettings.mixColorsWithMovementMaxSpeed
-      value: 100
       objectReference: {fileID: 0}
     - target: {fileID: 5961824672208803902, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
       propertyPath: m_Radius
@@ -115,7 +95,7 @@ PrefabInstance:
     - target: {fileID: 5961824672208803902, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
       propertyPath: m_Material
       value: 
-      objectReference: {fileID: 6200000, guid: 87177ccd6e65c1249bc3decd37b00274, type: 2}
+      objectReference: {fileID: 6200000, guid: 0b1f83d3dafc3a8459aa94f9e877327d, type: 2}
     - target: {fileID: 6359955899863538535, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
       propertyPath: m_Name
       value: Liquid2DParticleWaterMinisize
@@ -131,7 +111,7 @@ PrefabInstance:
     - target: {fileID: 7884424366146339886, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
       propertyPath: m_Material
       value: 
-      objectReference: {fileID: 6200000, guid: 87177ccd6e65c1249bc3decd37b00274, type: 2}
+      objectReference: {fileID: 6200000, guid: 0b1f83d3dafc3a8459aa94f9e877327d, type: 2}
     - target: {fileID: 7884424366146339886, guid: 54ff6b8af45f5994e8f3cbb4c06e99e8, type: 3}
       propertyPath: m_GravityScale
       value: 2
