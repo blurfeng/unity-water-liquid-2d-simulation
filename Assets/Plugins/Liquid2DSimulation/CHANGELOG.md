@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.9.4] - 2025-11-08
+### Changed
+- In the Liquid Spawner, change the SpawnOne method (which generates a single particle) to public.
+
 ## [0.9.3] - 2025-11-03
 ### Changed
 - Prompt when modifying the liquid particle NameTag. Updated the comparison rules for NameTag.
