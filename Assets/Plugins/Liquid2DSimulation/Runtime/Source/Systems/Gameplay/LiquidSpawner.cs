@@ -388,7 +388,7 @@ namespace Fs.Liquid2D
         /// <summary>
         /// 生成一个流体粒子。 // Spawn one fluid particle. // 1つの流体粒子を生成。
         /// </summary>
-        private void SpawnOne()
+        public void SpawnOne()
         {
             // 随机选择一个流体粒子预制体。 // Randomly select a fluid particle prefab. // ランダムに流体粒子のプレハブを選択。
             if (liquidParticles.Count == 0) return;
