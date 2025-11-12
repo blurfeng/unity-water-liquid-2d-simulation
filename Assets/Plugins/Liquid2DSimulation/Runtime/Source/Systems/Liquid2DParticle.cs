@@ -20,12 +20,6 @@ namespace Fs.Liquid2D
     public class Liquid2DParticle : MonoBehaviour
     {
         [SerializeField, LocalizationTooltip(
-             "粒子生命时间（秒），到时间后自动销毁。",
-             "Particle lifetime (seconds), automatically destroy after time.",
-             "粒子の寿命（秒）を設定し、時間後に自動破棄。" )]
-        private float lifetime;
-        
-        [SerializeField, LocalizationTooltip(
              "流体粒子渲染器设置。",
              "Fluid particle renderer settings.",
              "流体パーティクルレンダラー設定。")]
@@ -60,10 +54,7 @@ namespace Fs.Liquid2D
 
         private void Start()
         {
-            if (lifetime > 0f)
-            {
-                SetLifetime(lifetime);
-            }
+            LifetimeStart();
         }
 
         private void OnEnable()
@@ -99,6 +90,7 @@ namespace Fs.Liquid2D
         private void Update()
         {
             UpdateMixColor();
+            LifetimeUpdate();
         }
 
         /// <summary>
@@ -115,6 +107,37 @@ namespace Fs.Liquid2D
             return true;
         }
 
+        #region Lifetime 生命周期 // ライフタイム
+        
+        [Header("Lifetime")]
+        [SerializeField, LocalizationTooltip(
+             "粒子生命时间（秒），到时间后自动销毁。",
+             "Particle lifetime (seconds), automatically destroy after time.",
+             "粒子の寿命（秒）を設定し、時間後に自動破棄。" )]
+        private float lifetime;
+
+        private float _lifetime;
+        private float _lifetimeStartTime;
+        
+        private void LifetimeStart()
+        {
+            if (lifetime > 0f)
+            {
+                SetLifetime(lifetime);
+            }
+        }
+        
+        private void LifetimeUpdate()
+        {
+            if (_lifetime <= 0f) return;
+
+            float elapsed = Time.time - _lifetimeStartTime;
+            if (elapsed >= _lifetime)
+            {
+                Loader.Destroy(gameObject);
+            }
+        }
+
         /// <summary>
         /// 设置粒子生命时间（秒），到时间后自动销毁。
         /// 每次调用会重置计时。
@@ -128,9 +151,12 @@ namespace Fs.Liquid2D
         {
             if (!Application.isPlaying) return;
             if (setLifetime <= 0f) return;
-            
-            Destroy(gameObject, setLifetime);
+
+            _lifetime = setLifetime;
+            _lifetimeStartTime = Time.time;
         }
+
+        #endregion
 
         #region Mix Color 混合颜色 // 色を混ぜる
 
