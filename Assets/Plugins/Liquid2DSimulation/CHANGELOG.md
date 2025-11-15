@@ -1,8 +1,14 @@
 # Changelog
 
+## [0.9.5] - 2025-11-15
+### Changed
+- The SpawnOne method for generating liquid particles provides an onSpawned callback to retrieve the spawned particle.
+### Fixed
+- Fix a bug where liquid particles were destroyed using Unity’s built-in Destroy instead of the custom destruction method provided by the loader (such as a pool).
+
 ## [0.9.4] - 2025-11-08
 ### Changed
-- In the Liquid Spawner, change the SpawnOne method (which generates a single particle) to public.
+- In the liquid Spawner, change the SpawnOne method (which generates a single particle) to public.
 
 ## [0.9.3] - 2025-11-03
 ### Changed
