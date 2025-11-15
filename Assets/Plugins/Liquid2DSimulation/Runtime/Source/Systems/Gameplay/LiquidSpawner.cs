@@ -38,7 +38,7 @@ namespace Fs.Liquid2D
             "流体粒子预制体（需挂载Liquid2DParticleRenderer）", 
             "Fluid particle prefab (requires Liquid2DParticleRenderer component)", 
             "流体パーティクルプレハブ（Liquid2DParticleRendererコンポーネントが必要）")]
-        public List<LiquidParticle> liquidParticles = new List<LiquidParticle>();
+        public List<Liquid2DParticleConfig> liquidParticles = new List<Liquid2DParticleConfig>();
 
         [Range(0.01f, 100f), LocalizationTooltip("喷嘴宽度。", "Nozzle width.", "ノズル幅。")]
         public float nozzleWidth = 1f;
@@ -388,11 +388,12 @@ namespace Fs.Liquid2D
         /// <summary>
         /// 生成一个流体粒子。 // Spawn one fluid particle. // 1つの流体粒子を生成。
         /// </summary>
-        public void SpawnOne()
+        /// <param name="onSpawned"></param>
+        public void SpawnOne(Action<Liquid2DParticle> onSpawned = null)
         {
             // 随机选择一个流体粒子预制体。 // Randomly select a fluid particle prefab. // ランダムに流体粒子のプレハブを選択。
             if (liquidParticles.Count == 0) return;
-            LiquidParticle liquidParticle = liquidParticles.RandomWeight();
+            Liquid2DParticleConfig liquid2DParticleConfig = liquidParticles.RandomWeight();
             
             // 获取当前喷射方向。 // Get current ejection direction. // 現在の噴射方向を取得。
             Vector2 dir = GetCurrentEjectDirection();
@@ -403,7 +404,7 @@ namespace Fs.Liquid2D
             Vector3 spawnPos = TransformGet.position + (Vector3)(normal * offset);
             
             // 生成预制体。 // Instantiate prefab. // プレハブをインスタンス化。
-            Loader.Load(liquidParticle.liquidPrefab, (go) =>
+            Loader.Load(liquid2DParticleConfig.liquidPrefab, (go) =>
             {
                 Transform goTs = go.transform;
                 goTs.position = spawnPos;
@@ -411,10 +412,10 @@ namespace Fs.Liquid2D
                 go.transform.SetParent(ParticleParentTs);
             
                 // 检查是否挂载 Liquid2DParticleRenderer。 // Check if Liquid2DParticleRenderer is attached. // Liquid2DParticleRendererがアタッチされているか確認。
-                var lRenderer = go.GetComponent<Liquid2DParticle>();
-                if (!lRenderer)
+                var lp = go.GetComponent<Liquid2DParticle>();
+                if (!lp)
                 {
-                    Debug.LogWarning("预制体未挂载Liquid2DParticleRenderer！");
+                    Debug.LogWarning("LiquidSpawner SpawnOne Warning: The spawned liquid particle prefab does not have Liquid2DParticle component attached. Destroying the spawned object.");
                     Destroy(go);
                     return;
                 }
@@ -437,8 +438,10 @@ namespace Fs.Liquid2D
                     }
                     rb.AddForce(dir * forceEject, ForceMode2D.Impulse);
                 }
-            
-                lRenderer.SetLifetime(liquidParticle.lifetime);
+                
+                lp.SetLifetime(liquid2DParticleConfig.lifetime);
+                
+                onSpawned?.Invoke(lp);
             });
         }
 
@@ -544,7 +547,7 @@ namespace Fs.Liquid2D
     /// スポーン用の流体パーティクル設定。
     /// </summary>
     [Serializable]
-    public class LiquidParticle : IRandomData
+    public class Liquid2DParticleConfig : IRandomData
     {
         [LocalizationTooltip("流体粒子预制体（需挂载Liquid2DParticleRenderer）。",
              "Fluid particle prefab (requires Liquid2DParticleRenderer component).",
