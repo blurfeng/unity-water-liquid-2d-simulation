@@ -247,20 +247,6 @@ namespace Fs.Liquid2D
                 if (Vector2.Distance(transform.position, contact.transform.position) > radius * 2f)
                     continue;
 
-                // Debug.Log($"Self:{name} OtherP: {otherP.name} Radius:{radius} Distance: {Vector2.Distance(transform.position, contact.transform.position)}");
-                // Debug.DrawLine(transform.position, contact.transform.position, Color.red, 0f, false);
-                // if (Vector2.Distance(transform.position, contact.transform.position) > radius * 2f)
-                // {
-                //     var otherCollider = contact as CircleCollider2D;
-                //     float otherRadius = otherCollider ? otherCollider.radius * otherCollider.transform.lossyScale.x : -1f;
-                //     Debug.Log(
-                //         $"Self:{name} OtherP: {otherP?.name} " +
-                //         $"Radius:{radius} Distance:{Vector2.Distance(transform.position, contact.transform.position)} " +
-                //         $"ContactNull:{contact == null} ContactGO:{contact?.gameObject} " +
-                //         $"OtherRadius:{otherRadius} OtherPos:{contact.transform.position}"
-                //     );
-                // }
-
                 MixWithParticle(otherP);
             }
         }

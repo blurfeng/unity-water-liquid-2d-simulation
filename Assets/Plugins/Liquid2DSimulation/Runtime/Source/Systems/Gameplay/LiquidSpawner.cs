@@ -120,6 +120,7 @@ namespace Fs.Liquid2D
         private bool _isDelayedStarted; // 是否已延迟启动。 // Whether delayed start has occurred. // 遅延スタートが発生したかどうか。
         private bool _isFirstStart = true; // 是否首次启动。 // Whether it is the first start. // 初回開始かどうか。
         private float _delayTimer; // 延迟计时器。 // Delay timer. // 遅延タイマー。
+        private float _flowTimer; // 流量累积计时器。 // Flow rate accumulation timer. // 流量蓄積タイマー。
         private float _durationTimer; // 持续时间计时器。 // Duration timer. // 持続時間タイマー。
         private float _swingTime; // 摆动时间计时器。 // Swing time timer. // スイング時間タイマー。
         private bool _checkDelayStart = true; // 是否检查启动延迟。 // Whether to check start delay. // 開始遅延をチェックするかどうか。
@@ -253,6 +254,7 @@ namespace Fs.Liquid2D
             _checkDelayStart = true;
             _isDelayedStarted = false;
             _delayTimer = 0f;
+            _flowTimer = 0f;
         }
 
         /// <summary>
@@ -347,10 +349,10 @@ namespace Fs.Liquid2D
             // 喷射粒子。 // Spawn particles. // 粒子を噴射。
             if (_flowRateUse > 0f)
             {
-                _delayTimer += Time.deltaTime;
-                while (_delayTimer >= _flowRateInterval)
+                _flowTimer += Time.deltaTime;
+                while (_flowTimer >= _flowRateInterval)
                 {
-                    _delayTimer -= _flowRateInterval;
+                    _flowTimer -= _flowRateInterval;
                     SpawnOne();
                 }
             }

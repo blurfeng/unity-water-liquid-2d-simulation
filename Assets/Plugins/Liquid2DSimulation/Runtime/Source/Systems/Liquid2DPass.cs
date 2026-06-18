@@ -47,13 +47,13 @@ namespace Fs.Liquid2D
         private static readonly ShaderTagId _shaderTagId = new ShaderTagId("UniversalForward");
 
         private const string ShaderPathBlurCombineTwo = "Custom/URP/2D/CombineTwo";
-        private static Material _materialBlurCombineTwo;
+        private Material _materialBlurCombineTwo;
         /// <summary>
         /// 合并两张纹理的材质。用于将两张模糊纹理进行叠加。
         /// Material for combining two textures. Used to overlay two blurred textures.
         /// 2つのテクスチャを合成するマテリアル。2つのブラーテクスチャのオーバーレイに使用。
         /// </summary>
-        private static Material MaterialBlurCombineTwo
+        private Material MaterialBlurCombineTwo
         {
             get
             {
@@ -70,7 +70,32 @@ namespace Fs.Liquid2D
         private bool IsValidMat => _materialBlur && _materialEffect;
         
         private readonly Mesh _quadMesh; // 用于绘制流体粒子的四边形网格。 // Quad mesh for drawing fluid particles. // 流体粒子を描画するためのクアッドメッシュ。
-        
+
+        // GPU Instancing 单次绘制上限。DrawMeshInstanced 一次最多绘制 1023 个实例，超出需分批。
+        // GPU Instancing per-draw limit. DrawMeshInstanced draws at most 1023 instances at once; batches are required beyond this.
+        // GPUインスタンシングの1回あたりの上限。DrawMeshInstancedは一度に最大1023インスタンスまで描画でき、超過分はバッチが必要です。
+        private const int MaxInstancesPerBatch = 1023;
+
+        // 流体粒子绘制缓存。固定为单次批量上限大小，按批填充并绘制，避免每帧分配。
+        // Fluid particle drawing caches. Fixed to the per-batch limit size, filled and drawn per batch to avoid per-frame allocation.
+        // 流体粒子描画キャッシュ。バッチ上限サイズに固定し、バッチごとに充填・描画して毎フレームの割り当てを回避します。
+        private readonly Matrix4x4[] _matricesCache = new Matrix4x4[MaxInstancesPerBatch];
+        private readonly Vector4[] _colorArrayCache = new Vector4[MaxInstancesPerBatch];
+        // 视锥平面缓存。复用以避免每帧分配。 // Frustum planes cache. Reused to avoid per-frame allocation. // 視錐台平面キャッシュ。毎フレームの割り当てを避けるため再利用。
+        private readonly Plane[] _frustumPlanes = new Plane[6];
+
+        // 各 Pass 复用的 MaterialPropertyBlock，避免每帧/每 Pass 重新分配。
+        // (CommandBuffer 在调用绘制时会拷贝 MPB 内容，因此跨顺序执行的 Pass 复用同一实例是安全的。)
+        // Reusable MaterialPropertyBlock per pass, to avoid per-frame/per-pass allocation.
+        // (CommandBuffer copies MPB contents on draw, so reusing one instance across sequentially-executed passes is safe.)
+        // 各Passで再利用するMaterialPropertyBlock。毎フレーム/毎Passの再割り当てを回避します。
+        // (CommandBufferは描画時にMPB内容をコピーするため、順次実行されるPass間で同一インスタンスを再利用しても安全です。)
+        private readonly MaterialPropertyBlock _mpbParticle = new MaterialPropertyBlock();
+        private readonly MaterialPropertyBlock _mpbBlur = new MaterialPropertyBlock();
+        private readonly MaterialPropertyBlock _mpbEffect = new MaterialPropertyBlock();
+        private readonly MaterialPropertyBlock _mpbGrabAsBg = new MaterialPropertyBlock();
+        private readonly MaterialPropertyBlock _mpbCombineCore = new MaterialPropertyBlock();
+
         // 默认设置。用于在没有 Volume 或 Volume 未启用时使用。
         // Default settings. Used when there is no Volume or Volume is not enabled.
         // デフォルト設定。ボリュームがない場合やボリュームが有効になっていない場合に使用されます。
@@ -104,11 +129,12 @@ namespace Fs.Liquid2D
             _materialEffect = null;
             CoreUtils.Destroy(_materialClone);
             _materialClone = null;
+            CoreUtils.Destroy(_materialGrabAsBg);
+            _materialGrabAsBg = null;
         }
 
         private class PassData
         {
-            // public UniversalResourceData resourceData;
             public UniversalCameraData cameraData;
             public Liquid2DRenderFeatureSettings settings;
             
@@ -120,12 +146,19 @@ namespace Fs.Liquid2D
             
             public Material cloneMaterial;
             public TextureHandle cloneSourceTh;
-            
+
+            // 复用的 MaterialPropertyBlock 引用（指向 Pass 实例上的复用实例）。
+            // Reference to a reusable MaterialPropertyBlock (points to the reusable instance on the Pass).
+            // 再利用するMaterialPropertyBlockへの参照（Pass上の再利用インスタンスを指す）。
+            public MaterialPropertyBlock mpb;
+
             // 流体粒子绘制 Pass 相关。 // Fluid particle drawing Pass related. // 流体粒子描画Pass関連。
-            public Matrix4x4[] matricesCache = new Matrix4x4[512];
-            public Vector4[] colorArrayCache = new Vector4[512];
+            // 引用 Pass 实例上的复用缓存，不在此分配。 // Reference reusable caches on the Pass instance; not allocated here. // Pass上の再利用キャッシュを参照し、ここでは割り当てません。
+            public Matrix4x4[] matricesCache;
+            public Vector4[] colorArrayCache;
+            public Plane[] frustumPlanes;
             public Mesh quadMesh;
-            
+
             // 模糊 Pass 相关。 // Blur Pass related. // ブラーPass関連。
             public Material materialBlur;
             public TextureHandle blurSource;
@@ -206,11 +239,14 @@ namespace Fs.Liquid2D
             using (var builder = renderGraph.AddRasterRenderPass<PassData>(GetName("Particles"), out var passData))
             {
                 // 通道数据设置。 // Pass data setup.  // パスデータ設定。
-                // passData.resourceData = resourceData;
                 passData.cameraData = cameraData;
                 passData.settings = _settings;
-                
+
                 passData.quadMesh = _quadMesh; // 用于绘制流体粒子的四边形网格。
+                passData.matricesCache = _matricesCache;
+                passData.colorArrayCache = _colorArrayCache;
+                passData.frustumPlanes = _frustumPlanes;
+                passData.mpb = _mpbParticle;
 
                 builder.SetRenderAttachment(
                     // 设置渲染目标纹理句柄和声明使用纹理句柄。
@@ -228,10 +264,6 @@ namespace Fs.Liquid2D
             // シーンビューカメラは後続のブラーとエフェクト処理を行いません。編集操作を容易にするために粒子を直接返します。
             if (isSceneView)
                 return;
-            
-            // TEST: 直接将流体粒子TH拷贝回当前源TH。
-            // PassClone(renderGraph, liquidParticleTh, sourceTextureHandle);
-            // return;
             #endregion
             
             #region 模糊处理 // Blur processing // ブラー処理
@@ -327,13 +359,15 @@ namespace Fs.Liquid2D
                         builder.SetRenderAttachment(blurThCombineCore, 0, AccessFlags.Write);
                         builder.UseTexture(blurThMain, AccessFlags.Read);
                         builder.UseTexture(blurThCore, AccessFlags.Read);
-                
+                        passData.mpb = _mpbCombineCore;
+
                         // 设置绘制方法。 // Set drawing method. // 描画メソッドを設定します。
                         builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
                         {
                             var cmd = context.cmd;
-                        
-                            MaterialPropertyBlock mpb = new MaterialPropertyBlock();
+
+                            MaterialPropertyBlock mpb = data.mpb;
+                            mpb.Clear();
                             mpb.SetTexture(ShaderIds.MainTexId, blurThMain);
                             mpb.SetTexture(ShaderIds.SecondTex, blurThCore);
                             cmd.DrawProcedural(
@@ -365,10 +399,6 @@ namespace Fs.Liquid2D
                 // ブラーを行わない場合、流体粒子テクスチャを最終ブラーテクスチャとして直接使用します。
                 blurThFinal = liquidParticleTh;
             }
-            
-            // TEST: 直接将最后一个模糊 RT 拷贝回当前源纹理句柄。
-            // PassClone(renderGraph, blurThFinal, sourceTextureHandle);
-            // return;
             #endregion
 
             #region 流体阻挡物 // Fluid obstructor // 流体障害物
@@ -403,14 +433,6 @@ namespace Fs.Liquid2D
                     }
                 );
             }
-            
-            // TEST: 直接将最后一个 RT 拷贝回当前源纹理句柄。
-            // PassClone(renderGraph, liquidObstructorTh, sourceTextureHandle);
-            // renderGraph.AddBlitPass(
-            //     liquidObstructorTh, sourceTextureHandle, 
-            //     Vector2.one, Vector2.zero, passName: GetName("obstructorTh to sourceTextureHandle"));
-            // return;
-
             #endregion
 
             #region 流体遮挡物 // Fluid occluder // 流体オクルーダー
@@ -453,11 +475,11 @@ namespace Fs.Liquid2D
             using (var builder = renderGraph.AddRasterRenderPass<PassData>(GetName("liquid 2d Effect"), out var passData))
             {
                 // 通道数据设置。 // Pass data setup.  // パスデータ設定。
-                // passData.resourceData = resourceData;
                 passData.cameraData = cameraData;
                 passData.settings = _settings;
                 
                 passData.materialEffect = _materialEffect;
+                passData.mpb = _mpbEffect;
                 passData.sourceTh = grabAsBgSourceTh; // 当前相机纹理作为背景图。 // Current camera texture as background image. // 現在のカメラテクスチャを背景画像として。
                 passData.blurFinalTh = blurThFinal; // 最终模糊纹理。 // Final blur texture. // 最終ブラーテクスチャ。
                 passData.obstructorTh = liquidObstructorTh; // 流体阻挡纹理。 // Fluid obstructor texture. // 流体阻挡テクスチャ。
@@ -497,7 +519,12 @@ namespace Fs.Liquid2D
         {
             var cmd = context.cmd;
             Camera cam = data.cameraData.camera;
-            var planes = GeometryUtility.CalculateFrustumPlanes(cam);
+            // 使用非分配重载填充复用的视锥平面缓存。 // Fill the reusable frustum planes cache using the non-allocating overload. // 非割り当てオーバーロードで再利用する視錐台平面キャッシュを充填します。
+            GeometryUtility.CalculateFrustumPlanes(cam, data.frustumPlanes);
+
+            var mpb = data.mpb;
+            var matrices = data.matricesCache;
+            var colors = data.colorArrayCache;
 
             // 绘制所有流体粒子到 流体绘制RT。这里使用 GPU Instancing 来批量绘制。
             // Draw all fluid particles to fluid rendering RT. Here we use GPU Instancing for batch drawing.
@@ -507,45 +534,57 @@ namespace Fs.Liquid2D
             {
                 var settings = kvp.Key;
                 var list = kvp.Value;
-                if (list.Count == 0 || !settings.sprite) continue;
-             
-                // 扩容渲染数据缓存数组。 // Expand the rendering data cache array. // レンダリングデータキャッシュ配列を拡張します。
-                EnsureCacheSize(data, list.Count);
-                
-                // 填充流体粒子绘制用数据。 // Fill in data for fluid particle rendering. // 流体粒子描画用のデータを入力します。
-                int count = 0; // 实际渲染的粒子数量。 // Actual number of particles rendered. // 実際にレンダリングされる粒子の数。
+                // 跳过无效组（缺少贴图或材质则无法绘制）。 // Skip invalid groups (cannot draw without sprite or material). // 無効なグループをスキップ（スプライトまたはマテリアルがないと描画できません）。
+                if (list.Count == 0 || !settings.sprite || !settings.material) continue;
+
+                mpb.Clear();
+                mpb.SetTexture(ShaderIds.MainTexId, settings.sprite.texture);
+
+                // 填充流体粒子绘制用数据，按 1023 为上限分批绘制。
+                // Fill in fluid particle drawing data, drawing in batches capped at 1023.
+                // 流体粒子描画用データを入力し、1023を上限にバッチ描画します。
+                int count = 0; // 当前批次已填充的粒子数量。 // Number of particles filled in the current batch. // 現在のバッチに充填された粒子数。
                 for (int i = 0; i < list.Count; i++)
                 {
                     var item = list[i];
-                    
+
                     // 跳过无效或禁用的粒子。 // Skip invalid or disabled particles. // 無効または無効になっている粒子をスキップします。
                     if (!item || !item.isActiveAndEnabled) continue;
-                    
+
                     // 当粒子 NameTag 不为空时，渲染相同 NameTag 的对象。
                     // When the particle NameTag is not empty, render objects with the same NameTag.
                     // 粒子のNameTagが空でない場合、同じNameTagを持つオブジェクトをレンダリングします。
                     if (!string.IsNullOrEmpty(item.RenderSettings.nameTag) && !item.RenderSettings.nameTag.Equals(nameTag)) continue;
-                    
+
                     var ts = item.TransformGet;
-                    
-                    // 计算粒子的包围盒，不在相机视锥体内的不渲染。 // Calculate the bounding box of the particle, do not render those not in the camera frustum.
-                    var bounds = new Bounds(ts.position, ts.localScale);
-                    if (!GeometryUtility.TestPlanesAABB(planes, bounds)) continue; 
-                    
-                    // 填充矩阵和颜色数据。 // Fill in matrix and color data. // 行列と色データを入力します。
-                    data.matricesCache[count] = Matrix4x4.TRS(ts.position, ts.rotation, ts.localScale);
-                    data.colorArrayCache[count] = item.RenderSettings.color;
+
+                    // 计算粒子的包围盒，不在相机视锥体内的不渲染。使用 lossyScale 以正确处理带缩放的父节点。
+                    // Calculate the bounding box of the particle, do not render those not in the camera frustum. Use lossyScale to correctly handle scaled parents.
+                    // 粒子の境界ボックスを計算し、カメラの視錐台内にないものは描画しません。スケールされた親を正しく扱うため lossyScale を使用します。
+                    var bounds = new Bounds(ts.position, ts.lossyScale);
+                    if (!GeometryUtility.TestPlanesAABB(data.frustumPlanes, bounds)) continue;
+
+                    // 填充矩阵和颜色数据。使用 localToWorldMatrix 以包含父级层级的缩放/旋转。
+                    // Fill in matrix and color data. Use localToWorldMatrix to include parent hierarchy scale/rotation.
+                    // 行列と色データを入力します。親階層のスケール/回転を含めるため localToWorldMatrix を使用します。
+                    matrices[count] = ts.localToWorldMatrix;
+                    colors[count] = item.RenderSettings.color;
                     count++;
+
+                    // 当前批次填满，先绘制一批再继续。 // Current batch is full; draw this batch before continuing. // 現在のバッチが満杯になったら、このバッチを描画してから続行します。
+                    if (count == MaxInstancesPerBatch)
+                    {
+                        mpb.SetVectorArray(ShaderIds.ColorId, colors);
+                        cmd.DrawMeshInstanced(data.quadMesh, 0, settings.material, 0, matrices, count, mpb);
+                        count = 0;
+                    }
                 }
-             
-                // GUP Instancing 一次批量渲染。 // GUP Instancing batch rendering at once. // GUPインスタンシング一括レンダリング。
+
+                // 绘制剩余的最后一批。 // Draw the remaining last batch. // 残りの最後のバッチを描画します。
                 if (count > 0)
                 {
-                    var mpb = new MaterialPropertyBlock();
-                    mpb.SetTexture(ShaderIds.MainTexId, settings.sprite.texture);
-                    mpb.SetVectorArray(ShaderIds.ColorId, data.colorArrayCache);
-             
-                    cmd.DrawMeshInstanced(data.quadMesh, 0, settings.material, 0, data.matricesCache, count, mpb);
+                    mpb.SetVectorArray(ShaderIds.ColorId, colors);
+                    cmd.DrawMeshInstanced(data.quadMesh, 0, settings.material, 0, matrices, count, mpb);
                 }
             }
         }
@@ -555,13 +594,12 @@ namespace Fs.Liquid2D
             using (var builder = renderGraph.AddRasterRenderPass<PassData>(passName, out PassData passData))
             {
                 // 通道数据设置。 // Pass data setup.  // パスデータ設定。
-                // passData.resourceData = resourceData;
-                // passData.cameraData = cameraData;
                 passData.settings = _settings;
-                    
+
                 passData.materialBlur = _materialBlur;
                 passData.blurSource = source;
                 passData.blurIteration = iteration;
+                passData.mpb = _mpbBlur;
 
                 // 设置渲染目标纹理句柄和声明使用纹理句柄。
                 // Set render target texture handle and declare usage texture handle.
@@ -592,7 +630,8 @@ namespace Fs.Liquid2D
             // 设置模糊材质属性块，传入当前模糊材质和偏移强度。
             // Set blur material property block, pass in current blur material and offset intensity.
             // ブラーマテリアルプロパティブロックを設定し、現在のブラーマテリアルとオフセット強度を渡します。
-            MaterialPropertyBlock mpb = new MaterialPropertyBlock();
+            MaterialPropertyBlock mpb = data.mpb;
+            mpb.Clear();
             mpb.SetTexture(ShaderIds.MainTexId,data.blurSource); // 传入当前模糊纹理。 // Pass in current blur texture. // 現在のブラーテクスチャを渡します。
             mpb.SetFloat(ShaderIds.BlurOffsetId, offset); // 设置模糊偏移强度。 // Set blur offset intensity. // ブラーオフセット強度を設定します。
             // 是否忽略背景色。 // Whether to ignore background color. // 背景色を無視するかどうか。
@@ -623,7 +662,8 @@ namespace Fs.Liquid2D
             // 设置外描边材质属性块，传入绘制RT。
             // Set outline material property block, pass in draw RT.
             // アウライン材質プロパティブロックを設定し、描画RTを渡します。
-            MaterialPropertyBlock mpb = new MaterialPropertyBlock();
+            MaterialPropertyBlock mpb = data.mpb;
+            mpb.Clear();
             mpb.SetTexture(ShaderIds.MainTexId, data.blurFinalTh); // 流体纹理。 //Fluid texture. //流体テクスチャ。
             mpb.SetTexture(ShaderIds.ObstructorTex, data.obstructorTh); // 流体阻挡纹理。 //Fluid obstructor texture. //流体阻害テクスチャ。
             mpb.SetFloat(ShaderIds.Cutoff, data.settings.cutoff); // 裁剪阈值。 //Cutoff threshold. //カットオフ閾値。
@@ -750,8 +790,8 @@ namespace Fs.Liquid2D
         #region Grab as Bg Pass
 
         private const string ShaderPathGrabAsBg = "Custom/URP/2D/GrabAsBg";
-        private static Material _materialGrabAsBg;
-        private static Material MaterialGrabAsBg
+        private Material _materialGrabAsBg;
+        private Material MaterialGrabAsBg
         {
             get
             {
@@ -779,6 +819,7 @@ namespace Fs.Liquid2D
             using (var builder = renderGraph.AddRasterRenderPass<PassData>(passNameSet, out var passData))
             {
                 passData.grabAsBgMaterial = MaterialGrabAsBg;
+                passData.mpb = _mpbGrabAsBg;
                 passData.sourceTh = source;
                 passData.grabAsBgEdgeColor = _settings.blur.blurBgColor;
                 passData.grabAsBgEdgeColorIntensity = _settings.blur.blurBgColorIntensity;
@@ -798,7 +839,8 @@ namespace Fs.Liquid2D
                     // material.SetFloat(ShaderIds.ColorIntensityId, data.grabAsBgEdgeColorIntensity);
                     // Blitter.BlitTexture(cmd, sourceTh, Vector2.one, material, 0);
                     
-                    MaterialPropertyBlock mpb = new MaterialPropertyBlock();
+                    MaterialPropertyBlock mpb = data.mpb;
+                    mpb.Clear();
                     mpb.SetTexture(ShaderIds.MainTexId, data.sourceTh);
                     mpb.SetColor(ShaderIds.ColorId, data.grabAsBgEdgeColor);
                     mpb.SetFloat(ShaderIds.ColorIntensityId, data.grabAsBgEdgeColorIntensity);
@@ -964,15 +1006,14 @@ namespace Fs.Liquid2D
         #region Clone Pass
 
         private const string ShaderPathClone = "Custom/URP/2D/Clone";
-        private static Material _materialClone;
-        
+        private Material _materialClone;
+
         /// <summary>
         /// 克隆材质。直接将源纹理拷贝到目标纹理。
         /// Clone material. Directly copy source texture to target texture.
         /// クローンマテリアル。ソーステクスチャを直接ターゲットテクスチャにコピー。
         /// </summary>
-        /// </summary>
-        private static Material MaterialClone
+        private Material MaterialClone
         {
             get
             {
@@ -1018,26 +1059,6 @@ namespace Fs.Liquid2D
 
         #endregion
         
-        /// <summary>
-        /// 确保渲染用缓存数组大小足够。
-        /// 缓存数组用于 GPU Instancing 批量渲染。
-        /// 
-        /// Ensure render cache array size is sufficient.
-        /// Cache array is used for GPU Instancing batch rendering.
-        /// 
-        /// レンダリング用キャッシュ配列のサイズが十分であることを確認。
-        /// キャッシュ配列はGPU Instancingバッチレンダリングに使用されます。
-        /// </summary>
-        /// <param name="data"></param>
-        /// <param name="size"></param>
-        private static void EnsureCacheSize(PassData data, int size)
-        {
-            if (data.matricesCache == null || data.matricesCache.Length < size)
-                data.matricesCache = new Matrix4x4[size];
-            if (data.colorArrayCache == null || data.colorArrayCache.Length < size)
-                data.colorArrayCache = new Vector4[size];
-        }
-    
         /// <summary>
         /// 生成一个简单的四边形网格。用于全屏渲染。
         /// Generate a simple quad mesh. Used for full-screen rendering.
