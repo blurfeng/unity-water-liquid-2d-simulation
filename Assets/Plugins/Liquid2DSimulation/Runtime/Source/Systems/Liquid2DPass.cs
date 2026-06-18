@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using Fs.Liquid2D.Volumes;
 using UnityEngine;
 using UnityEngine.Experimental.Rendering;
@@ -163,6 +164,11 @@ namespace Fs.Liquid2D
             public Material materialBlur;
             public TextureHandle blurSource;
             public int blurIteration;
+
+            // 核心保持叠加 Pass 相关。 // Core-keep combine Pass related. // コア保持合成Pass関連。
+            public Material combineMaterial;
+            public TextureHandle combineMainTh;
+            public TextureHandle combineCoreTh;
             
             // 流体阻挡 Pass 相关。 // Fluid Obstructor Pass related. // 流体オブストラクターパス関連。
             public RendererListHandle obstructorRendererListHandle;
@@ -315,7 +321,7 @@ namespace Fs.Liquid2D
                     PassBlur(
                         renderGraph, 
                         i % 2 == 0 ? blurThLeft : blurThRight, i % 2 == 0 ? blurThRight : blurThLeft, 
-                        i, GetName($"Blur: {i}"));
+                        i, GetName(GetBlurIndexName(i)));
                     
                     // 选择某次迭代的模糊图作为核心保持图。
                     // Select the blur image from a certain iteration as the core keep image.
@@ -360,20 +366,12 @@ namespace Fs.Liquid2D
                         builder.UseTexture(blurThMain, AccessFlags.Read);
                         builder.UseTexture(blurThCore, AccessFlags.Read);
                         passData.mpb = _mpbCombineCore;
+                        passData.combineMaterial = MaterialBlurCombineTwo;
+                        passData.combineMainTh = blurThMain;
+                        passData.combineCoreTh = blurThCore;
 
                         // 设置绘制方法。 // Set drawing method. // 描画メソッドを設定します。
-                        builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
-                        {
-                            var cmd = context.cmd;
-
-                            MaterialPropertyBlock mpb = data.mpb;
-                            mpb.Clear();
-                            mpb.SetTexture(ShaderIds.MainTexId, blurThMain);
-                            mpb.SetTexture(ShaderIds.SecondTex, blurThCore);
-                            cmd.DrawProcedural(
-                                Matrix4x4.identity, MaterialBlurCombineTwo, 0, 
-                                MeshTopology.Triangles, 3, 1, mpb);
-                        });
+                        builder.SetRenderFunc((PassData data, RasterGraphContext context) => ExecutePassCombineCore(data, context));
                     }
                 
                     // ---- 叠加后模糊 // Blur after overlay // オーバーレイ後のブラー ---- //
@@ -382,7 +380,7 @@ namespace Fs.Liquid2D
                     // このステップにより、コア保持画像と最終的なブラー画像がより良く融合します。
                     blurDesc.name = GetName("Blur: Final");
                     blurThFinal = renderGraph.CreateTexture(blurDesc);
-                    PassBlur(renderGraph, blurThCombineCore, blurThFinal, 0, GetName($"Blur: Final"));
+                    PassBlur(renderGraph, blurThCombineCore, blurThFinal, 0, GetName("Blur: Final"));
                 }
                 else
                 {
@@ -635,16 +633,33 @@ namespace Fs.Liquid2D
             mpb.SetTexture(ShaderIds.MainTexId,data.blurSource); // 传入当前模糊纹理。 // Pass in current blur texture. // 現在のブラーテクスチャを渡します。
             mpb.SetFloat(ShaderIds.BlurOffsetId, offset); // 设置模糊偏移强度。 // Set blur offset intensity. // ブラーオフセット強度を設定します。
             // 是否忽略背景色。 // Whether to ignore background color. // 背景色を無視するかどうか。
-            if (data.settings.blur.ignoreBgColor)
-                data.materialBlur.EnableKeyword("_IGNORE_BG_COLOR");
-            else
-                data.materialBlur.DisableKeyword("_IGNORE_BG_COLOR");
+            SetKeyword(data.materialBlur, "_IGNORE_BG_COLOR", data.settings.blur.ignoreBgColor);
 
             // 绘制一个全屏三角形，使用模糊材质，并传入属性块。
             // Draw a full-screen triangle using blur material and pass in property block.
             // ブラー材質を使用して全画面三角形を描画し、プロ
             cmd.DrawProcedural(
-                Matrix4x4.identity, data.materialBlur, 0, 
+                Matrix4x4.identity, data.materialBlur, 0,
+                MeshTopology.Triangles, 3, 1, mpb);
+        }
+
+        /// <summary>
+        /// 核心保持叠加 Pass。将核心保持图与最终模糊图叠加。
+        /// Core-keep combine Pass. Overlays the core-keep image with the final blur image.
+        /// コア保持合成Pass。コア保持画像と最終ブラー画像を合成します。
+        /// </summary>
+        /// <param name="data"></param>
+        /// <param name="context"></param>
+        private static void ExecutePassCombineCore(PassData data, RasterGraphContext context)
+        {
+            var cmd = context.cmd;
+
+            MaterialPropertyBlock mpb = data.mpb;
+            mpb.Clear();
+            mpb.SetTexture(ShaderIds.MainTexId, data.combineMainTh);
+            mpb.SetTexture(ShaderIds.SecondTex, data.combineCoreTh);
+            cmd.DrawProcedural(
+                Matrix4x4.identity, data.combineMaterial, 0,
                 MeshTopology.Triangles, 3, 1, mpb);
         }
 
@@ -670,41 +685,23 @@ namespace Fs.Liquid2D
             mpb.SetTexture(ShaderIds.BackgroundTex, data.sourceTh); // 背景纹理。用于扰动采样。 //Background texture. Used for distortion sampling. //背景テクスチャ。歪みサンプリングに使用。
 
             // 流体遮挡纹理。 // Fluid occluder texture. // 流体オクルーダーテクスチャ。
+            SetKeyword(data.materialEffect, "_OCCLUDER_ENABLE", data.isHaveOccluder);
             if (data.isHaveOccluder)
             {
-                data.materialEffect.EnableKeyword("_OCCLUDER_ENABLE");
-                mpb.SetTexture(ShaderIds.OccluderTex, data.occluderTh); 
+                mpb.SetTexture(ShaderIds.OccluderTex, data.occluderTh);
             }
-            else
-            {
-                data.materialEffect.DisableKeyword("_OCCLUDER_ENABLE");
-            }
-            
+
             // 透明度调整参数。 // Opacity adjustment parameters. // 透明度調整パラメータ。
-            if (data.settings.opacityMode == EOpacityMode.Multiply)
-            {
-                data.materialEffect.EnableKeyword("_OPACITY_MULTIPLY");
-                data.materialEffect.DisableKeyword("_OPACITY_REPLACE");
-            }
-            else if (data.settings.opacityMode == EOpacityMode.Replace)
-            {
-                data.materialEffect.EnableKeyword("_OPACITY_REPLACE");
-                data.materialEffect.DisableKeyword("_OPACITY_MULTIPLY");
-            }
-            else // Default
-            {
-                data.materialEffect.DisableKeyword("_OPACITY_MULTIPLY");
-                data.materialEffect.DisableKeyword("_OPACITY_REPLACE");
-            }
+            SetKeyword(data.materialEffect, "_OPACITY_MULTIPLY", data.settings.opacityMode == EOpacityMode.Multiply);
+            SetKeyword(data.materialEffect, "_OPACITY_REPLACE", data.settings.opacityMode == EOpacityMode.Replace);
             mpb.SetFloat(ShaderIds.OpacityValue, data.settings.opacityValue); // 透明度值。 // Opacity value. //透明度値。
             
             // 覆盖颜色。透明度值是强度。 // Cover color. Opacity value is intensity. // カバー色。透明度値は強度です。
             mpb.SetColor(ShaderIds.CoverColorId, data.settings.coverColor);
 
+            SetKeyword(data.materialEffect, "_EDGE_ENABLE", data.settings.edge.enable);
             if (data.settings.edge.enable)
             {
-                data.materialEffect.EnableKeyword("_EDGE_ENABLE");
-                
                 float cutoff = data.settings.cutoff;
                 float edgeRange = data.settings.edge.edgeRange;
                 float edgeIntensity = data.settings.edge.edgeIntensity;
@@ -720,27 +717,15 @@ namespace Fs.Liquid2D
                 mpb.SetFloat(ShaderIds.EdgeMixStart, edgeMixStart);
                 mpb.SetColor(ShaderIds.EdgeColor, data.settings.edge.edgeColor); // 边缘颜色。 // Edge color. // エッジカラー。
 
-                switch (data.settings.edge.blendType)
-                {
-                    case Liquid2DRenderFeatureSettings.Edge.EdgeBlendType.BlendSrcAlphaOneMinusSrcAlpha:
-                        data.materialEffect.EnableKeyword("_EDGE_BLEND_SA_OMSA");
-                        data.materialEffect.DisableKeyword("_EDGE_BLEND_LERP");
-                        break;
-                    case Liquid2DRenderFeatureSettings.Edge.EdgeBlendType.Lerp:
-                        data.materialEffect.EnableKeyword("_EDGE_BLEND_LERP");
-                        data.materialEffect.DisableKeyword("_EDGE_BLEND_SA_OMSA");
-                        break;
-                }
-            }
-            else
-            {
-                data.materialEffect.DisableKeyword("_EDGE_ENABLE");
+                bool lerpBlend = data.settings.edge.blendType == Liquid2DRenderFeatureSettings.Edge.EdgeBlendType.Lerp;
+                SetKeyword(data.materialEffect, "_EDGE_BLEND_SA_OMSA", !lerpBlend);
+                SetKeyword(data.materialEffect, "_EDGE_BLEND_LERP", lerpBlend);
             }
 
             // 像素风格化。 // Pixel stylization. // ピクセルスタイリゼーション。
+            SetKeyword(data.materialEffect, "_PIXEL_ENABLE", data.settings.pixel.enable);
             if (data.settings.pixel.enable)
             {
-                data.materialEffect.EnableKeyword("_PIXEL_ENABLE");
                 // 计算像素化尺寸。 // Calculate pixelation size. // ピクセル化サイズを計算します。
                 float aspect = (float)Screen.width / Screen.height; // 屏幕宽高比。 // Screen aspect ratio. // 画面のアスペクト比。
                 int pixelWidthCount = Screen.width / data.settings.pixel.pixelSize; // 水平像素块数量。 // Number of horizontal pixel blocks. // 水平ピクセルブロックの数。
@@ -750,34 +735,22 @@ namespace Fs.Liquid2D
                 // 是否使背景像素化。在水体透明时背景色也会像素化。
                 // Whether to pixelate the background. When the water is transparent, the background color will also be pixelated.
                 // 背景がピクセル化されるかどうか。水が透明な場合、背景色もピクセル化されます。
-                if (data.settings.pixel.pixelBg)
-                    data.materialEffect.EnableKeyword("_PIXEL_BG");
-                else
-                    data.materialEffect.DisableKeyword("_PIXEL_BG");
-            }
-            else
-            {
-                data.materialEffect.DisableKeyword("_PIXEL_ENABLE");
+                SetKeyword(data.materialEffect, "_PIXEL_BG", data.settings.pixel.pixelBg);
             }
 
             // 水体扰动纹理和强度。 // Water distortion texture and intensity. // 水の歪みテクスチャと強度。
             bool distortEnable = data.settings.distort.enable
                                  // 完全不透明时不进行扰动。 // No distortion when completely opaque. // 完全に不透明な場合は歪みを行いません。
-                                 && !(data.settings.opacityMode == EOpacityMode.Replace && data.settings.opacityValue >= 1f); 
+                                 && !(data.settings.opacityMode == EOpacityMode.Replace && data.settings.opacityValue >= 1f);
+            SetKeyword(data.materialEffect, "_DISTORT_ENABLE", distortEnable);
             if (distortEnable)
             {
-                data.materialEffect.EnableKeyword("_DISTORT_ENABLE");
-                
                 mpb.SetFloat(ShaderIds.Magnitude, data.settings.distort.magnitude);
                 mpb.SetFloat(ShaderIds.Frequency, data.settings.distort.frequency);
                 mpb.SetFloat(ShaderIds.Amplitude, data.settings.distort.amplitude);
                 mpb.SetVector(ShaderIds.DistortSpeed, data.settings.distort.distortSpeed);
                 mpb.SetVector(ShaderIds.DistortTimeFactors, data.settings.distort.distortTimeFactors);
                 mpb.SetFloat(ShaderIds.NoiseCoordOffset, data.settings.distort.noiseCoordOffset);
-            }
-            else
-            {
-                data.materialEffect.DisableKeyword("_DISTORT_ENABLE");
             }
             
             // 绘制一个全屏三角形，使用外描边材质，并传入属性块。
@@ -890,29 +863,6 @@ namespace Fs.Liquid2D
         // Volume設定により、ランタイムで流体エフェクトのパラメータを動的に変更できます。 
         
         /// <summary>
-        /// 获取自身 NameTag 的 Volume 数据。
-        /// Get Volume data for own NameTag.
-        /// 自身のNameTagのVolumeデータを取得。
-        /// </summary>
-        private Liquid2DVolumeData VolumeData
-        {
-            get
-            {
-                if (_volumeData == null)
-                {
-                    Liquid2DVolume volumeComponent = VolumeManager.instance.stack.GetComponent<Liquid2DVolume>();
-                    if (volumeComponent)
-                    {
-                        volumeComponent.GetData(_settings.nameTag, out _volumeData);
-                    }
-                }
-
-                return _volumeData;
-            }
-        }
-        private Liquid2DVolumeData _volumeData;
-         
-        /// <summary>
         /// 更新设置。
         /// 支持通过 Volume 系统重载当前 Renderer Feature 的配置。
         /// 如果没有 Volume 或 Volume 未启用，则使用默认设置。
@@ -932,6 +882,10 @@ namespace Fs.Liquid2D
              
             // 获取 Volume。 // Get Volume. // Volumeを取得。
             Liquid2DVolume volumeComponent = VolumeManager.instance.stack.GetComponent<Liquid2DVolume>();
+            // 每帧从当前 Volume 组件实时解析数据，避免缓存导致运行时 Volume 变更后读到旧值。
+            // Resolve data from the current Volume component each frame to avoid reading stale values after a runtime Volume change.
+            // 毎フレーム現在のVolumeコンポーネントからデータを解決し、ランタイムでのVolume変更後に古い値を読むことを回避します。
+            Liquid2DVolumeData volumeData = null;
             // 判断 Volume 是否启用且当前组件是否启用且数据有效。
             // Check if Volume is enabled and current component is enabled and data is valid.
             // Volumeが有効で、現在のコンポーネントが有効で、データが有効かを判断。
@@ -939,64 +893,65 @@ namespace Fs.Liquid2D
                 volumeComponent
                 && volumeComponent.isActive.value
                 && volumeComponent.liquid2DVolumeDataList.overrideState
-                && VolumeData != null && VolumeData.isActive;
+                && volumeComponent.GetData(_settings.nameTag, out volumeData)
+                && volumeData != null && volumeData.isActive;
 
             // ---- 重载设置。 // Override settings. // 設定をオーバーライド。 ---- //
             // 2D流体层遮罩。只会渲染设定的流体层的粒子。
             // 2D Liquid layer mask. Only particles of the set fluid layer will be rendered.
             // 2D流体レイヤーマスク。設定された流体レイヤーの粒子のみがレンダリングされます。
-            _settings.nameTag = isActive ? VolumeData.nameTag : _settingsDefault.nameTag;
+            _settings.nameTag = isActive ? volumeData.nameTag : _settingsDefault.nameTag;
             
             // 阻挡层遮罩。 // Obstructor layer mask. // 阻害レイヤーマスク。
-            _settings.obstructorRenderingLayerMask = isActive ? VolumeData.obstructorRenderingLayerMask : _settingsDefault.obstructorRenderingLayerMask;
+            _settings.obstructorRenderingLayerMask = isActive ? volumeData.obstructorRenderingLayerMask : _settingsDefault.obstructorRenderingLayerMask;
             if (_obstructorFilteringSettings.layerMask != _settings.obstructorRenderingLayerMask)
             {
                 SetObstructorFilteringSettings();
             }
             // 遮挡层遮罩。 // Occlusion layer mask. // オクルージョンレイヤーマスク。
-            _settings.occluderRenderingLayerMask = isActive ? VolumeData.occluderRenderingLayerMask : _settingsDefault.occluderRenderingLayerMask;
+            _settings.occluderRenderingLayerMask = isActive ? volumeData.occluderRenderingLayerMask : _settingsDefault.occluderRenderingLayerMask;
             if (_occluderFilteringSettings.layerMask != _settings.occluderRenderingLayerMask)
             {
                 SetOccluderFilteringSettings();
             }
             
-            _settings.cutoff = isActive ? VolumeData.cutoff : _settingsDefault.cutoff;
+            _settings.cutoff = isActive ? volumeData.cutoff : _settingsDefault.cutoff;
             
-            _settings.opacityMode = isActive ? VolumeData.opacityMode : _settingsDefault.opacityMode;
-            _settings.opacityValue = isActive ? VolumeData.opacityValue : _settingsDefault.opacityValue;
-            _settings.coverColor = isActive ? VolumeData.coverColor : _settingsDefault.coverColor;
+            _settings.opacityMode = isActive ? volumeData.opacityMode : _settingsDefault.opacityMode;
+            _settings.opacityValue = isActive ? volumeData.opacityValue : _settingsDefault.opacityValue;
+            _settings.coverColor = isActive ? volumeData.coverColor : _settingsDefault.coverColor;
             
             // ---- 边缘设置 // Edge settings // エッジ設定 ---- //
-            _settings.edge.enable = isActive ? VolumeData.edge.enable : _settingsDefault.edge.enable;
-            _settings.edge.edgeRange = isActive ? VolumeData.edge.edgeRange : _settingsDefault.edge.edgeRange;
-            _settings.edge.edgeIntensity = isActive ? VolumeData.edge.edgeIntensity : _settingsDefault.edge.edgeIntensity;
-            _settings.edge.edgeColor = isActive ? VolumeData.edge.edgeColor : _settingsDefault.edge.edgeColor;
-            _settings.edge.blendType = isActive ? VolumeData.edge.blendType : _settingsDefault.edge.blendType;
+            _settings.edge.enable = isActive ? volumeData.edge.enable : _settingsDefault.edge.enable;
+            _settings.edge.edgeRange = isActive ? volumeData.edge.edgeRange : _settingsDefault.edge.edgeRange;
+            _settings.edge.edgeIntensity = isActive ? volumeData.edge.edgeIntensity : _settingsDefault.edge.edgeIntensity;
+            _settings.edge.edgeColor = isActive ? volumeData.edge.edgeColor : _settingsDefault.edge.edgeColor;
+            _settings.edge.blendType = isActive ? volumeData.edge.blendType : _settingsDefault.edge.blendType;
 
             // ---- 模糊设置 // Blur settings // ブラー設定 ---- //
-            _settings.blur.iterations = isActive ? VolumeData.blur.iterations : _settingsDefault.blur.iterations;
-            _settings.blur.blurSpread = isActive ? VolumeData.blur.blurSpread : _settingsDefault.blur.blurSpread;
-            _settings.blur.coreKeepIntensity = isActive ? VolumeData.blur.coreKeepIntensity : _settingsDefault.blur.coreKeepIntensity;
-            _settings.blur.scaleFactor = isActive ? VolumeData.blur.scaleFactor : _settingsDefault.blur.scaleFactor;
-            _settings.blur.ignoreBgColor = isActive ? VolumeData.blur.ignoreBgColor : _settingsDefault.blur.ignoreBgColor;
+            _settings.blur.iterations = isActive ? volumeData.blur.iterations : _settingsDefault.blur.iterations;
+            _settings.blur.blurSpread = isActive ? volumeData.blur.blurSpread : _settingsDefault.blur.blurSpread;
+            _settings.blur.coreKeepIntensity = isActive ? volumeData.blur.coreKeepIntensity : _settingsDefault.blur.coreKeepIntensity;
+            _settings.blur.scaleFactor = isActive ? volumeData.blur.scaleFactor : _settingsDefault.blur.scaleFactor;
+            _settings.blur.ignoreBgColor = isActive ? volumeData.blur.ignoreBgColor : _settingsDefault.blur.ignoreBgColor;
             // 模糊背景色和强度。实际上在 Blur 前作为底图进行混合。默认的底图是当前相机的场景纹理（alpha为0）。
             // Blur background color and intensity. In fact, it is blended as a base map before Blur. The default base map is the current camera scene texture (alpha is 0).
             // ブラーバックグラウンドカラーと強度。実際には、Blurの前にベースマップとしてブレンドされます。デフォルトのベースマップは現在のカメラシーンテクスチャ（アルファは0）です。
-            _settings.blur.blurBgColor = isActive ? VolumeData.blur.blurBgColor : _settingsDefault.blur.blurBgColor;
-            _settings.blur.blurBgColorIntensity = isActive ? VolumeData.blur.blurBgColorIntensity : _settingsDefault.blur.blurBgColorIntensity;
+            _settings.blur.blurBgColor = isActive ? volumeData.blur.blurBgColor : _settingsDefault.blur.blurBgColor;
+            _settings.blur.blurBgColorIntensity = isActive ? volumeData.blur.blurBgColorIntensity : _settingsDefault.blur.blurBgColorIntensity;
             
             // ---- 水体扰动设置 // Water distortion settings // 水の歪み設定 ---- //
-            _settings.distort.enable = isActive ? VolumeData.distort.enable : _settingsDefault.distort.enable;
-            _settings.distort.frequency = isActive ? VolumeData.distort.frequency : _settingsDefault.distort.frequency;
-            _settings.distort.amplitude = isActive ? VolumeData.distort.amplitude : _settingsDefault.distort.amplitude;
-            _settings.distort.distortSpeed = isActive ? VolumeData.distort.distortSpeed : _settingsDefault.distort.distortSpeed;
-            _settings.distort.distortTimeFactors = isActive ? VolumeData.distort.distortTimeFactors : _settingsDefault.distort.distortTimeFactors;
-            _settings.distort.noiseCoordOffset = isActive ? VolumeData.distort.noiseCoordOffset : _settingsDefault.distort.noiseCoordOffset;
+            _settings.distort.enable = isActive ? volumeData.distort.enable : _settingsDefault.distort.enable;
+            _settings.distort.frequency = isActive ? volumeData.distort.frequency : _settingsDefault.distort.frequency;
+            _settings.distort.amplitude = isActive ? volumeData.distort.amplitude : _settingsDefault.distort.amplitude;
+            _settings.distort.distortSpeed = isActive ? volumeData.distort.distortSpeed : _settingsDefault.distort.distortSpeed;
+            _settings.distort.distortTimeFactors = isActive ? volumeData.distort.distortTimeFactors : _settingsDefault.distort.distortTimeFactors;
+            _settings.distort.noiseCoordOffset = isActive ? volumeData.distort.noiseCoordOffset : _settingsDefault.distort.noiseCoordOffset;
             
             // ---- 像素化 // Pixelation // ピクセル化 ---- //
-            _settings.pixel.enable = isActive ? VolumeData.pixel.enable : _settingsDefault.pixel.enable;
-            _settings.pixel.pixelSize = isActive ? VolumeData.pixel.pixelSize : _settingsDefault.pixel.pixelSize;
-            _settings.pixel.pixelBg = isActive ? VolumeData.pixel.pixelBg : _settingsDefault.pixel.pixelBg;
+            _settings.pixel.enable = isActive ? volumeData.pixel.enable : _settingsDefault.pixel.enable;
+            _settings.pixel.pixelSize = isActive ? volumeData.pixel.pixelSize : _settingsDefault.pixel.pixelSize;
+            _settings.pixel.pixelBg = isActive ? volumeData.pixel.pixelBg : _settingsDefault.pixel.pixelBg;
         }
 
         #endregion
@@ -1088,9 +1043,50 @@ namespace Fs.Liquid2D
             return mesh;
         }
 
+        // Pass 名缓存。按 name 缓存完整 Pass 名，避免每帧字符串插值分配；nameTag 变化时清空。
+        // Pass name cache. Caches full pass names by name to avoid per-frame string interpolation allocation; cleared when nameTag changes.
+        // Pass名キャッシュ。nameをキーに完全なPass名をキャッシュし、毎フレームの文字列補間割り当てを回避。nameTag変更時にクリア。
+        private readonly Dictionary<string, string> _nameCache = new Dictionary<string, string>();
+        private string _nameCacheTag;
+
         private string GetName(string name)
         {
-            return $"[Liquid 2D] [{_settings.nameTag}] {name}";
+            if (_nameCacheTag != _settings.nameTag)
+            {
+                _nameCache.Clear();
+                _nameCacheTag = _settings.nameTag;
+            }
+
+            if (!_nameCache.TryGetValue(name, out var full))
+            {
+                full = $"[Liquid 2D] [{_settings.nameTag}] {name}";
+                _nameCache[name] = full;
+            }
+            return full;
+        }
+
+        // 模糊迭代内层名（"Blur: i"）缓存，避免每帧为循环索引分配字符串。
+        // Cache for blur iteration inner names ("Blur: i") to avoid per-frame string allocation for the loop index.
+        // ブラー反復の内部名（"Blur: i"）キャッシュ。ループインデックスのための毎フレームの文字列割り当てを回避。
+        private readonly List<string> _blurIndexNames = new List<string>();
+
+        private string GetBlurIndexName(int i)
+        {
+            while (_blurIndexNames.Count <= i)
+                _blurIndexNames.Add($"Blur: {_blurIndexNames.Count}");
+            return _blurIndexNames[i];
+        }
+
+        /// <summary>
+        /// 仅在关键字状态变化时切换，避免每帧冗余的材质变体重算。
+        /// Toggle a shader keyword only when its state changes, avoiding redundant per-frame material variant recomputation.
+        /// キーワード状態が変化したときのみ切り替え、毎フレームの冗長なマテリアルバリアント再計算を回避します。
+        /// </summary>
+        private static void SetKeyword(Material material, string keyword, bool enable)
+        {
+            if (material.IsKeywordEnabled(keyword) == enable) return;
+            if (enable) material.EnableKeyword(keyword);
+            else material.DisableKeyword(keyword);
         }
 
         #endregion
