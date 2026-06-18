@@ -48,8 +48,6 @@ namespace Fs.Liquid2D
             _transform = transform;
             _circleCollider2D = GetComponent<CircleCollider2D>();
             _rigidbody2d = GetComponent<Rigidbody2D>();
-
-            AwakeMixColor();
         }
 
         private void Start()
@@ -66,30 +64,43 @@ namespace Fs.Liquid2D
             }
             
             _dicParticlesWithCollider.Add(CircleCollider2DGet, this);
-        
+
             // 注册到 Liquid2dFeature。 // Register to Liquid2dFeature. // Liquid2dFeatureに登録。
             Liquid2DFeature.RegisterLiquidParticle(this);
-            
+
+            // 注册到集中管理器统一 tick（仅运行时）。 // Register to the central manager for unified tick (runtime only). // 集中マネージャーの統一 tick に登録（ランタイムのみ）。
+            Liquid2DParticleManager.Register(this);
+
 #if UNITY_EDITOR
             OnEnableEditor();
 #endif
         }
-    
+
         private void OnDisable()
         {
             _dicParticlesWithCollider.Remove(CircleCollider2DGet);
-            
+
             // 从 Liquid2dFeature 注销。 // Unregister from Liquid2dFeature. // Liquid2dFeatureから登録解除。
             Liquid2DFeature.UnregisterLiquidParticle(this);
-            
+
+            // 从集中管理器注销。 // Unregister from the central manager. // 集中マネージャーから登録解除。
+            Liquid2DParticleManager.Unregister(this);
+
 #if UNITY_EDITOR
             OnDisableEditor();
 #endif
         }
-        
-        private void Update()
+
+        /// <summary>
+        /// 由 Liquid2DParticleManager 集中调用的逐帧逻辑。
+        /// 替代原 MonoBehaviour.Update，以消除逐粒子的 Update 调用派发开销。
+        /// Per-frame logic invoked centrally by Liquid2DParticleManager.
+        /// Replaces the original MonoBehaviour.Update to eliminate per-particle Update dispatch overhead.
+        /// Liquid2DParticleManager から一元的に呼び出されるフレーム毎のロジック。
+        /// 元の MonoBehaviour.Update を置き換え、粒子ごとの Update 呼び出しのディスパッチコストを排除します。
+        /// </summary>
+        internal void Tick()
         {
-            UpdateMixColor();
             LifetimeUpdate();
         }
 
@@ -169,32 +180,37 @@ namespace Fs.Liquid2D
         public bool CanMixColor => mixSettings.mixColors && mixSettings.mixColorsSpeed > 0f;
         
         private float _lastContactCheckTime;
-        
-        private Collider2D[] _mixColorContacts;
 
-        private ContactFilter2D _mixColorContactFilter;
-        
-        private void AwakeMixColor()
-        {
-            _mixColorContacts = new Collider2D[4];
-            
-            _mixColorContactFilter = new ContactFilter2D()
-            {
-                useTriggers = false,
-                useLayerMask = true,
-                layerMask = 1 << gameObject.layer,
-                useDepth = false,
-                useOutsideDepth = false,
-            };
-        }
-
-        private void UpdateMixColor()
+        /// <summary>
+        /// 物理接触时混合颜色。复用物理引擎已计算的接触点，避免每帧主动 Physics2D.OverlapCircle 查询。
+        /// 需开启 Project Settings &gt; Physics 2D &gt; Reuse Collision Callbacks 以保证零 GC（Collision2D 被复用）。
+        /// Mix colors on physics contact. Reuses contacts already computed by the physics engine, avoiding a per-frame
+        /// active Physics2D.OverlapCircle query. Enable Project Settings &gt; Physics 2D &gt; Reuse Collision Callbacks for zero GC (Collision2D is reused).
+        /// 物理接触時に色を混ぜます。物理エンジンが既に計算した接触点を再利用し、毎フレームの能動的な Physics2D.OverlapCircle クエリを回避します。
+        /// ゼロGCを保証するため、Project Settings &gt; Physics 2D &gt; Reuse Collision Callbacks を有効にしてください（Collision2Dは再利用されます）。
+        /// </summary>
+        /// <param name="collision"></param>
+        private void OnCollisionStay2D(Collision2D collision)
         {
             if (!CanMixColor) return;
-            
-            MixWithContactParticles();
+
+            // 静止/休眠时是否混色。未允许时，自身休眠（引擎认定静止）则跳过，让休眠刚体零混色开销。
+            // Whether to mix when stationary/sleeping. When disabled, skip if this body is sleeping (engine-deemed stationary), giving sleeping bodies zero mixing cost.
+            // 静止/スリープ時に混色するかどうか。無効の場合、自身がスリープ中（エンジンが静止と判定）ならスキップし、スリープ剛体の混色コストをゼロにします。
+            if (!mixSettings.mixColorsWhenStationary && Rigidbody2DGet.IsSleeping()) return;
+
+            // 检查混合颜色间隔。 // Check mix color interval. // 色の混合間隔をチェックします。
+            if (!CheckMixColorInterval()) return;
+
+            // 通过 collider 反查接触到的流体粒子；非粒子对象（障碍/遮挡等）不在字典中，自然被过滤。
+            // Look up the contacting fluid particle by its collider; non-particle objects (obstructors/occluders) are not in the dictionary and are naturally filtered out.
+            // collider から接触した流体粒子を逆引きします。非粒子オブジェクト（障害物/オクルーダーなど）は辞書に存在しないため自然にフィルタリングされます。
+            if (!_dicParticlesWithCollider.TryGetValue(collision.collider, out Liquid2DParticle otherP)) return;
+            if (!otherP) return;
+
+            MixWithParticle(otherP);
         }
-        
+
         /// <summary>
         /// 检查混合颜色间隔。
         /// Check mix color interval.
@@ -209,46 +225,6 @@ namespace Fs.Liquid2D
                 return false;
             _lastContactCheckTime = now;
             return true;
-        }
-        
-        /// <summary>
-        /// 和接触的粒子混合颜色。
-        /// Mix colors with contact particles.
-        /// 接触しているパーティクルと色を混ぜる。
-        /// </summary>
-        private void MixWithContactParticles()
-        {
-            // 如果粒子静止且未设置为在静止时混合颜色，则跳过混合。
-            // If the particle is stationary and not set to mix colors when stationary, skip mixing.
-            // 粒子が静止していて、静止時に色を混ぜるように設定されていない場合、ミックスをスキップします。
-            if (Rigidbody2DGet.linearVelocity.sqrMagnitude < 0.00000001f && !mixSettings.mixColorsWhenStationary) return;
-            
-            // 检查混合颜色间隔。 // Check mix color interval. // 色の混合間隔をチェックします。
-            if (!CheckMixColorInterval()) return;
-            
-            // 获取接触的粒子。 // Get contacting particles. // 接触しているパーティクルを取得します。
-            Vector2 center = (Vector2)TransformGet.position + CircleCollider2DGet.offset;
-            float radius = CircleCollider2DGet.radius * TransformGet.lossyScale.x * mixSettings.mixColorsRadiusRate;
-            int contactNum = Physics2D.OverlapCircle(center, radius, _mixColorContactFilter, _mixColorContacts);
-            if (contactNum == 0) return;
-            
-            // 和接触的粒子混合颜色。 // Mix colors with contacting particles. // 接触しているパーティクルと色を混ぜます。
-            for (int i = 0; i < contactNum; i++)
-            {
-                var contact = _mixColorContacts[i];
-                if (!contact || !contact.gameObject.activeSelf) continue;
-                if (contact.gameObject == gameObject) continue;
-                if (!_dicParticlesWithCollider.TryGetValue(contact, out Liquid2DParticle otherP)) continue;
-                if (!otherP) continue;
-                
-                // 偶现的获取到距离过远的粒子，跳过。
-                // Occasionally get particles that are too far away, skip.
-                // 時々、遠すぎるパーティクルが取得されることがあるため、スキップします。
-                if (Vector2.Distance(transform.position, contact.transform.position) > radius * 2f)
-                    continue;
-
-                MixWithParticle(otherP);
-            }
         }
         
         /// <summary>

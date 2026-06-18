@@ -50,6 +50,10 @@ With its extensive configuration options, you can freely create fluids with a va
   - [Mix Colors](#mix-colors)
 - [⛲ Particle Spawner Settings Guide](#-particle-spawner-settings-guide)
   - [Control Spawning](#control-spawning)
+- [🚀 Performance Guide (Physics)](#-performance-guide-physics)
+  - [Liquid2DPhysicsConfig Component](#liquid2dphysicsconfig-component)
+  - [Enable Reuse Collision Callbacks (required for mixing)](#enable-reuse-collision-callbacks-required-for-mixing)
+  - [Dedicated Particle Layer + Tightened Layer Collision Matrix](#dedicated-particle-layer--tightened-layer-collision-matrix)
 - [📋 Todo List](#-todo-list)
 
 
@@ -269,6 +273,10 @@ Both particles need to have `Mix Colors` enabled to mix when they come into cont
 Based on configuration, you can control the speed and range of mixing.\
 ![](Documents/mc_2.png)
 
+> Color mixing is triggered by physics-engine contacts (`OnCollisionStay2D`), i.e. it only mixes when particles actually touch, avoiding the cost of a per-frame active spatial query.\
+> Make sure to enable `Reuse Collision Callbacks` in `Project Settings > Physics 2D` for zero GC. See the [Performance Guide](#-performance-guide-physics).\
+> `Mix Colors When Stationary` is off by default: particles whose body is sleeping (engine-deemed stationary) skip mixing, giving sleeping bodies near-zero cost; enable it manually if you want mixing while stationary.
+
 ## ⛲ Particle Spawner Settings Guide
 `LiquidSpawner` is used to generate fluid particles, like a pipe or fountain.\
 The following mainly explains important features or parameters. More detailed parameters can be viewed directly in the Inspector panel tooltips.
@@ -284,6 +292,29 @@ This allows you to use more different particles to simulate more complex fluids,
 
 For magma configuration tips, I set the `Cutoff` to 0.14 here, so the fluid retains more parts with low transparency.\
 Then enable the `Distort` effect. This way you'll see the background near the transparent parts of the magma fluid edges being refracted and distorted, creating an effect similar to rising heat.
+
+
+## 🚀 Performance Guide (Physics)
+With a large number of fluid particles, Unity's physics system is the main performance bottleneck. The following measures significantly improve physics performance at the scale of thousands of particles.
+
+### Liquid2DPhysicsConfig Component
+Since project-level Physics 2D settings are not shipped with the plugin, the plugin provides the `Liquid2DPhysicsConfig` component, which applies recommended physics settings at runtime. Attach it to any persistent object in your scene:
+- **Multithreaded solver**: Enables the 2D physics multithreaded solver, leveraging multiple cores with many dynamic rigidbodies. ⚠️ Note: Unity 2D physics parallelizes by "island" (a connected set of contacts), and a single island is solved serially; when many particles pile up and touch into one giant island, the multithreading benefit is very limited.
+- **Physics frequency (fixedDeltaTime)**: Lowering the physics frequency (e.g. 50Hz→30Hz, i.e. 0.0333) **reduces total `Physics2D.Simulate` time almost linearly** and is one of the most effective levers for pile-up scenes; the cost is physics smoothness and high-speed tunneling stability.
+- **Solver iterations**: A fluid particle soup is insensitive to solver precision, so you can lower the velocity/position iteration counts (recommended 4/2, engine default 8/3) to reduce solver cost. Note: this affects ALL 2D physics globally.
+- **Per-nameTag alive cap**: Sets the max alive particles per `nameTag`; when exceeded, the oldest particle under that `nameTag` is recycled automatically, deterministically bounding worst-case physics cost (0 = no limit).
+
+### Enable Reuse Collision Callbacks (required for mixing)
+Color mixing now reuses contacts already computed by the physics engine (`OnCollisionStay2D`), avoiding a per-frame active `Physics2D.OverlapCircle` query.\
+Enable `Reuse Collision Callbacks` in `Project Settings > Physics 2D` so the mixing callback is zero-GC (the `Collision2D` object is reused).
+
+### Dedicated Particle Layer + Tightened Layer Collision Matrix
+By default fluid particles are on the `Default` layer and collide (broadphase) with everything in the scene, which is wasteful. Recommended:
+1. Create a dedicated layer, e.g. `Liquid`.
+2. Set the fluid particle prefab's `Layer` to that layer.
+3. In `Project Settings > Physics 2D > Layer Collision Matrix`, keep only the collisions between that layer and "the particle layer itself / obstructor layer / occluder layer / DeadZone layer", and uncheck collisions with unrelated layers.
+
+> ⚠️ Like [Rendering Layer](#configure-rendering-layer), these layers and the collision matrix are not imported into your project with the plugin; you need to set them up manually in your own project.
 
 
 ## 📋 Todo List

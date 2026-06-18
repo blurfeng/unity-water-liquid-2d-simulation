@@ -65,11 +65,44 @@ MonoBehaviour:
   liquid2DVolumeDataList:
     m_OverrideState: 1
     m_Value:
-    - isActive: 1
-      nameTag: Liquid2D
-      iterations: 7
-      blurSpread: 0.6
-      liquid2DLayerMask: 2
+    - nameTag: Liquid2D
+      obstructorRenderingLayerMask:
+        serializedVersion: 0
+        m_Bits: 0
+      occluderRenderingLayerMask:
+        serializedVersion: 0
+        m_Bits: 0
+      cutoff: 0.45
+      opacityMode: 0
+      opacityValue: 1
+      coverColor: {r: 0, g: 0, b: 0, a: 0}
+      blur:
+        iterations: 7
+        blurSpread: 0.8
+        coreKeepIntensity: 0.4
+        scaleFactor: 4
+        ignoreBgColor: 0
+        blurBgColor: {r: 0, g: 0, b: 0, a: 0}
+        blurBgColorIntensity: 0
+      distort:
+        enable: 1
+        magnitude: 0.1
+        frequency: 380
+        amplitude: 0.008
+        distortSpeed: {x: 0.1, y: 1}
+        distortTimeFactors: {x: 0.3, y: -0.4, z: 0.1, w: 0.5}
+        noiseCoordOffset: 4
+      edge:
+        enable: 0
+        edgeRange: 0.6
+        edgeIntensity: 0.1
+        edgeColor: {r: 1, g: 1, b: 1, a: 0.8}
+        blendType: 0
+      pixel:
+        enable: 0
+        pixelSize: 6
+        pixelBg: 1
+      isActive: 1
 --- !u!114 &-7598665844862709615
 MonoBehaviour:
   m_ObjectHideFlags: 3
@@ -517,6 +550,9 @@ MonoBehaviour:
     m_OverrideState: 1
     m_Value: {r: 1, g: 1, b: 1, a: 1}
   highQualityFiltering:
+    m_OverrideState: 1
+    m_Value: 0
+  filter:
     m_OverrideState: 1
     m_Value: 0
   downscale:

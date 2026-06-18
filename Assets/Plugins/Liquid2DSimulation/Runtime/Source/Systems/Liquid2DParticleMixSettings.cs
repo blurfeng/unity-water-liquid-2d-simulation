@@ -20,9 +20,9 @@ namespace Fs.Liquid2D
         public bool mixColors = false;
 
         [LocalizationTooltip(
-            "颜色混合半径倍率，基础为CircleCollider2D的半径。",
-            "Color mix radius rate, based on the radius of CircleCollider2D.",
-            "色の混合半径倍率、CircleCollider2Dの半径に基)]づきます。")]
+            "（已弃用）混色已改为复用物理引擎接触点（OnCollisionStay2D），仅在粒子实际接触时混色，此放大半径倍率不再生效。保留以兼容旧数据。",
+            "(Deprecated) Color mixing now reuses physics engine contacts (OnCollisionStay2D) and only mixes on actual contact; this radius multiplier no longer takes effect. Kept for backward compatibility.",
+            "（非推奨）色の混合は物理エンジンの接触点（OnCollisionStay2D）を再利用するようになり、実際の接触時のみ混色します。この拡大半径倍率は無効です。旧データとの互換性のために保持されます。")]
         public float mixColorsRadiusRate = 2f;
         
         [Range(0f, 1f)]
@@ -45,10 +45,10 @@ namespace Fs.Liquid2D
         public float mixColorsWithMovementMaxSpeed = 100f;
 
         [LocalizationTooltip(
-             "静止时混合颜色。当仅启用mixColors时，只有运动的粒子才会混合颜色。启用此选项可在自身静止时也与接触的粒子混合颜色。",
-             "Mix colors when stationary. When only mixColors is enabled, only moving particles will mix colors. Enabling this option allows mixing colors with contacting particles even when stationary.",
-             "静止しているときに色を混ぜる。mixColorsのみが有効になっている場合、動いている粒子のみが色を混ぜます。このオプションを有効にすると、静止している場合でも接触している粒子と色を混ぜることができます。")]
-        public bool mixColorsWhenStationary = true;
+             "静止时混合颜色。关闭时，自身休眠（引擎认定静止）的粒子将跳过混色，使休眠刚体几乎零开销（推荐关闭以提升性能）。开启时，即使自身静止也会与接触的粒子混色。",
+             "Mix colors when stationary. When off, particles whose body is sleeping (engine-deemed stationary) skip mixing, giving sleeping bodies near-zero cost (recommended off for performance). When on, mixes with contacting particles even when stationary.",
+             "静止しているときに色を混ぜる。オフの場合、自身がスリープ中（エンジンが静止と判定）の粒子は混色をスキップし、スリープ剛体のコストをほぼゼロにします（パフォーマンスのためオフ推奨）。オンの場合、自身が静止していても接触している粒子と混色します。")]
+        public bool mixColorsWhenStationary = false;
         
         [LocalizationTooltip(
              "与接触的流体粒子混合颜色的时间间隔（每个接触的粒子单独计时）。",
