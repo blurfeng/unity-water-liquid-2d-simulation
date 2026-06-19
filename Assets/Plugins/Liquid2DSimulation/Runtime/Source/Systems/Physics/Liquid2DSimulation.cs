@@ -74,13 +74,24 @@ namespace Fs.Liquid2D
             _nameTagToGroup[string.Empty] = 0;
         }
 
+        // 上次创建求解器所依据的目标模式（用于运行时切换检测）。 // Desired mode the solver was last created for (runtime-switch detection). // ソルバー作成時の目標モード。
+        private Liquid2DSimulationMode _createdMode = Liquid2DSimulationMode.Cpu;
+
         private void CreateSolver()
         {
             _solver?.Dispose();
+            _createdMode = Mode;
+
             if (Mode == Liquid2DSimulationMode.Gpu)
             {
-                // GPU SPH 求解器将在 Phase 2 接入；当前回退到 CPU SPH。 // GPU SPH solver lands in Phase 2; fall back to CPU SPH for now. // GPU は Phase 2 で接続、当面は CPU にフォールバック。
-                Debug.LogWarning("[Liquid2DSimulation] GPU mode is not implemented yet; falling back to CPU.");
+                var cs = Resources.Load<ComputeShader>("Liquid2DSph");
+                if (cs != null && SystemInfo.supportsComputeShaders)
+                {
+                    _solver = new SphGpuSolver(cs);
+                    return;
+                }
+                // 计算着色器缺失或硬件不支持，回退 CPU。 // Compute shader missing or unsupported; fall back to CPU. // CS 不在/未対応のため CPU へ。
+                Debug.LogWarning("[Liquid2DSimulation] GPU mode unavailable (compute shader missing or unsupported); falling back to CPU.");
             }
             _solver = new SphCpuSolver();
         }
@@ -226,6 +237,10 @@ namespace Fs.Liquid2D
         private void FixedUpdate()
         {
             if (_store == null) return;
+
+            // 运行时切换 CPU/GPU 模式：目标模式变化时重建求解器。 // Runtime CPU/GPU switch: recreate solver when the desired mode changes. // 実行時の CPU/GPU 切替。
+            if (_createdMode != Mode || _solver == null) CreateSolver();
+
             float now = Time.time;
 
             ExpireLifetimes(now);

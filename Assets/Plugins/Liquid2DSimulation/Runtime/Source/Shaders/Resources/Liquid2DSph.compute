@@ -1,0 +1,521 @@
+// 2D SPH 双密度流体求解 Compute Shader（GPU 模式）。逐字镜像 CPU 的 SphJobs，使 CPU/GPU 行为一致：
+//   外力+预测 → 计数排序建哈希 → 密度(双) → 压力力 → 粘性 → 积分+碰撞 → 帧末邻居混色。
+// 邻居查找与 CPU Liquid2DHashGrid 完全一致（同一哈希常量、3×3 cell、按精确 cell 坐标过滤避免哈希碰撞重复计数）。
+//
+// 2D SPH dual-density fluid solver compute shader (GPU mode). Mirrors the CPU SphJobs to keep CPU/GPU behavior identical:
+//   external forces+predict → counting-sort hash → dual density → pressure force → viscosity → integrate+collide → mix.
+// Neighbor search matches CPU Liquid2DHashGrid exactly (same hash constants, 3×3 cells, exact-cell filtering).
+//
+// 2D SPH デュアル密度流体ソルバー Compute Shader（GPU モード）。CPU の SphJobs を逐語ミラーし、CPU/GPU の挙動を一致させます。
+
+#pragma kernel ExternalForces
+#pragma kernel ClearGrid
+#pragma kernel CountBuckets
+#pragma kernel PrefixSum
+#pragma kernel ScatterSlots
+#pragma kernel Density
+#pragma kernel Pressure
+#pragma kernel Viscosity
+#pragma kernel CopyVelocity
+#pragma kernel ClearImpulse
+#pragma kernel IntegrateCollide
+#pragma kernel MixColor
+#pragma kernel CopyColor
+
+static const int NumThreads = 64;
+static const float PI = 3.14159265358979f;
+
+// ---- 粒子数据（紧凑 0..numParticles-1，由 CPU 按 active 集合 gather/scatter）。 ----
+// ---- Particle data (compact 0..numParticles-1, gathered/scattered by CPU per active set). ----
+RWStructuredBuffer<float2> Positions;
+RWStructuredBuffer<float2> Predicted;
+RWStructuredBuffer<float2> Velocities;
+RWStructuredBuffer<float2> VelNext;
+RWStructuredBuffer<float2> Densities;    // (density, nearDensity)
+RWStructuredBuffer<float4> Colors;
+RWStructuredBuffer<float4> ColorsNext;
+RWStructuredBuffer<float>  LastMixTime;
+StructuredBuffer<float>    Radii;
+StructuredBuffer<float>    InvMass;
+StructuredBuffer<int>      TypeId;
+StructuredBuffer<int>      GroupId;
+
+// ---- 逐 typeId 材质（与 Liquid2DMaterialData 对齐）。 // Per-typeId material (matches Liquid2DMaterialData). ----
+struct MaterialData
+{
+    float invMass;
+    float restDensityScale;
+    float viscosity;
+    float cohesion;
+    float friction;
+    float restitution;
+    float gravityScale;
+};
+StructuredBuffer<MaterialData> Materials;
+
+// ---- 逐 typeId 混色参数（与 Liquid2DGpuMixData 对齐）。 // Per-typeId mix params (matches Liquid2DGpuMixData). ----
+struct MixData
+{
+    int enabled;
+    float speed;
+    int withMovement;
+    float maxSpeed;
+    float interval;
+};
+StructuredBuffer<MixData> MixDatas;
+
+// ---- 碰撞体（与 Liquid2DGpuCollider 对齐）。 // Colliders (matches Liquid2DGpuCollider). ----
+struct GpuCollider
+{
+    int shape;       // 0 Circle, 1 Box, 2 Capsule, 3 Polygon, 4 EdgeChain
+    float2 center;
+    float2 size;
+    float rotation;
+    float radius;
+    int pointStart;
+    int pointCount;
+    int dynamic;
+    int bodyIndex;
+};
+StructuredBuffer<GpuCollider> Colliders;
+StructuredBuffer<float2> ColliderPoints;
+
+// 动态体冲量（定点量化累加，回读后反量化）。 // Dynamic-body impulse (fixed-point accumulation). // 動的体力積（定点累積）。
+RWStructuredBuffer<int> ImpulseX;
+RWStructuredBuffer<int> ImpulseY;
+
+// ---- 空间哈希（计数排序，与 CPU 一致）。 // Spatial hash (counting sort, matches CPU). ----
+RWStructuredBuffer<float2> SortPositions; // 绑定到 Predicted（主排序）或 Positions（混色排序）。 // bound to Predicted or Positions.
+RWStructuredBuffer<int> BucketOf;   // numParticles
+RWStructuredBuffer<int> Counts;     // tableSize
+RWStructuredBuffer<int> CellStart;  // tableSize+1
+RWStructuredBuffer<int> Cursor;     // tableSize
+RWStructuredBuffer<int> SortedSlots;// numParticles
+
+// ---- 标量参数。 // Scalar params. ----
+int numParticles;
+int tableSize;
+int numColliders;
+int numBodies;
+int accumulateImpulse; // 1 时累积动态体冲量（仅末子步）。 // accumulate dynamic-body impulse when 1 (last substep only). // 末サブステップのみ 1。
+float h;
+float invCellSize;
+float targetDensity;
+float pressureMultiplier;
+float nearPressureMultiplier;
+float viscosityStrength;
+float collisionDamping;
+float maxSpeed;
+float predictionFactor;
+float2 gravity;
+float dt;
+float time;
+float impulseScale;
+
+// ============ 核函数（与 CPU KernelMath 一致）。 // Kernels (match CPU KernelMath). ============
+float Poly6Coef()       { return 4.0f  / (PI * pow(h, 8.0f)); }
+float SpikyPow2Coef()   { return 6.0f  / (PI * pow(h, 4.0f)); }
+float SpikyPow3Coef()   { return 10.0f / (PI * pow(h, 5.0f)); }
+float DerivP2Coef()     { return 12.0f / (PI * pow(h, 4.0f)); }
+float DerivP3Coef()     { return 30.0f / (PI * pow(h, 5.0f)); }
+
+float Poly6(float dst, float coef)     { if (dst >= h) return 0; float v = h*h - dst*dst; return v*v*v*coef; }
+float SpikyPow2(float dst, float coef) { if (dst >= h) return 0; float v = h - dst; return v*v*coef; }
+float SpikyPow3(float dst, float coef) { if (dst >= h) return 0; float v = h - dst; return v*v*v*coef; }
+float DerivSpikyPow2(float dst, float coef) { if (dst > h) return 0; float v = h - dst; return -v*coef; }
+float DerivSpikyPow3(float dst, float coef) { if (dst > h) return 0; float v = h - dst; return -v*v*coef; }
+
+// ============ 空间哈希（与 CPU Liquid2DHashGrid 同一公式）。 ============
+int2 CellCoord(float2 p) { return (int2)floor(p * invCellSize); }
+int HashCell(int2 c)
+{
+    int hsh = (c.x * 73856093) ^ (c.y * 19349663);
+    int m = hsh % tableSize;
+    return m < 0 ? m + tableSize : m;
+}
+
+// ============ 碰撞体投影（移植 Liquid2DColliderMath，返回是否穿透 + 修正 + 外法线）。 ============
+bool ProjCircle(GpuCollider c, float2 p, float pr, out float2 corr, out float2 n)
+{
+    float2 d = p - c.center; float distSq = dot(d, d); float minD = c.radius + pr;
+    if (distSq >= minD * minD) { corr = 0; n = 0; return false; }
+    float dist = sqrt(distSq);
+    n = dist > 1e-6f ? d / dist : float2(0, 1);
+    corr = n * (minD - dist); return true;
+}
+bool ProjBox(GpuCollider c, float2 p, float pr, out float2 corr, out float2 n)
+{
+    float cs = cos(c.rotation), sn = sin(c.rotation);
+    float2 d = p - c.center;
+    float2 local = float2(d.x * cs + d.y * sn, -d.x * sn + d.y * cs);
+    float2 hsz = c.size;
+    float2 cl = clamp(local, -hsz, hsz);
+    float2 diff = local - cl; float distSq = dot(diff, diff);
+    float2 nL, corrL;
+    if (distSq > 1e-12f)
+    {
+        if (distSq >= pr * pr) { corr = 0; n = 0; return false; }
+        float dist = sqrt(distSq); nL = diff / dist; corrL = nL * (pr - dist);
+    }
+    else
+    {
+        float dx = hsz.x - abs(local.x); float dy = hsz.y - abs(local.y);
+        if (dx < dy) { float sx = local.x >= 0 ? 1 : -1; nL = float2(sx, 0); corrL = nL * (dx + pr); }
+        else         { float sy = local.y >= 0 ? 1 : -1; nL = float2(0, sy); corrL = nL * (dy + pr); }
+    }
+    corr = float2(corrL.x * cs - corrL.y * sn, corrL.x * sn + corrL.y * cs);
+    n = float2(nL.x * cs - nL.y * sn, nL.x * sn + nL.y * cs);
+    return true;
+}
+bool ProjCapsule(GpuCollider c, float2 p, float pr, out float2 corr, out float2 n)
+{
+    float cs = cos(c.rotation), sn = sin(c.rotation);
+    float2 d = p - c.center;
+    float2 local = float2(d.x * cs + d.y * sn, -d.x * sn + d.y * cs);
+    float t = clamp(local.x, -c.size.x, c.size.x);
+    float2 dl = local - float2(t, 0); float distSq = dot(dl, dl); float minD = c.radius + pr;
+    if (distSq >= minD * minD) { corr = 0; n = 0; return false; }
+    float dist = sqrt(distSq);
+    float2 nL = dist > 1e-6f ? dl / dist : float2(0, 1);
+    float2 corrL = nL * (minD - dist);
+    corr = float2(corrL.x * cs - corrL.y * sn, corrL.x * sn + corrL.y * cs);
+    n = float2(nL.x * cs - nL.y * sn, nL.x * sn + nL.y * cs);
+    return true;
+}
+float2 ClosestOnSeg(float2 a, float2 b, float2 p)
+{
+    float2 ab = b - a; float den = dot(ab, ab);
+    if (den < 1e-12f) return a;
+    float t = clamp(dot(p - a, ab) / den, 0, 1);
+    return a + t * ab;
+}
+bool PointInPoly(int start, int count, float2 p)
+{
+    bool inside = false;
+    int j = count - 1;
+    for (int i = 0; i < count; i++)
+    {
+        float2 vi = ColliderPoints[start + i];
+        float2 vj = ColliderPoints[start + j];
+        if (((vi.y > p.y) != (vj.y > p.y)) && (p.x < (vj.x - vi.x) * (p.y - vi.y) / (vj.y - vi.y) + vi.x))
+            inside = !inside;
+        j = i;
+    }
+    return inside;
+}
+bool ProjPolygon(GpuCollider c, float2 p, float pr, out float2 corr, out float2 n)
+{
+    int nn = c.pointCount; if (nn < 3) { corr = 0; n = 0; return false; }
+    int s = c.pointStart;
+    float minDistSq = 1e30f; float2 best = p;
+    for (int i = 0; i < nn; i++)
+    {
+        float2 a = ColliderPoints[s + i];
+        float2 b = ColliderPoints[s + ((i + 1) % nn)];
+        float2 cp = ClosestOnSeg(a, b, p);
+        float dsq = dot(p - cp, p - cp);
+        if (dsq < minDistSq) { minDistSq = dsq; best = cp; }
+    }
+    bool inside = PointInPoly(s, nn, p);
+    float dist = sqrt(minDistSq);
+    if (!inside)
+    {
+        if (minDistSq >= pr * pr) { corr = 0; n = 0; return false; }
+        n = dist > 1e-6f ? (p - best) / dist : float2(0, 1); corr = n * (pr - dist);
+    }
+    else { n = dist > 1e-6f ? (best - p) / dist : float2(0, 1); corr = n * (dist + pr); }
+    return true;
+}
+bool ProjEdge(GpuCollider c, float2 p, float pr, out float2 corr, out float2 n)
+{
+    int nn = c.pointCount; if (nn < 2) { corr = 0; n = 0; return false; }
+    int s = c.pointStart;
+    float minDistSq = 1e30f; float2 best = p;
+    for (int i = 0; i < nn - 1; i++)
+    {
+        float2 a = ColliderPoints[s + i];
+        float2 b = ColliderPoints[s + i + 1];
+        float2 cp = ClosestOnSeg(a, b, p);
+        float dsq = dot(p - cp, p - cp);
+        if (dsq < minDistSq) { minDistSq = dsq; best = cp; }
+    }
+    if (minDistSq >= pr * pr) { corr = 0; n = 0; return false; }
+    float dist = sqrt(minDistSq);
+    n = dist > 1e-6f ? (p - best) / dist : float2(0, 1); corr = n * (pr - dist);
+    return true;
+}
+bool ProjectCollider(GpuCollider c, float2 p, float pr, out float2 corr, out float2 n)
+{
+    if (c.shape == 0) return ProjCircle(c, p, pr, corr, n);
+    if (c.shape == 1) return ProjBox(c, p, pr, corr, n);
+    if (c.shape == 2) return ProjCapsule(c, p, pr, corr, n);
+    if (c.shape == 3) return ProjPolygon(c, p, pr, corr, n);
+    if (c.shape == 4) return ProjEdge(c, p, pr, corr, n);
+    corr = 0; n = 0; return false;
+}
+
+// ============ Kernels ============
+
+[numthreads(NumThreads,1,1)]
+void ExternalForces(uint3 id : SV_DispatchThreadID)
+{
+    int i = (int)id.x; if (i >= numParticles) return;
+    float gs = Materials[TypeId[i]].gravityScale;
+    float2 v = Velocities[i] + gravity * gs * dt;
+    Velocities[i] = v;
+    Predicted[i] = Positions[i] + v * predictionFactor;
+}
+
+[numthreads(NumThreads,1,1)]
+void ClearGrid(uint3 id : SV_DispatchThreadID)
+{
+    int t = (int)id.x; if (t >= tableSize) return;
+    Counts[t] = 0;
+}
+
+[numthreads(NumThreads,1,1)]
+void CountBuckets(uint3 id : SV_DispatchThreadID)
+{
+    int i = (int)id.x; if (i >= numParticles) return;
+    int b = HashCell(CellCoord(SortPositions[i]));
+    BucketOf[i] = b;
+    InterlockedAdd(Counts[b], 1);
+}
+
+// 单线程前缀和（tableSize 通常较小；与 CPU BuildHashGridJob 同序）。 // Single-thread prefix sum. // 単スレッド前置和。
+[numthreads(1,1,1)]
+void PrefixSum(uint3 id : SV_DispatchThreadID)
+{
+    int acc = 0;
+    for (int t = 0; t < tableSize; t++)
+    {
+        CellStart[t] = acc;
+        Cursor[t] = acc;
+        acc += Counts[t];
+    }
+    CellStart[tableSize] = acc;
+}
+
+[numthreads(NumThreads,1,1)]
+void ScatterSlots(uint3 id : SV_DispatchThreadID)
+{
+    int i = (int)id.x; if (i >= numParticles) return;
+    int b = BucketOf[i];
+    int pos;
+    InterlockedAdd(Cursor[b], 1, pos);
+    SortedSlots[pos] = i;
+}
+
+[numthreads(NumThreads,1,1)]
+void Density(uint3 id : SV_DispatchThreadID)
+{
+    int i = (int)id.x; if (i >= numParticles) return;
+    float2 pi = Predicted[i];
+    float h2 = h * h; float c2 = SpikyPow2Coef(); float c3 = SpikyPow3Coef();
+    float density = 0, nearDensity = 0;
+    int2 ci = CellCoord(pi);
+    for (int dy = -1; dy <= 1; dy++)
+    for (int dx = -1; dx <= 1; dx++)
+    {
+        int2 qc = ci + int2(dx, dy);
+        int b = HashCell(qc);
+        int start = CellStart[b]; int end = CellStart[b + 1];
+        for (int s = start; s < end; s++)
+        {
+            int j = SortedSlots[s];
+            if (CellCoord(Predicted[j]).x != qc.x || CellCoord(Predicted[j]).y != qc.y) continue;
+            float2 r = pi - Predicted[j]; float r2 = dot(r, r);
+            if (r2 >= h2) continue;
+            float dist = sqrt(r2);
+            density += SpikyPow2(dist, c2);
+            nearDensity += SpikyPow3(dist, c3);
+        }
+    }
+    Densities[i] = float2(density, nearDensity);
+}
+
+float PressureFor(int slot)
+{
+    float rho0 = targetDensity * Materials[TypeId[slot]].restDensityScale;
+    return (Densities[slot].x - rho0) * pressureMultiplier;
+}
+float NearPressureFor(int slot)
+{
+    float coh = Materials[TypeId[slot]].cohesion;
+    return Densities[slot].y * nearPressureMultiplier * (0.5f + coh);
+}
+
+[numthreads(NumThreads,1,1)]
+void Pressure(uint3 id : SV_DispatchThreadID)
+{
+    int i = (int)id.x; if (i >= numParticles) return;
+    float2 pi = Predicted[i];
+    float densityI = Densities[i].x;
+    if (densityI <= 1e-8f) return;
+    float pressureI = PressureFor(i);
+    float nearPressureI = NearPressureFor(i);
+    float h2 = h * h; float cd2 = DerivP2Coef(); float cd3 = DerivP3Coef();
+    float2 pressureForce = 0;
+    int2 ci = CellCoord(pi);
+    for (int dy = -1; dy <= 1; dy++)
+    for (int dx = -1; dx <= 1; dx++)
+    {
+        int2 qc = ci + int2(dx, dy);
+        int b = HashCell(qc);
+        int start = CellStart[b]; int end = CellStart[b + 1];
+        for (int s = start; s < end; s++)
+        {
+            int j = SortedSlots[s];
+            if (j == i) continue;
+            if (CellCoord(Predicted[j]).x != qc.x || CellCoord(Predicted[j]).y != qc.y) continue;
+            float2 offset = Predicted[j] - pi; float r2 = dot(offset, offset);
+            if (r2 >= h2) continue;
+            float r = sqrt(r2);
+            float2 dir = r > 1e-6f ? offset / r : float2(0, 1);
+            float densityJ = Densities[j].x; float nearJ = Densities[j].y;
+            if (densityJ <= 1e-8f || nearJ <= 1e-8f) continue;
+            float sharedP = (pressureI + PressureFor(j)) * 0.5f;
+            float sharedNear = (nearPressureI + NearPressureFor(j)) * 0.5f;
+            pressureForce += dir * DerivSpikyPow2(r, cd2) * sharedP / densityJ;
+            pressureForce += dir * DerivSpikyPow3(r, cd3) * sharedNear / nearJ;
+        }
+    }
+    Velocities[i] += (pressureForce / densityI) * dt;
+}
+
+[numthreads(NumThreads,1,1)]
+void Viscosity(uint3 id : SV_DispatchThreadID)
+{
+    int i = (int)id.x; if (i >= numParticles) return;
+    float2 pi = Predicted[i]; float2 vi = Velocities[i];
+    float h2 = h * h; float c6 = Poly6Coef();
+    float strength = viscosityStrength + Materials[TypeId[i]].viscosity;
+    float2 force = 0;
+    int2 ci = CellCoord(pi);
+    for (int dy = -1; dy <= 1; dy++)
+    for (int dx = -1; dx <= 1; dx++)
+    {
+        int2 qc = ci + int2(dx, dy);
+        int b = HashCell(qc);
+        int start = CellStart[b]; int end = CellStart[b + 1];
+        for (int s = start; s < end; s++)
+        {
+            int j = SortedSlots[s];
+            if (j == i) continue;
+            if (CellCoord(Predicted[j]).x != qc.x || CellCoord(Predicted[j]).y != qc.y) continue;
+            float2 r = pi - Predicted[j]; float r2 = dot(r, r);
+            if (r2 >= h2) continue;
+            force += (Velocities[j] - vi) * Poly6(sqrt(r2), c6);
+        }
+    }
+    VelNext[i] = vi + force * strength * dt;
+}
+
+[numthreads(NumThreads,1,1)]
+void CopyVelocity(uint3 id : SV_DispatchThreadID)
+{
+    int i = (int)id.x; if (i >= numParticles) return;
+    Velocities[i] = VelNext[i];
+}
+
+[numthreads(NumThreads,1,1)]
+void ClearImpulse(uint3 id : SV_DispatchThreadID)
+{
+    int b = (int)id.x; if (b >= numBodies) return;
+    ImpulseX[b] = 0; ImpulseY[b] = 0;
+}
+
+[numthreads(NumThreads,1,1)]
+void IntegrateCollide(uint3 id : SV_DispatchThreadID)
+{
+    int i = (int)id.x; if (i >= numParticles) return;
+    float2 v = Velocities[i];
+    if (maxSpeed > 0)
+    {
+        float spd2 = dot(v, v);
+        if (spd2 > maxSpeed * maxSpeed) v *= maxSpeed / sqrt(spd2);
+    }
+    float2 p = Positions[i] + v * dt;
+
+    float pr = Radii[i];
+    MaterialData mat = Materials[TypeId[i]];
+    float e = saturate(mat.restitution) * collisionDamping;
+
+    for (int ci = 0; ci < numColliders; ci++)
+    {
+        GpuCollider col = Colliders[ci];
+        float2 corr, n;
+        if (!ProjectCollider(col, p, pr, corr, n)) continue;
+        p += corr;
+        float vn = dot(v, n);
+        if (vn < 0) v -= (1.0f + e) * vn * n;
+        if (mat.friction > 0)
+        {
+            float2 vt = v - dot(v, n) * n;
+            v -= vt * mat.friction;
+        }
+        if (accumulateImpulse == 1 && col.dynamic == 1 && col.bodyIndex >= 0)
+        {
+            float mass = InvMass[i] > 1e-6f ? 1.0f / InvMass[i] : 0.0f;
+            float2 imp = -n * (length(corr) * mass / max(dt, 1e-5f));
+            InterlockedAdd(ImpulseX[col.bodyIndex], (int)(imp.x * impulseScale));
+            InterlockedAdd(ImpulseY[col.bodyIndex], (int)(imp.y * impulseScale));
+        }
+    }
+
+    Positions[i] = p;
+    Velocities[i] = v;
+}
+
+[numthreads(NumThreads,1,1)]
+void MixColor(uint3 id : SV_DispatchThreadID)
+{
+    int i = (int)id.x; if (i >= numParticles) return;
+    float4 ci4 = Colors[i];
+    MixData mi = MixDatas[TypeId[i]];
+    if (mi.enabled == 0 || mi.speed <= 0) { ColorsNext[i] = ci4; return; }
+    if (time - LastMixTime[i] < mi.interval) { ColorsNext[i] = ci4; return; }
+
+    int gi = GroupId[i];
+    float2 pi = Positions[i]; float ri = Radii[i];
+    float4 accum = 0; float wsum = 0;
+    int2 cc = CellCoord(pi);
+    for (int dy = -1; dy <= 1; dy++)
+    for (int dx = -1; dx <= 1; dx++)
+    {
+        int2 qc = cc + int2(dx, dy);
+        int b = HashCell(qc);
+        int start = CellStart[b]; int end = CellStart[b + 1];
+        for (int s = start; s < end; s++)
+        {
+            int j = SortedSlots[s];
+            if (j == i) continue;
+            if (CellCoord(Positions[j]).x != qc.x || CellCoord(Positions[j]).y != qc.y) continue;
+            int gj = GroupId[j];
+            if (gi != gj && gi != 0 && gj != 0) continue;
+            if (MixDatas[TypeId[j]].enabled == 0) continue;
+            float contact = ri + Radii[j];
+            float2 r = pi - Positions[j];
+            if (dot(r, r) >= contact * contact) continue;
+            accum += Colors[j]; wsum += 1;
+        }
+    }
+    if (wsum <= 0) { ColorsNext[i] = ci4; return; }
+
+    float4 avg = (accum + ci4) / (wsum + 1.0f);
+    float speed = mi.speed;
+    if (speed < 1.0f && mi.withMovement == 1)
+    {
+        float vf = saturate(dot(Velocities[i], Velocities[i]) / max(1e-4f, mi.maxSpeed * mi.maxSpeed));
+        speed = saturate(speed + vf * (1.0f - speed));
+    }
+    ColorsNext[i] = lerp(ci4, avg, speed);
+    LastMixTime[i] = time;
+}
+
+[numthreads(NumThreads,1,1)]
+void CopyColor(uint3 id : SV_DispatchThreadID)
+{
+    int i = (int)id.x; if (i >= numParticles) return;
+    Colors[i] = ColorsNext[i];
+}

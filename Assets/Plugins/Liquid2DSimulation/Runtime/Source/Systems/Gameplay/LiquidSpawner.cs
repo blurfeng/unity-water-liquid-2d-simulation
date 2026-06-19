@@ -527,6 +527,12 @@ namespace Fs.Liquid2D
             // Inspector 変更時に流量のランタイム計算値を即座に同期。
             SetFlowRate(flowRate);
             SetEjectForce(ejectForce);
+            
+            // 数量上限检查。 // Max spawn count check. // 生成数上限チェック。
+            if (maxSpawnCount > 0 && _spawnedCount < maxSpawnCount)
+            {
+                StartSpawn();
+            }
         }
 
         private void OnDrawGizmos()

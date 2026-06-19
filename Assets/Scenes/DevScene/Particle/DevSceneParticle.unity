@@ -229,7 +229,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   applyOnAwake: 1
-  mode: 0
+  mode: 1
   gravity: {x: 0, y: -9.8}
   smoothingRadius: 0.4
   targetDensity: 55
