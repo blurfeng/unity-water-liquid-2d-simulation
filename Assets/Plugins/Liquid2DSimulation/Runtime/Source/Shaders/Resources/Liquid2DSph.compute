@@ -1,13 +1,15 @@
-// 2D SPH 双密度流体求解 Compute Shader（GPU 模式）。逐字镜像 CPU 的 SphJobs，使 CPU/GPU 行为一致：
+// 2D SPH 双密度流体求解 Compute Shader（GPU 模式，数据常驻）。逐字镜像 CPU 的 SphJobs：
 //   外力+预测 → 计数排序建哈希 → 密度(双) → 压力力 → 粘性 → 积分+碰撞 → 帧末邻居混色。
-// 邻居查找与 CPU Liquid2DHashGrid 完全一致（同一哈希常量、3×3 cell、按精确 cell 坐标过滤避免哈希碰撞重复计数）。
+// 数据常驻：粒子缓冲按 slot 索引、跨帧驻留在 GPU；每帧仅上传紧凑的 ActiveIndices（k→slot），kernel 通过它间接寻址，
+// 与 CPU 的 activeIndices/sortedSlots 结构一致。新生成的粒子通过 ScatterSpawn 写入对应 slot。
 //
-// 2D SPH dual-density fluid solver compute shader (GPU mode). Mirrors the CPU SphJobs to keep CPU/GPU behavior identical:
-//   external forces+predict → counting-sort hash → dual density → pressure force → viscosity → integrate+collide → mix.
-// Neighbor search matches CPU Liquid2DHashGrid exactly (same hash constants, 3×3 cells, exact-cell filtering).
+// 2D SPH dual-density solver compute shader (GPU mode, resident data). Mirrors CPU SphJobs. Particle buffers are
+// slot-indexed and reside on the GPU across frames; each frame only the compact ActiveIndices (k→slot) is uploaded and
+// kernels indirect through it (matching CPU activeIndices/sortedSlots). New particles are written via ScatterSpawn.
 //
-// 2D SPH デュアル密度流体ソルバー Compute Shader（GPU モード）。CPU の SphJobs を逐語ミラーし、CPU/GPU の挙動を一致させます。
+// 2D SPH デュアル密度ソルバー Compute Shader（GPU 常駐）。CPU の SphJobs を逐語ミラー。
 
+#pragma kernel ScatterSpawn
 #pragma kernel ExternalForces
 #pragma kernel ClearGrid
 #pragma kernel CountBuckets
@@ -24,9 +26,12 @@
 
 static const int NumThreads = 64;
 static const float PI = 3.14159265358979f;
+// 每粒子邻居扫描预算上限。健康流体远小于此值；用于在粒子异常聚集（不稳定/NaN 坍缩）时封顶单帧 GPU 工作量，杜绝 O(N²) 导致的驱动超时(TDR)。
+// Per-particle neighbor scan budget. A healthy fluid stays well below this; caps GPU work when particles cluster pathologically (instability/NaN collapse) to avoid O(N^2) driver timeouts (TDR).
+// 近傍走査の予算上限。異常な凝集時に O(N^2) を防ぎ TDR を回避。
+static const int MaxScan = 128;
 
-// ---- 粒子数据（紧凑 0..numParticles-1，由 CPU 按 active 集合 gather/scatter）。 ----
-// ---- Particle data (compact 0..numParticles-1, gathered/scattered by CPU per active set). ----
+// ---- 粒子数据（slot 索引，容量 = store.Capacity，跨帧驻留）。 // Particle data (slot-indexed, capacity = store.Capacity, resident). ----
 RWStructuredBuffer<float2> Positions;
 RWStructuredBuffer<float2> Predicted;
 RWStructuredBuffer<float2> Velocities;
@@ -35,69 +40,54 @@ RWStructuredBuffer<float2> Densities;    // (density, nearDensity)
 RWStructuredBuffer<float4> Colors;
 RWStructuredBuffer<float4> ColorsNext;
 RWStructuredBuffer<float>  LastMixTime;
-StructuredBuffer<float>    Radii;
-StructuredBuffer<float>    InvMass;
-StructuredBuffer<int>      TypeId;
-StructuredBuffer<int>      GroupId;
+// 静态属性（spawn 后不变）：只读 SRV，由 CPU 从 store 整块上传，避免占用各 kernel 的 UAV 配额（上限 8）。
+// Static attributes (immutable after spawn): read-only SRV, uploaded whole from store by CPU, to avoid using per-kernel UAV slots (limit 8).
+// 静的属性：読み取り専用 SRV、CPU が store から一括アップロード。
+StructuredBuffer<float>  Radii;
+StructuredBuffer<float>  InvMass;
+StructuredBuffer<int>    TypeId;
+StructuredBuffer<int>    GroupId;
 
-// ---- 逐 typeId 材质（与 Liquid2DMaterialData 对齐）。 // Per-typeId material (matches Liquid2DMaterialData). ----
-struct MaterialData
-{
-    float invMass;
-    float restDensityScale;
-    float viscosity;
-    float cohesion;
-    float friction;
-    float restitution;
-    float gravityScale;
-};
+// 紧凑的存活 slot 索引（k→slot），每帧上传。 // Compact alive-slot indices (k→slot), uploaded each frame. // コンパクト生存 slot 索引。
+StructuredBuffer<int> ActiveIndices;
+
+// ---- 逐 typeId 材质（与 Liquid2DMaterialData 对齐）。 ----
+struct MaterialData { float invMass; float restDensityScale; float viscosity; float cohesion; float friction; float restitution; float gravityScale; };
 StructuredBuffer<MaterialData> Materials;
 
-// ---- 逐 typeId 混色参数（与 Liquid2DGpuMixData 对齐）。 // Per-typeId mix params (matches Liquid2DGpuMixData). ----
-struct MixData
-{
-    int enabled;
-    float speed;
-    int withMovement;
-    float maxSpeed;
-    float interval;
-};
+// ---- 逐 typeId 混色参数（与 Liquid2DGpuMixData 对齐）。 ----
+struct MixData { int enabled; float speed; int withMovement; float maxSpeed; float interval; };
 StructuredBuffer<MixData> MixDatas;
 
-// ---- 碰撞体（与 Liquid2DGpuCollider 对齐）。 // Colliders (matches Liquid2DGpuCollider). ----
-struct GpuCollider
-{
-    int shape;       // 0 Circle, 1 Box, 2 Capsule, 3 Polygon, 4 EdgeChain
-    float2 center;
-    float2 size;
-    float rotation;
-    float radius;
-    int pointStart;
-    int pointCount;
-    int dynamic;
-    int bodyIndex;
-};
+// ---- 碰撞体（与 Liquid2DGpuCollider 对齐）。 ----
+struct GpuCollider { int shape; float2 center; float2 size; float rotation; float radius; int pointStart; int pointCount; int dynamic; int bodyIndex; };
 StructuredBuffer<GpuCollider> Colliders;
 StructuredBuffer<float2> ColliderPoints;
 
-// 动态体冲量（定点量化累加，回读后反量化）。 // Dynamic-body impulse (fixed-point accumulation). // 動的体力積（定点累積）。
 RWStructuredBuffer<int> ImpulseX;
 RWStructuredBuffer<int> ImpulseY;
 
-// ---- 空间哈希（计数排序，与 CPU 一致）。 // Spatial hash (counting sort, matches CPU). ----
-RWStructuredBuffer<float2> SortPositions; // 绑定到 Predicted（主排序）或 Positions（混色排序）。 // bound to Predicted or Positions.
-RWStructuredBuffer<int> BucketOf;   // numParticles
+// ---- 空间哈希（计数排序，与 CPU 一致）。SortedSlots 存 slot。 ----
+RWStructuredBuffer<float2> SortPositions; // 绑定到 Predicted（主排序）或 Positions（混色排序）。
+RWStructuredBuffer<int> BucketOf;   // 索引 k（紧凑）。 // indexed by k (compact).
 RWStructuredBuffer<int> Counts;     // tableSize
 RWStructuredBuffer<int> CellStart;  // tableSize+1
 RWStructuredBuffer<int> Cursor;     // tableSize
-RWStructuredBuffer<int> SortedSlots;// numParticles
+RWStructuredBuffer<int> SortedSlots;// activeCount，存 slot。 // stores slots.
 
-// ---- 标量参数。 // Scalar params. ----
-int numParticles;
+// ---- 生成上传源（仅 ScatterSpawn 使用，只含动态状态；静态属性由 CPU 整块上传）。 // Spawn upload sources (ScatterSpawn only, dynamic state). ----
+StructuredBuffer<int>    UploadSlots;
+StructuredBuffer<float2> UploadPos;
+StructuredBuffer<float2> UploadVel;
+StructuredBuffer<float4> UploadColor;
+
+// ---- 标量参数。 ----
+int numParticles;   // = activeCount，遍历上界。 // = activeCount, loop bound.
+int numUploads;
 int tableSize;
 int numColliders;
 int numBodies;
-int accumulateImpulse; // 1 时累积动态体冲量（仅末子步）。 // accumulate dynamic-body impulse when 1 (last substep only). // 末サブステップのみ 1。
+int accumulateImpulse;
 float h;
 float invCellSize;
 float targetDensity;
@@ -112,13 +102,12 @@ float dt;
 float time;
 float impulseScale;
 
-// ============ 核函数（与 CPU KernelMath 一致）。 // Kernels (match CPU KernelMath). ============
-float Poly6Coef()       { return 4.0f  / (PI * pow(h, 8.0f)); }
-float SpikyPow2Coef()   { return 6.0f  / (PI * pow(h, 4.0f)); }
-float SpikyPow3Coef()   { return 10.0f / (PI * pow(h, 5.0f)); }
-float DerivP2Coef()     { return 12.0f / (PI * pow(h, 4.0f)); }
-float DerivP3Coef()     { return 30.0f / (PI * pow(h, 5.0f)); }
-
+// ============ 核函数。 ============
+float Poly6Coef()     { return 4.0f  / (PI * pow(h, 8.0f)); }
+float SpikyPow2Coef() { return 6.0f  / (PI * pow(h, 4.0f)); }
+float SpikyPow3Coef() { return 10.0f / (PI * pow(h, 5.0f)); }
+float DerivP2Coef()   { return 12.0f / (PI * pow(h, 4.0f)); }
+float DerivP3Coef()   { return 30.0f / (PI * pow(h, 5.0f)); }
 float Poly6(float dst, float coef)     { if (dst >= h) return 0; float v = h*h - dst*dst; return v*v*v*coef; }
 float SpikyPow2(float dst, float coef) { if (dst >= h) return 0; float v = h - dst; return v*v*coef; }
 float SpikyPow3(float dst, float coef) { if (dst >= h) return 0; float v = h - dst; return v*v*v*coef; }
@@ -126,22 +115,23 @@ float DerivSpikyPow2(float dst, float coef) { if (dst > h) return 0; float v = h
 float DerivSpikyPow3(float dst, float coef) { if (dst > h) return 0; float v = h - dst; return -v*v*coef; }
 
 // ============ 空间哈希（与 CPU Liquid2DHashGrid 同一公式）。 ============
+// 备注：编译器会对下面的有符号取模 `hsh % tableSize` 报告
+//   "integer modulus may be much slower, try using uints if possible" —— 这是性能提示，非错误。
+//   此处刻意保留有符号 int 取模（含负值 `+tableSize` 修正），以与 CPU 侧 Liquid2DHashGrid.Hash 逐位一致，
+//   保证 CPU/GPU 两种求解器落入相同的哈希桶（"同算法"前提）。改成 uint 取模会改变负哈希值的桶号、与 CPU 分叉，故不要改。
+// Note: the compiler warns "integer modulus may be much slower" on the signed `hsh % tableSize` below — a perf hint, not an error.
+//   The signed-int modulus (with the negative `+tableSize` fixup) is kept ON PURPOSE so it stays bit-identical to the CPU-side
+//   Liquid2DHashGrid.Hash and both solvers land in the same hash bucket. Switching to uint would diverge from the CPU; do not change.
+// 注：下記の符号付き剰余に対する性能警告は意図的に無視。CPU 側 Liquid2DHashGrid.Hash とビット一致させるため uint に変更しないこと。
 int2 CellCoord(float2 p) { return (int2)floor(p * invCellSize); }
-int HashCell(int2 c)
-{
-    int hsh = (c.x * 73856093) ^ (c.y * 19349663);
-    int m = hsh % tableSize;
-    return m < 0 ? m + tableSize : m;
-}
+int HashCell(int2 c) { int hsh = (c.x * 73856093) ^ (c.y * 19349663); int m = hsh % tableSize; return m < 0 ? m + tableSize : m; }
 
-// ============ 碰撞体投影（移植 Liquid2DColliderMath，返回是否穿透 + 修正 + 外法线）。 ============
+// ============ 碰撞体投影（移植 Liquid2DColliderMath）。 ============
 bool ProjCircle(GpuCollider c, float2 p, float pr, out float2 corr, out float2 n)
 {
     float2 d = p - c.center; float distSq = dot(d, d); float minD = c.radius + pr;
     if (distSq >= minD * minD) { corr = 0; n = 0; return false; }
-    float dist = sqrt(distSq);
-    n = dist > 1e-6f ? d / dist : float2(0, 1);
-    corr = n * (minD - dist); return true;
+    float dist = sqrt(distSq); n = dist > 1e-6f ? d / dist : float2(0, 1); corr = n * (minD - dist); return true;
 }
 bool ProjBox(GpuCollider c, float2 p, float pr, out float2 corr, out float2 n)
 {
@@ -191,14 +181,12 @@ float2 ClosestOnSeg(float2 a, float2 b, float2 p)
 }
 bool PointInPoly(int start, int count, float2 p)
 {
-    bool inside = false;
-    int j = count - 1;
+    bool inside = false; int j = count - 1;
     for (int i = 0; i < count; i++)
     {
         float2 vi = ColliderPoints[start + i];
         float2 vj = ColliderPoints[start + j];
-        if (((vi.y > p.y) != (vj.y > p.y)) && (p.x < (vj.x - vi.x) * (p.y - vi.y) / (vj.y - vi.y) + vi.x))
-            inside = !inside;
+        if (((vi.y > p.y) != (vj.y > p.y)) && (p.x < (vj.x - vi.x) * (p.y - vi.y) / (vj.y - vi.y) + vi.x)) inside = !inside;
         j = i;
     }
     return inside;
@@ -206,18 +194,14 @@ bool PointInPoly(int start, int count, float2 p)
 bool ProjPolygon(GpuCollider c, float2 p, float pr, out float2 corr, out float2 n)
 {
     int nn = c.pointCount; if (nn < 3) { corr = 0; n = 0; return false; }
-    int s = c.pointStart;
-    float minDistSq = 1e30f; float2 best = p;
+    int s = c.pointStart; float minDistSq = 1e30f; float2 best = p;
     for (int i = 0; i < nn; i++)
     {
-        float2 a = ColliderPoints[s + i];
-        float2 b = ColliderPoints[s + ((i + 1) % nn)];
-        float2 cp = ClosestOnSeg(a, b, p);
-        float dsq = dot(p - cp, p - cp);
+        float2 a = ColliderPoints[s + i]; float2 b = ColliderPoints[s + ((i + 1) % nn)];
+        float2 cp = ClosestOnSeg(a, b, p); float dsq = dot(p - cp, p - cp);
         if (dsq < minDistSq) { minDistSq = dsq; best = cp; }
     }
-    bool inside = PointInPoly(s, nn, p);
-    float dist = sqrt(minDistSq);
+    bool inside = PointInPoly(s, nn, p); float dist = sqrt(minDistSq);
     if (!inside)
     {
         if (minDistSq >= pr * pr) { corr = 0; n = 0; return false; }
@@ -229,14 +213,11 @@ bool ProjPolygon(GpuCollider c, float2 p, float pr, out float2 corr, out float2 
 bool ProjEdge(GpuCollider c, float2 p, float pr, out float2 corr, out float2 n)
 {
     int nn = c.pointCount; if (nn < 2) { corr = 0; n = 0; return false; }
-    int s = c.pointStart;
-    float minDistSq = 1e30f; float2 best = p;
+    int s = c.pointStart; float minDistSq = 1e30f; float2 best = p;
     for (int i = 0; i < nn - 1; i++)
     {
-        float2 a = ColliderPoints[s + i];
-        float2 b = ColliderPoints[s + i + 1];
-        float2 cp = ClosestOnSeg(a, b, p);
-        float dsq = dot(p - cp, p - cp);
+        float2 a = ColliderPoints[s + i]; float2 b = ColliderPoints[s + i + 1];
+        float2 cp = ClosestOnSeg(a, b, p); float dsq = dot(p - cp, p - cp);
         if (dsq < minDistSq) { minDistSq = dsq; best = cp; }
     }
     if (minDistSq >= pr * pr) { corr = 0; n = 0; return false; }
@@ -256,10 +237,28 @@ bool ProjectCollider(GpuCollider c, float2 p, float pr, out float2 corr, out flo
 
 // ============ Kernels ============
 
+// 写入新生成粒子到其 slot。 // Write newly spawned particles to their slots. // 新規粒子を slot に書込み。
+[numthreads(NumThreads,1,1)]
+void ScatterSpawn(uint3 id : SV_DispatchThreadID)
+{
+    int m = (int)id.x; if (m >= numUploads) return;
+    int slot = UploadSlots[m];
+    float2 pos = UploadPos[m];
+    Positions[slot] = pos;
+    Predicted[slot] = pos;
+    Velocities[slot] = UploadVel[m];
+    float4 c = UploadColor[m];
+    Colors[slot] = c;
+    ColorsNext[slot] = c;
+    LastMixTime[slot] = time;
+    Densities[slot] = float2(0, 0);
+}
+
 [numthreads(NumThreads,1,1)]
 void ExternalForces(uint3 id : SV_DispatchThreadID)
 {
-    int i = (int)id.x; if (i >= numParticles) return;
+    int k = (int)id.x; if (k >= numParticles) return;
+    int i = ActiveIndices[k];
     float gs = Materials[TypeId[i]].gravityScale;
     float2 v = Velocities[i] + gravity * gs * dt;
     Velocities[i] = v;
@@ -276,79 +275,70 @@ void ClearGrid(uint3 id : SV_DispatchThreadID)
 [numthreads(NumThreads,1,1)]
 void CountBuckets(uint3 id : SV_DispatchThreadID)
 {
-    int i = (int)id.x; if (i >= numParticles) return;
+    int k = (int)id.x; if (k >= numParticles) return;
+    int i = ActiveIndices[k];
     int b = HashCell(CellCoord(SortPositions[i]));
-    BucketOf[i] = b;
+    BucketOf[k] = b;
     InterlockedAdd(Counts[b], 1);
 }
 
-// 单线程前缀和（tableSize 通常较小；与 CPU BuildHashGridJob 同序）。 // Single-thread prefix sum. // 単スレッド前置和。
 [numthreads(1,1,1)]
 void PrefixSum(uint3 id : SV_DispatchThreadID)
 {
     int acc = 0;
-    for (int t = 0; t < tableSize; t++)
-    {
-        CellStart[t] = acc;
-        Cursor[t] = acc;
-        acc += Counts[t];
-    }
+    for (int t = 0; t < tableSize; t++) { CellStart[t] = acc; Cursor[t] = acc; acc += Counts[t]; }
     CellStart[tableSize] = acc;
 }
 
 [numthreads(NumThreads,1,1)]
 void ScatterSlots(uint3 id : SV_DispatchThreadID)
 {
-    int i = (int)id.x; if (i >= numParticles) return;
-    int b = BucketOf[i];
+    int k = (int)id.x; if (k >= numParticles) return;
+    int b = BucketOf[k];
     int pos;
     InterlockedAdd(Cursor[b], 1, pos);
-    SortedSlots[pos] = i;
+    SortedSlots[pos] = ActiveIndices[k];
 }
 
 [numthreads(NumThreads,1,1)]
 void Density(uint3 id : SV_DispatchThreadID)
 {
-    int i = (int)id.x; if (i >= numParticles) return;
+    int k = (int)id.x; if (k >= numParticles) return;
+    int i = ActiveIndices[k];
     float2 pi = Predicted[i];
     float h2 = h * h; float c2 = SpikyPow2Coef(); float c3 = SpikyPow3Coef();
     float density = 0, nearDensity = 0;
+    int budget = MaxScan;
     int2 ci = CellCoord(pi);
-    for (int dy = -1; dy <= 1; dy++)
-    for (int dx = -1; dx <= 1; dx++)
+    for (int dy = -1; dy <= 1 && budget > 0; dy++)
+    for (int dx = -1; dx <= 1 && budget > 0; dx++)
     {
         int2 qc = ci + int2(dx, dy);
-        int b = HashCell(qc);
-        int start = CellStart[b]; int end = CellStart[b + 1];
+        int b = HashCell(qc); int start = CellStart[b]; int end = CellStart[b + 1];
         for (int s = start; s < end; s++)
         {
             int j = SortedSlots[s];
-            if (CellCoord(Predicted[j]).x != qc.x || CellCoord(Predicted[j]).y != qc.y) continue;
+            int2 jc = CellCoord(Predicted[j]);
+            if (jc.x != qc.x || jc.y != qc.y) continue;
             float2 r = pi - Predicted[j]; float r2 = dot(r, r);
             if (r2 >= h2) continue;
             float dist = sqrt(r2);
             density += SpikyPow2(dist, c2);
             nearDensity += SpikyPow3(dist, c3);
+            if (--budget <= 0) break;
         }
     }
     Densities[i] = float2(density, nearDensity);
 }
 
-float PressureFor(int slot)
-{
-    float rho0 = targetDensity * Materials[TypeId[slot]].restDensityScale;
-    return (Densities[slot].x - rho0) * pressureMultiplier;
-}
-float NearPressureFor(int slot)
-{
-    float coh = Materials[TypeId[slot]].cohesion;
-    return Densities[slot].y * nearPressureMultiplier * (0.5f + coh);
-}
+float PressureFor(int slot) { float rho0 = targetDensity * Materials[TypeId[slot]].restDensityScale; return (Densities[slot].x - rho0) * pressureMultiplier; }
+float NearPressureFor(int slot) { float coh = Materials[TypeId[slot]].cohesion; return Densities[slot].y * nearPressureMultiplier * (0.5f + coh); }
 
 [numthreads(NumThreads,1,1)]
 void Pressure(uint3 id : SV_DispatchThreadID)
 {
-    int i = (int)id.x; if (i >= numParticles) return;
+    int k = (int)id.x; if (k >= numParticles) return;
+    int i = ActiveIndices[k];
     float2 pi = Predicted[i];
     float densityI = Densities[i].x;
     if (densityI <= 1e-8f) return;
@@ -356,18 +346,19 @@ void Pressure(uint3 id : SV_DispatchThreadID)
     float nearPressureI = NearPressureFor(i);
     float h2 = h * h; float cd2 = DerivP2Coef(); float cd3 = DerivP3Coef();
     float2 pressureForce = 0;
+    int budget = MaxScan;
     int2 ci = CellCoord(pi);
-    for (int dy = -1; dy <= 1; dy++)
-    for (int dx = -1; dx <= 1; dx++)
+    for (int dy = -1; dy <= 1 && budget > 0; dy++)
+    for (int dx = -1; dx <= 1 && budget > 0; dx++)
     {
         int2 qc = ci + int2(dx, dy);
-        int b = HashCell(qc);
-        int start = CellStart[b]; int end = CellStart[b + 1];
+        int b = HashCell(qc); int start = CellStart[b]; int end = CellStart[b + 1];
         for (int s = start; s < end; s++)
         {
             int j = SortedSlots[s];
             if (j == i) continue;
-            if (CellCoord(Predicted[j]).x != qc.x || CellCoord(Predicted[j]).y != qc.y) continue;
+            int2 jc = CellCoord(Predicted[j]);
+            if (jc.x != qc.x || jc.y != qc.y) continue;
             float2 offset = Predicted[j] - pi; float r2 = dot(offset, offset);
             if (r2 >= h2) continue;
             float r = sqrt(r2);
@@ -378,6 +369,7 @@ void Pressure(uint3 id : SV_DispatchThreadID)
             float sharedNear = (nearPressureI + NearPressureFor(j)) * 0.5f;
             pressureForce += dir * DerivSpikyPow2(r, cd2) * sharedP / densityJ;
             pressureForce += dir * DerivSpikyPow3(r, cd3) * sharedNear / nearJ;
+            if (--budget <= 0) break;
         }
     }
     Velocities[i] += (pressureForce / densityI) * dt;
@@ -386,26 +378,29 @@ void Pressure(uint3 id : SV_DispatchThreadID)
 [numthreads(NumThreads,1,1)]
 void Viscosity(uint3 id : SV_DispatchThreadID)
 {
-    int i = (int)id.x; if (i >= numParticles) return;
+    int k = (int)id.x; if (k >= numParticles) return;
+    int i = ActiveIndices[k];
     float2 pi = Predicted[i]; float2 vi = Velocities[i];
     float h2 = h * h; float c6 = Poly6Coef();
     float strength = viscosityStrength + Materials[TypeId[i]].viscosity;
     float2 force = 0;
+    int budget = MaxScan;
     int2 ci = CellCoord(pi);
-    for (int dy = -1; dy <= 1; dy++)
-    for (int dx = -1; dx <= 1; dx++)
+    for (int dy = -1; dy <= 1 && budget > 0; dy++)
+    for (int dx = -1; dx <= 1 && budget > 0; dx++)
     {
         int2 qc = ci + int2(dx, dy);
-        int b = HashCell(qc);
-        int start = CellStart[b]; int end = CellStart[b + 1];
+        int b = HashCell(qc); int start = CellStart[b]; int end = CellStart[b + 1];
         for (int s = start; s < end; s++)
         {
             int j = SortedSlots[s];
             if (j == i) continue;
-            if (CellCoord(Predicted[j]).x != qc.x || CellCoord(Predicted[j]).y != qc.y) continue;
+            int2 jc = CellCoord(Predicted[j]);
+            if (jc.x != qc.x || jc.y != qc.y) continue;
             float2 r = pi - Predicted[j]; float r2 = dot(r, r);
             if (r2 >= h2) continue;
             force += (Velocities[j] - vi) * Poly6(sqrt(r2), c6);
+            if (--budget <= 0) break;
         }
     }
     VelNext[i] = vi + force * strength * dt;
@@ -414,7 +409,8 @@ void Viscosity(uint3 id : SV_DispatchThreadID)
 [numthreads(NumThreads,1,1)]
 void CopyVelocity(uint3 id : SV_DispatchThreadID)
 {
-    int i = (int)id.x; if (i >= numParticles) return;
+    int k = (int)id.x; if (k >= numParticles) return;
+    int i = ActiveIndices[k];
     Velocities[i] = VelNext[i];
 }
 
@@ -428,14 +424,17 @@ void ClearImpulse(uint3 id : SV_DispatchThreadID)
 [numthreads(NumThreads,1,1)]
 void IntegrateCollide(uint3 id : SV_DispatchThreadID)
 {
-    int i = (int)id.x; if (i >= numParticles) return;
+    int k = (int)id.x; if (k >= numParticles) return;
+    int i = ActiveIndices[k];
     float2 v = Velocities[i];
-    if (maxSpeed > 0)
-    {
-        float spd2 = dot(v, v);
-        if (spd2 > maxSpeed * maxSpeed) v *= maxSpeed / sqrt(spd2);
-    }
-    float2 p = Positions[i] + v * dt;
+
+    // NaN/无穷防护：异常值会让粒子坍缩到同一 cell 触发 O(N²)/TDR，发现即清零。 // NaN/Inf guard: reset to avoid collapse → O(N^2)/TDR. // NaN/Inf 防護。
+    if (!isfinite(v.x) || !isfinite(v.y)) v = float2(0, 0);
+    if (maxSpeed > 0) { float spd2 = dot(v, v); if (spd2 > maxSpeed * maxSpeed) v *= maxSpeed / sqrt(spd2); }
+
+    float2 oldP = Positions[i];
+    if (!isfinite(oldP.x) || !isfinite(oldP.y)) { oldP = float2(0, 0); v = float2(0, 0); }
+    float2 p = oldP + v * dt;
 
     float pr = Radii[i];
     MaterialData mat = Materials[TypeId[i]];
@@ -449,11 +448,7 @@ void IntegrateCollide(uint3 id : SV_DispatchThreadID)
         p += corr;
         float vn = dot(v, n);
         if (vn < 0) v -= (1.0f + e) * vn * n;
-        if (mat.friction > 0)
-        {
-            float2 vt = v - dot(v, n) * n;
-            v -= vt * mat.friction;
-        }
+        if (mat.friction > 0) { float2 vt = v - dot(v, n) * n; v -= vt * mat.friction; }
         if (accumulateImpulse == 1 && col.dynamic == 1 && col.bodyIndex >= 0)
         {
             float mass = InvMass[i] > 1e-6f ? 1.0f / InvMass[i] : 0.0f;
@@ -463,6 +458,7 @@ void IntegrateCollide(uint3 id : SV_DispatchThreadID)
         }
     }
 
+    if (!isfinite(p.x) || !isfinite(p.y)) { p = oldP; v = float2(0, 0); }
     Positions[i] = p;
     Velocities[i] = v;
 }
@@ -470,7 +466,8 @@ void IntegrateCollide(uint3 id : SV_DispatchThreadID)
 [numthreads(NumThreads,1,1)]
 void MixColor(uint3 id : SV_DispatchThreadID)
 {
-    int i = (int)id.x; if (i >= numParticles) return;
+    int k = (int)id.x; if (k >= numParticles) return;
+    int i = ActiveIndices[k];
     float4 ci4 = Colors[i];
     MixData mi = MixDatas[TypeId[i]];
     if (mi.enabled == 0 || mi.speed <= 0) { ColorsNext[i] = ci4; return; }
@@ -479,18 +476,20 @@ void MixColor(uint3 id : SV_DispatchThreadID)
     int gi = GroupId[i];
     float2 pi = Positions[i]; float ri = Radii[i];
     float4 accum = 0; float wsum = 0;
+    int budget = MaxScan;
     int2 cc = CellCoord(pi);
-    for (int dy = -1; dy <= 1; dy++)
-    for (int dx = -1; dx <= 1; dx++)
+    for (int dy = -1; dy <= 1 && budget > 0; dy++)
+    for (int dx = -1; dx <= 1 && budget > 0; dx++)
     {
         int2 qc = cc + int2(dx, dy);
-        int b = HashCell(qc);
-        int start = CellStart[b]; int end = CellStart[b + 1];
+        int b = HashCell(qc); int start = CellStart[b]; int end = CellStart[b + 1];
         for (int s = start; s < end; s++)
         {
             int j = SortedSlots[s];
             if (j == i) continue;
-            if (CellCoord(Positions[j]).x != qc.x || CellCoord(Positions[j]).y != qc.y) continue;
+            int2 jc = CellCoord(Positions[j]);
+            if (jc.x != qc.x || jc.y != qc.y) continue;
+            if (--budget <= 0) break;
             int gj = GroupId[j];
             if (gi != gj && gi != 0 && gj != 0) continue;
             if (MixDatas[TypeId[j]].enabled == 0) continue;
@@ -501,7 +500,6 @@ void MixColor(uint3 id : SV_DispatchThreadID)
         }
     }
     if (wsum <= 0) { ColorsNext[i] = ci4; return; }
-
     float4 avg = (accum + ci4) / (wsum + 1.0f);
     float speed = mi.speed;
     if (speed < 1.0f && mi.withMovement == 1)
@@ -516,6 +514,7 @@ void MixColor(uint3 id : SV_DispatchThreadID)
 [numthreads(NumThreads,1,1)]
 void CopyColor(uint3 id : SV_DispatchThreadID)
 {
-    int i = (int)id.x; if (i >= numParticles) return;
+    int k = (int)id.x; if (k >= numParticles) return;
+    int i = ActiveIndices[k];
     Colors[i] = ColorsNext[i];
 }

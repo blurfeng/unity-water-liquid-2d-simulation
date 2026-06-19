@@ -44,6 +44,15 @@ namespace Fs.Liquid2D
             
             // 像素化相关。 // Pixelation related. // ピクセル化関連。
             internal static readonly int PixelSize = Shader.PropertyToID("_PixelSize");
+
+            // GPU 常驻粒子绘制相关。 // GPU-resident particle draw related. // GPU 常駐粒子描画関連。
+            internal static readonly int PositionsBuf = Shader.PropertyToID("_Positions");
+            internal static readonly int ColorsBuf = Shader.PropertyToID("_Colors");
+            internal static readonly int RadiiBuf = Shader.PropertyToID("_Radii");
+            internal static readonly int TypeIdsBuf = Shader.PropertyToID("_TypeIds");
+            internal static readonly int ActiveIdxBuf = Shader.PropertyToID("_ActiveIndices");
+            internal static readonly int TargetType = Shader.PropertyToID("_TargetType");
+            internal static readonly int RenderScale = Shader.PropertyToID("_RenderScale");
         }
         
         private static readonly ShaderTagId _shaderTagId = new ShaderTagId("UniversalForward");
@@ -69,6 +78,18 @@ namespace Fs.Liquid2D
         
         private Material _materialBlur; // 流体模糊材质。 // Fluid blur material. // 流体ブラー材。
         private Material _materialEffect; // 流体效果材质。 // Fluid effect material. // 流体エフェクトマテリアル。
+
+        private const string ShaderPathParticleGpu = "Custom/URP/2D/Liquid2DParticleGpu";
+        private Material _materialParticleGpu; // GPU 常驻粒子程序化绘制材质（共享）。 // Shared material for GPU-resident procedural particle draw. // GPU 常駐粒子描画材（共有）。
+        /// <summary>GPU 常驻粒子绘制材质（懒创建）。 // GPU-resident particle draw material (lazy). // GPU 常駐粒子描画材（遅延）。</summary>
+        private Material MaterialParticleGpu
+        {
+            get
+            {
+                if (!_materialParticleGpu) _materialParticleGpu = CoreUtils.CreateEngineMaterial(ShaderPathParticleGpu);
+                return _materialParticleGpu;
+            }
+        }
         private bool IsValidMat => _materialBlur && _materialEffect;
         
         private readonly Mesh _quadMesh; // 用于绘制流体粒子的四边形网格。 // Quad mesh for drawing fluid particles. // 流体粒子を描画するためのクアッドメッシュ。
@@ -129,6 +150,8 @@ namespace Fs.Liquid2D
             _materialBlurCombineTwo = null;
             CoreUtils.Destroy(_materialEffect);
             _materialEffect = null;
+            CoreUtils.Destroy(_materialParticleGpu);
+            _materialParticleGpu = null;
             CoreUtils.Destroy(_materialClone);
             _materialClone = null;
             CoreUtils.Destroy(_materialGrabAsBg);
@@ -160,6 +183,17 @@ namespace Fs.Liquid2D
             public Vector4[] colorArrayCache;
             public Plane[] frustumPlanes;
             public Mesh quadMesh;
+
+            // GPU 常驻粒子绘制（DrawProcedural 直读 GPU 缓冲）。 // GPU-resident particle draw (DrawProcedural). // GPU 常駐粒子描画。
+            public bool gpuMode;
+            public Material gpuMaterial;
+            public ComputeBuffer gpuPositions;
+            public ComputeBuffer gpuColors;
+            public ComputeBuffer gpuRadii;
+            public ComputeBuffer gpuTypeIds;
+            public ComputeBuffer gpuActive;
+            public int gpuCount;
+            public IReadOnlyList<Liquid2DParticleDescriptor> gpuDescriptors;
 
             // 模糊 Pass 相关。 // Blur Pass related. // ブラーPass関連。
             public Material materialBlur;
@@ -254,6 +288,24 @@ namespace Fs.Liquid2D
                 passData.colorArrayCache = _colorArrayCache;
                 passData.frustumPlanes = _frustumPlanes;
                 passData.mpb = _mpbParticle;
+
+                // GPU 常驻模式：取 GPU 缓冲直读绘制（DrawProcedural），否则走 CPU 路径。
+                // GPU resident mode: read GPU buffers and draw via DrawProcedural; otherwise the CPU path.
+                // GPU 常駐モード：GPU バッファを直読して DrawProcedural、それ以外は CPU パス。
+                bool hasGpuBuffers = Liquid2DSimulation.TryGetRenderBuffers(out var gpuPos, out var gpuCol, out var gpuRad,
+                    out var gpuType, out var gpuActive, out _, out int gpuCount, out var gpuDesc);
+                passData.gpuMode = Liquid2DSimulation.Mode == Liquid2DSimulationMode.Gpu && hasGpuBuffers;
+                if (passData.gpuMode)
+                {
+                    passData.gpuMaterial = MaterialParticleGpu;
+                    passData.gpuPositions = gpuPos;
+                    passData.gpuColors = gpuCol;
+                    passData.gpuRadii = gpuRad;
+                    passData.gpuTypeIds = gpuType;
+                    passData.gpuActive = gpuActive;
+                    passData.gpuCount = gpuCount;
+                    passData.gpuDescriptors = gpuDesc;
+                }
 
                 builder.SetRenderAttachment(
                     // 设置渲染目标纹理句柄和声明使用纹理句柄。
@@ -517,6 +569,14 @@ namespace Fs.Liquid2D
         private static void ExecutePassParticle(PassData data, RasterGraphContext context)
         {
             var cmd = context.cmd;
+
+            // GPU 常驻路径：程序化绘制直读 GPU 缓冲，绕过 CPU 逐粒子矩阵与回读。 // GPU-resident path: procedural draw from GPU buffers. // GPU 常駐パス。
+            if (data.gpuMode)
+            {
+                ExecutePassParticleGpu(data, cmd);
+                return;
+            }
+
             Camera cam = data.cameraData.camera;
             // 使用非分配重载填充复用的视锥平面缓存。 // Fill the reusable frustum planes cache using the non-allocating overload. // 非割り当てオーバーロードで再利用する視錐台平面キャッシュを充填します。
             GeometryUtility.CalculateFrustumPlanes(cam, data.frustumPlanes);
@@ -592,6 +652,48 @@ namespace Fs.Liquid2D
                     mpb.SetVectorArray(ShaderIds.ColorId, colors);
                     cmd.DrawMeshInstanced(data.quadMesh, 0, settings.material, 0, matrices, count, mpb);
                 }
+            }
+        }
+
+        /// <summary>
+        /// GPU 常驻路径的粒子绘制。按描述符（typeId）逐类用 DrawProcedural 绘制，直读 SphGpuSolver 的常驻 GPU 缓冲，
+        /// Shader 内按 slot 取位置/颜色/半径并剔除非本类实例。绕过 CPU 逐粒子矩阵构建与每帧回读。
+        /// Particle draw for the GPU-resident path. Draws per descriptor (typeId) via DrawProcedural, reading SphGpuSolver's
+        /// resident GPU buffers directly; the shader fetches position/color/radius by slot and culls non-matching types.
+        /// Bypasses CPU per-particle matrix building and per-frame readback.
+        /// GPU 常駐パスの粒子描画。記述子ごとに DrawProcedural で描画し、常駐 GPU バッファを直読。
+        /// </summary>
+        private static void ExecutePassParticleGpu(PassData data, RasterCommandBuffer cmd)
+        {
+            var descriptors = data.gpuDescriptors;
+            if (descriptors == null || data.gpuCount <= 0 || data.gpuMaterial == null) return;
+
+            string nameTag = data.settings.nameTag;
+            var mpb = data.mpb;
+
+            for (int t = 0; t < descriptors.Count; t++)
+            {
+                var d = descriptors[t];
+                if (d == null || !d.IsValid()) continue;
+                var settings = d.renderSettings;
+
+                // NameTag 不为空时仅由同名 Feature 渲染（与 CPU 路径一致）。 // Same nameTag gating as the CPU path. // CPU パスと同じ nameTag ゲート。
+                if (!string.IsNullOrEmpty(settings.nameTag) && !settings.nameTag.Equals(nameTag)) continue;
+
+                mpb.Clear();
+                mpb.SetBuffer(ShaderIds.PositionsBuf, data.gpuPositions);
+                mpb.SetBuffer(ShaderIds.ColorsBuf, data.gpuColors);
+                mpb.SetBuffer(ShaderIds.RadiiBuf, data.gpuRadii);
+                mpb.SetBuffer(ShaderIds.TypeIdsBuf, data.gpuTypeIds);
+                mpb.SetBuffer(ShaderIds.ActiveIdxBuf, data.gpuActive);
+                mpb.SetTexture(ShaderIds.MainTexId, settings.sprite.texture);
+                mpb.SetInteger(ShaderIds.TargetType, t);
+                mpb.SetFloat(ShaderIds.RenderScale, d.renderScale);
+
+                // 6 顶点/实例（两三角拼四边形），实例数 = 活动粒子数；Shader 内按 typeId 剔除非本类。
+                // 6 verts/instance (quad), instances = active particle count; shader culls non-matching typeIds.
+                // 6 頂点/インスタンス、インスタンス数 = アクティブ粒子数。
+                cmd.DrawProcedural(Matrix4x4.identity, data.gpuMaterial, 0, MeshTopology.Triangles, 6, data.gpuCount, mpb);
             }
         }
 

@@ -34,6 +34,16 @@ namespace Fs.Liquid2D
 
         /// <summary>当前时间（Time.time），用于混色节流等。 // Current time, for mix throttling etc. // 現在時刻（混色スロットリング等）。</summary>
         public float time;
+
+        /// <summary>动态碰撞体数量（>0 时 GPU 才回读冲量）。 // Dynamic collider count (GPU reads impulse back only when >0). // 動的コライダー数。</summary>
+        public int dynamicBodyCount;
+
+        /// <summary>
+        /// GPU 模式：自上次 Step 以来新生成的粒子 slot 列表（供 GPU 增量上传到常驻缓冲）。CPU 模式忽略。
+        /// GPU mode: slots spawned since the last Step (for incremental upload into resident GPU buffers). Ignored on CPU.
+        /// GPU モード：前回 Step 以降に生成された slot リスト（常駐バッファへの増分アップロード用）。
+        /// </summary>
+        public System.Collections.Generic.List<int> gpuPendingSpawns;
     }
 
     /// <summary>

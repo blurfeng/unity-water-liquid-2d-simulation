@@ -44,6 +44,15 @@ namespace Fs.Liquid2D
         /// <summary>计算平台模式（GPU 预留）。 // Compute mode (GPU reserved). // 計算モード。</summary>
         public static Liquid2DSimulationMode Mode = Liquid2DSimulationMode.Cpu;
 
+        /// <summary>
+        /// GPU 模式下每帧把 GPU 数据全量回读到 CPU store。仅为让依赖 CPU store 的功能（Liquid2DDebugGizmos、
+        /// GetPosition/GetVelocity 查询）在 GPU 模式下可用。⚠ 这是同步 GPU→CPU 阻塞点，会严重降低性能，默认关闭。
+        /// Full per-frame GPU→CPU readback into the store in GPU mode, only so CPU-store consumers (Liquid2DDebugGizmos,
+        /// GetPosition/GetVelocity) work under GPU mode. ⚠ Synchronous stall, severely hurts performance; off by default.
+        /// GPU モードで毎フレーム GPU→CPU 全量回読（CPU store 依存機能の互換用）。⚠ 同期ストールで性能大幅低下、既定はオフ。
+        /// </summary>
+        public static bool GpuReadbackToStore = false;
+
         private Liquid2DParticleStore _store;
         private ILiquid2DSolver _solver;
 
@@ -62,6 +71,9 @@ namespace Fs.Liquid2D
         private bool _activeDirty;
 
         private readonly List<ILiquid2DForceReceiver> _dynamicReceivers = new List<ILiquid2DForceReceiver>();
+
+        // GPU 模式：自上次 Step 以来新生成的粒子 slot（供 GPU 增量上传到常驻缓冲）。 // GPU mode: slots spawned since last Step. // GPU 増分アップロード用。
+        private readonly List<int> _gpuPendingSpawns = new List<int>();
 
         public Liquid2DParticleStore Store => _store;
         public IReadOnlyList<Liquid2DParticleDescriptor> Descriptors => _descriptors;
@@ -191,6 +203,9 @@ namespace Fs.Liquid2D
             _activeDirty = true;
 
             EnforceCap(list, handle.Index);
+
+            // GPU 常驻模式：记录新 slot，待下次 Step 增量上传。 // GPU resident mode: record new slot for incremental upload. // GPU 常駐：新 slot を記録。
+            if (Mode == Liquid2DSimulationMode.Gpu) _gpuPendingSpawns.Add(handle.Index);
             return handle;
         }
 
@@ -248,7 +263,7 @@ namespace Fs.Liquid2D
             EnsureMaterials();
             EnsureActiveCapacity();
             int count = RebuildActiveIndices();
-            if (count == 0) return;
+            if (count == 0) { _gpuPendingSpawns.Clear(); return; }
 
             if (Params.h <= 0f) Params = SolverParams.Default;
 
@@ -265,15 +280,35 @@ namespace Fs.Liquid2D
                 colliders = colliders,
                 colliderImpulse = impulse,
                 time = now,
+                dynamicBodyCount = _dynamicReceivers.Count,
+                gpuPendingSpawns = _gpuPendingSpawns,
             };
 
-            _solver.Step(ctx, Params, Time.fixedDeltaTime);
+            // try/finally 确保即使 Step 抛异常也释放 TempJob 缓冲，避免泄漏。 // Ensure TempJob buffers are freed even if Step throws. // 例外時もバッファ解放。
+            try
+            {
+                _solver.Step(ctx, Params, Time.fixedDeltaTime);
 
-            DispatchImpulses(impulse);
+                // 增量上传列表本帧已消费，清空。 // Pending spawn list consumed this frame; clear. // 消費したのでクリア。
+                _gpuPendingSpawns.Clear();
 
-            colliders.colliders.Dispose();
-            colliders.points.Dispose();
-            impulse.Dispose();
+                // 可选：GPU 模式每帧回读到 CPU store（仅为兼容 Gizmos / 查询，开启会严重降速）。
+                // Optional: per-frame GPU→CPU readback in GPU mode (compat for Gizmos/queries only; severe perf hit when on).
+                // 任意：GPU モードで毎フレーム回読（Gizmos/クエリ互換用、性能大幅低下）。
+                if (GpuReadbackToStore && _solver is SphGpuSolver gpuSolver)
+                {
+                    gpuSolver.ReadbackToStore(_store);
+                    _activeDirty = true;
+                }
+
+                DispatchImpulses(impulse);
+            }
+            finally
+            {
+                colliders.colliders.Dispose();
+                colliders.points.Dispose();
+                impulse.Dispose();
+            }
         }
 
         private void ExpireLifetimes(float now)
@@ -348,6 +383,26 @@ namespace Fs.Liquid2D
             activeCount = inst._activeCount;
             descriptors = inst._descriptors;
             return activeCount > 0;
+        }
+
+        /// <summary>
+        /// GPU 模式：供渲染层直读常驻 GPU 缓冲（DrawProcedural）。仅在 GPU 求解器有效且有粒子时返回 true。
+        /// descriptors 用于按 typeId 取贴图/材质/renderScale/nameTag；buffers 为 slot 索引，需配合 activeIndices 间接寻址。
+        /// GPU mode: lets the render layer read resident GPU buffers directly (DrawProcedural). Returns true only when the
+        /// GPU solver is active and has particles. Buffers are slot-indexed; use activeIndices to indirect.
+        /// GPU モード：常駐 GPU バッファを直読するため。
+        /// </summary>
+        public static bool TryGetRenderBuffers(out UnityEngine.ComputeBuffer positions, out UnityEngine.ComputeBuffer colors,
+            out UnityEngine.ComputeBuffer radii, out UnityEngine.ComputeBuffer typeIds, out UnityEngine.ComputeBuffer activeIndices,
+            out UnityEngine.ComputeBuffer velocities, out int count, out IReadOnlyList<Liquid2DParticleDescriptor> descriptors)
+        {
+            positions = colors = radii = typeIds = activeIndices = velocities = null; count = 0; descriptors = null;
+            var inst = _instance;
+            if (inst == null) return false;
+            descriptors = inst._descriptors;
+            if (inst._solver is SphGpuSolver gpu)
+                return gpu.TryGetRenderBuffers(out positions, out colors, out radii, out typeIds, out activeIndices, out velocities, out count);
+            return false;
         }
 
         #endregion

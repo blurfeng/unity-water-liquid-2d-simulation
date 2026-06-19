@@ -31,6 +31,9 @@ namespace Fs.Liquid2D
 
         public static int2 CellCoord(float2 p, float invCell) => (int2)floor(p * invCell);
 
+        // 此哈希必须与 GPU 侧 Liquid2DSph.compute 的 HashCell 逐位一致（同算法前提），改动需同步两处。
+        // This hash must stay bit-identical to HashCell in the GPU-side Liquid2DSph.compute; change both together.
+        // このハッシュは GPU 側 Liquid2DSph.compute の HashCell とビット一致させること。
         public static int Hash(int2 c, int tableSize)
         {
             unchecked

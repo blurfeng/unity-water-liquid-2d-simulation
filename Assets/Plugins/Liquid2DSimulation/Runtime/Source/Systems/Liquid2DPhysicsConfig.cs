@@ -15,6 +15,67 @@ namespace Fs.Liquid2D
     /// </summary>
     public class Liquid2DPhysicsConfig : MonoBehaviour
     {
+        #region Description 使用说明 // 使用説明
+
+        // ─────────────────────────────────────────────────────────────────────────────
+        // 【GPU 模式下从 CPU 读取粒子数据】gpuReadbackToStore 使用流程
+        //
+        // 默认（gpuReadbackToStore = false）：GPU 模式下粒子数据常驻 GPU，CPU 侧 store 仅在扩容帧同步，
+        //   其余帧是陈旧数据 —— 任何走 store 的 CPU 读取（GetPosition/GetVelocity/Gizmos）都不可靠。
+        //   注意：Liquid2DParticleDisplay 与正式 Feature 渲染直读 GPU 缓冲，不经过 store，不受此开关影响、无需开启。
+        //
+        // 开启（gpuReadbackToStore = true）：每个 FixedUpdate 的 GPU Step 之后，SphGpuSolver.ReadbackToStore 会把
+        //   position / velocity / color / lastMix 从 GPU 缓冲全量回读进 CPU store，当帧即为最新。
+        //   ⚠ 这是同步 GPU→CPU 阻塞点，粒子越多越慢，除非有业务需求要使用 CPU 数据，否则正式使用务必关闭。
+        //
+        // 【Reading Particle Data from CPU in GPU Mode】gpuReadbackToStore Workflow
+        //
+        // Default (gpuReadbackToStore = false): In GPU mode, particle data permanently resides on the GPU.
+        // The CPU-side store is only synchronized during expansion frames;
+        // in all other frames, the data is stale —— any CPU reads via the store (GetPosition/GetVelocity/Gizmos) are unreliable.
+        // Note: Liquid2DParticleDisplay and the official Feature rendering read directly from the GPU buffer
+        // without going through the store, so they are unaffected by this switch and do not require it to be enabled.
+        //
+        // Enabled (gpuReadbackToStore = true): After the GPU Step of each FixedUpdate,
+        // SphGpuSolver.ReadbackToStore will read back all position / velocity / color / lastMix data
+        // from the GPU buffer into the CPU store, making it up-to-date within the same frame.
+        // ⚠ This is a synchronous GPU→CPU bottleneck (blocking point). The more particles there are, the slower it becomes.
+        // Unless there is a specific gameplay/business requirement to use CPU data, it MUST be turned off for production/official use.
+        //
+        // 【GPUモードにおけるCPUからのパーティクルデータ読み込み】gpuReadbackToStore の使用フロー
+        //
+        // デフォルト（gpuReadbackToStore = false）：GPUモードでは、パーティクルデータは常にGPU上に常駐します。
+        //   CPU側の store は拡充フレーム（メモリ拡張時）のみ同期され、
+        //   その他のフレームでは古いデータ（Stale Data）となります —— store を経由するすべてのCPU読み込み（GetPosition/GetVelocity/Gizmos）は信頼できません。
+        //   注意：Liquid2DParticleDisplay および正式な Feature レンダリングは、store を経由せずGPUバッファから直接読み込むため、
+        //   このスイッチの影響を受けず、有効にする必要はありません。
+        //
+        // 有効化（gpuReadbackToStore = true）：各 FixedUpdate の GPU Step の後、
+        //   SphGpuSolver.ReadbackToStore が position / velocity / color / lastMix を
+        //   GPUバッファから CPU store へ全量リードバック（回読）し、そのフレーム内で最新データとなります。
+        //   ⚠ これはGPU→CPUの同期ブロッキングポイント（ボトルネック）であり、パーティクル数が多ければ多いほど処理が遅くなります。
+        //   CPU側のデータを必要とする業務・仕様上の要求がない限り、正式リリース/本番環境では必ず無効（false）にしてください。
+        // -----------------------------------------------------------------------------
+        // 【Use Cases】
+        // we can read particle data from CPU store in GPU mode only when gpuReadbackToStore = true. Two common use cases:
+        //   1) single particle query (GetPosition/GetVelocity/IsAlive):
+        //        var h = Liquid2DSimulation.Instance.Spawn(descriptor, pos, vel, ...);
+        //        float2 p = Liquid2DSimulation.Instance.GetPosition(h);
+        //        float2 v = Liquid2DSimulation.Instance.GetVelocity(h);
+        //        bool alive = Liquid2DSimulation.Instance.IsAlive(h);
+        //   2) batch particle query (debug gizmos, or any other CPU-side processing):
+        //        if (Liquid2DSimulation.TryGetRenderData(out var store, out var active, out int count, out var descriptors))
+        //        {
+        //             for (int i = 0; i < count; i++)
+        //             {
+        //                  int slot = active[i];                 // 紧凑活动索引 → slot
+        //                  float2 pos = store.positions[slot];   // 同理 velocities / colors / radii / typeId
+        //             }
+        //        }
+        // ─────────────────────────────────────────────────────────────────────────────
+
+        #endregion
+
         [SerializeField, LocalizationTooltip(
              "在 Awake 时自动应用以下设置。",
              "Automatically apply the settings below on Awake.",
@@ -27,6 +88,19 @@ namespace Fs.Liquid2D
              "Compute platform mode. CPU = Job System + Burst; GPU = Compute Shader (GPU-resident data, for high particle counts).",
              "計算プラットフォームモード。CPU は Job System + Burst、GPU は Compute Shader（GPU 常駐、高粒子数向け）。")]
         private Liquid2DSimulationMode mode = Liquid2DSimulationMode.Cpu;
+
+        [SerializeField, LocalizationTooltip(
+             "⚠ 性能警告：GPU 模式下每帧把粒子数据从 GPU 全量回读到 CPU。仅在需要让依赖 CPU 数据的功能" +
+             "（Liquid2DDebugGizmos 调试可视化、GetPosition/GetVelocity 查询）在 GPU 模式下工作时才开启。" +
+             "这是同步 GPU→CPU 阻塞点，会严重降低性能（粒子越多越明显），正式使用务必关闭。Liquid2DParticleDisplay 与正式 Feature 渲染不受影响、无需此开关。",
+             "⚠ Performance warning: in GPU mode, reads ALL particle data back from GPU to CPU every frame. Enable ONLY when you need " +
+             "CPU-data-dependent features (Liquid2DDebugGizmos visualization, GetPosition/GetVelocity queries) to work under GPU mode. " +
+             "This is a synchronous GPU→CPU stall that severely degrades performance (worse with more particles); keep it OFF for production. " +
+             "Liquid2DParticleDisplay and the official Feature rendering are unaffected and do not need this.",
+             "⚠ 性能警告：GPU モードで毎フレーム全粒子データを GPU から CPU へ回読します。CPU データ依存機能" +
+             "（Liquid2DDebugGizmos、GetPosition/GetVelocity）を GPU モードで使う場合のみオンにしてください。" +
+             "同期 GPU→CPU ストールで性能が大幅に低下します（粒子が多いほど顕著）。本番では必ずオフに。Liquid2DParticleDisplay と正式 Feature 描画は影響を受けません。")]
+        private bool gpuReadbackToStore;
 
         [SerializeField, LocalizationTooltip("重力加速度。", "Gravity acceleration.", "重力加速度。")]
         private Vector2 gravity = new Vector2(0f, -9.8f);
@@ -111,6 +185,7 @@ namespace Fs.Liquid2D
         public void Apply()
         {
             Liquid2DSimulation.Mode = mode;
+            Liquid2DSimulation.GpuReadbackToStore = gpuReadbackToStore;
             Liquid2DSimulation.MaxParticlesPerTag = maxParticlesPerTag;
             Liquid2DSimulation.Params = new SolverParams
             {
@@ -128,14 +203,23 @@ namespace Fs.Liquid2D
 
             if (overrideFixedTimestep && fixedTimestep > 0f)
                 Time.fixedDeltaTime = fixedTimestep;
-        }
-        
-#if UNITY_EDITOR
-            private void OnValidate()
+            
+            if (Liquid2DSimulation.TryGetRenderData(out var store, out var active, out int count, out var descriptors))
             {
-               if (applyOnAwake && Application.isPlaying)
-                     Apply();
+                 for (int i = 0; i < count; i++)
+                 {
+                      int slot = active[i];                 // 紧凑活动索引 → slot
+                      float2 pos = store.positions[slot];   // 同理 velocities / colors / radii / typeId
+                 }
             }
+        }
+
+#if UNITY_EDITOR
+        private void OnValidate()
+        {
+            if (applyOnAwake && Application.isPlaying)
+                Apply();
+        }
 #endif
     }
 }

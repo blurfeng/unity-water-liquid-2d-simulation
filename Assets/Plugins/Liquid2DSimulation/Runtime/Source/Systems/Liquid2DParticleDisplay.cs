@@ -113,11 +113,46 @@ namespace Fs.Liquid2D
         private static readonly int _idVelocityMax = Shader.PropertyToID("_VelocityMax");
         private static readonly int _idColourMode  = Shader.PropertyToID("_ColourMode");
 
+        // GPU 常驻路径专用。 // GPU resident path only. // GPU 常駐パス専用。
+        private static readonly int _idRadii        = Shader.PropertyToID("_Radii");
+        private static readonly int _idTypeIds      = Shader.PropertyToID("_TypeIds");
+        private static readonly int _idActiveIndices = Shader.PropertyToID("_ActiveIndices");
+        private static readonly int _idTargetType   = Shader.PropertyToID("_TargetType");
+        private static readonly int _idRenderScale  = Shader.PropertyToID("_RenderScale");
+        private static readonly int _idDisplayScale = Shader.PropertyToID("_DisplayScale");
+        private const string GpuProceduralKeyword = "_GPU_PROCEDURAL";
+
+        private MaterialPropertyBlock _gpuMpb;
+
         private void LateUpdate()
         {
             if (!displayEnabled) return;
-            if (mesh == null || material == null) return;
+            if (material == null) return;
             if (!Application.isPlaying) return;
+
+            // GPU 模式：直读常驻 GPU 缓冲，程序化绘制（每帧最新、零回读，与正式 Feature 路径一致）。
+            // GPU 模式下无论本帧是否拿到缓冲都直接返回，绝不回落到读 CPU store 的 CPU 路径（store 在 GPU 模式下是陈旧数据）。
+            // GPU mode: read resident GPU buffers and draw procedurally (per-frame latest, zero readback; same as the Feature path).
+            // In GPU mode always return here; never fall through to the CPU store path (the store is stale under GPU mode).
+            // GPU モード：常駐 GPU バッファを直読してプロシージャル描画。GPU モードでは常に return し、CPU store パスへ回落しません。
+            if (Liquid2DSimulation.Mode == Liquid2DSimulationMode.Gpu)
+            {
+                material.EnableKeyword(GpuProceduralKeyword);
+                if (Liquid2DSimulation.TryGetRenderBuffers(
+                        out var gpuPositions, out var gpuColors, out var gpuRadii, out var gpuTypeIds,
+                        out var gpuActive, out var gpuVelocities, out int gpuCount,
+                        out IReadOnlyList<Liquid2DParticleDescriptor> gpuDescriptors))
+                {
+                    DrawGpu(gpuPositions, gpuColors, gpuRadii, gpuTypeIds, gpuActive, gpuVelocities, gpuCount, gpuDescriptors);
+                }
+                return;
+            }
+
+            // CPU 模式：从 CPU store 取数，上传后用 DrawMeshInstancedIndirect 绘制。
+            // CPU mode: pull from the CPU store, upload, draw via DrawMeshInstancedIndirect.
+            // CPU モード：CPU store から取得しアップロード、DrawMeshInstancedIndirect で描画。
+            material.DisableKeyword(GpuProceduralKeyword);
+            if (mesh == null) return;
 
             if (!Liquid2DSimulation.TryGetRenderData(
                     out Liquid2DParticleStore store,
@@ -133,6 +168,64 @@ namespace Fs.Liquid2D
 
             var bounds = new Bounds(Vector3.zero, Vector3.one * 100000f);
             Graphics.DrawMeshInstancedIndirect(mesh, 0, material, bounds, _argsBuffer);
+        }
+
+        // ── GPU 程序化绘制 GPU procedural draw GPU プロシージャル描画 ────────────
+        private void DrawGpu(
+            ComputeBuffer positions, ComputeBuffer colors, ComputeBuffer radii, ComputeBuffer typeIds,
+            ComputeBuffer active, ComputeBuffer velocities, int count,
+            IReadOnlyList<Liquid2DParticleDescriptor> descriptors)
+        {
+            if (positions == null || active == null || count <= 0) return;
+
+            // 关键字 _GPU_PROCEDURAL 已在 LateUpdate 统一开启，这里不再重复设置。
+            // The _GPU_PROCEDURAL keyword is enabled in LateUpdate; not set again here.
+            // キーワードは LateUpdate で有効化済み。
+
+            // 速度渐变模式需要烘焙渐变贴图。 // Velocity-gradient mode needs the baked gradient texture. // 速度グラデーションはベイク要。
+            if (colourMode == ColourMode.VelocityGradient && _gradientDirty)
+            {
+                _gradientDirty = false;
+                BakeGradient(ref _gradientTexture, gradientResolution, colourMap);
+            }
+
+            _gpuMpb ??= new MaterialPropertyBlock();
+            _gpuMpb.Clear();
+            _gpuMpb.SetBuffer(_idPositions, positions);
+            _gpuMpb.SetBuffer(_idColors, colors);
+            _gpuMpb.SetBuffer(_idRadii, radii);
+            _gpuMpb.SetBuffer(_idTypeIds, typeIds);
+            _gpuMpb.SetBuffer(_idActiveIndices, active);
+            if (velocities != null) _gpuMpb.SetBuffer(_idVelocities, velocities);
+            _gpuMpb.SetFloat(_idVelocityMax, velocityDisplayMax);
+            _gpuMpb.SetInteger(_idColourMode, (int)colourMode);
+            _gpuMpb.SetFloat(_idDisplayScale, scale);
+            if (colourMode == ColourMode.VelocityGradient && _gradientTexture != null)
+                _gpuMpb.SetTexture(_idColourMap, _gradientTexture);
+
+            var bounds = new Bounds(Vector3.zero, Vector3.one * 100000f);
+            int typeCount = descriptors?.Count ?? 0;
+
+            // 按描述符类型分别绘制：每次发 count 个实例，shader 内剔除类型不匹配者并应用该类型 renderScale。
+            // 无描述符表（typeCount==0）时退化为单次绘制：targetType=0、renderScale=1。
+            // Draw per descriptor type: each call dispatches count instances; the shader culls non-matching ones and applies
+            // that type's renderScale. With no descriptor table (typeCount==0) it falls back to one draw (targetType=0, renderScale=1).
+            // 記述子タイプ別に描画。記述子なし（typeCount==0）の場合は単一描画に退化。
+            void DrawType(int targetType, float renderScale)
+            {
+                _gpuMpb.SetInteger(_idTargetType, targetType);
+                _gpuMpb.SetFloat(_idRenderScale, renderScale);
+                Graphics.DrawProcedural(material, bounds, MeshTopology.Triangles, 6, count, null, _gpuMpb);
+            }
+
+            if (typeCount == 0)
+            {
+                DrawType(0, 1f);
+                return;
+            }
+
+            for (int t = 0; t < typeCount; t++)
+                DrawType(t, descriptors[t] != null ? descriptors[t].renderScale : 1f);
         }
 
         // ── 容量管理 Capacity management 容量管理 ─────────────────────────────
@@ -217,7 +310,7 @@ namespace Fs.Liquid2D
             material.SetBuffer(_idColors,     _colorBuffer);
             material.SetBuffer(_idScales,     _scaleBuffer);
             material.SetFloat(_idVelocityMax, velocityDisplayMax);
-            material.SetInt(_idColourMode,    (int)colourMode);
+            material.SetInteger(_idColourMode, (int)colourMode);
 
             if (colourMode == ColourMode.VelocityGradient)
             {
