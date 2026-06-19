@@ -3,6 +3,7 @@ using UnityEngine;
 using System.Collections.Generic;
 using Fs.Liquid2D.Utility;
 using Fs.Liquid2D.Localization;
+using Unity.Mathematics;
 
 namespace Fs.Liquid2D
 {
@@ -388,63 +389,43 @@ namespace Fs.Liquid2D
         }
 
         /// <summary>
-        /// 生成一个流体粒子。 // Spawn one fluid particle. // 1つの流体粒子を生成。
+        /// 生成一个流体粒子（写入模拟器 SoA，无 GameObject）。 // Spawn one fluid particle (into the simulation SoA, no GameObject). // 1つの流体粒子を生成（SoA へ、GameObject なし）。
         /// </summary>
-        /// <param name="onSpawned"></param>
-        public void SpawnOne(Action<Liquid2DParticle> onSpawned = null)
+        /// <param name="onSpawned">生成回调，参数为粒子句柄。 // Spawn callback with the particle handle. // 生成コールバック（粒子ハンドル）。</param>
+        public void SpawnOne(Action<Liquid2DParticleHandle> onSpawned = null)
         {
-            // 随机选择一个流体粒子预制体。 // Randomly select a fluid particle prefab. // ランダムに流体粒子のプレハブを選択。
+            // 随机选择一个流体粒子描述符。 // Randomly select a fluid particle descriptor. // ランダムに流体粒子記述子を選択。
             if (liquidParticles.Count == 0) return;
-            Liquid2DParticleConfig liquid2DParticleConfig = liquidParticles.RandomWeight();
-            
+            Liquid2DParticleConfig config = liquidParticles.RandomWeight();
+            if (config == null || config.descriptor == null) return;
+
+            var sim = Liquid2DSimulation.Instance;
+            if (sim == null) return;
+
             // 获取当前喷射方向。 // Get current ejection direction. // 現在の噴射方向を取得。
             Vector2 dir = GetCurrentEjectDirection();
-            
+
             // 随机获取生成位置。 // Randomly get spawn position. // ランダムに生成位置を取得。
             Vector2 normal = new Vector2(-dir.y, dir.x); // 计算法线 // Calculate normal // 法線を計算
             float offset = UnityEngine.Random.Range(-nozzleWidth * 0.5f, nozzleWidth * 0.5f);
-            Vector3 spawnPos = TransformGet.position + (Vector3)(normal * offset);
-            
-            // 生成预制体。 // Instantiate prefab. // プレハブをインスタンス化。
-            Loader.Load(liquid2DParticleConfig.liquidPrefab, (go) =>
-            {
-                Transform goTs = go.transform;
-                goTs.position = spawnPos;
-                // goTs.rotation = Quaternion.identity;
-                go.transform.SetParent(ParticleParentTs);
-            
-                // 检查是否挂载 Liquid2DParticleRenderer。 // Check if Liquid2DParticleRenderer is attached. // Liquid2DParticleRendererがアタッチされているか確認。
-                var lp = go.GetComponent<Liquid2DParticle>();
-                if (!lp)
-                {
-                    Debug.LogWarning("LiquidSpawner SpawnOne Warning: The spawned liquid particle prefab does not have Liquid2DParticle component attached. Destroying the spawned object.");
-                    Destroy(go);
-                    return;
-                }
-            
-                // 随机设置尺寸。 // Randomly set size. // ランダムにサイズを設定。
-                if (sizeRandomRange.y > sizeRandomRange.x && sizeRandomRange.x > 0f)
-                {
-                    float size = UnityEngine.Random.Range(sizeRandomRange.x, sizeRandomRange.y);
-                    go.transform.localScale *= size;
-                }
-            
-                var rb = go.GetComponent<Rigidbody2D>();
-                if (rb)
-                {
-                    float forceEject = _ejectForceUse;
-                    // 随机设置喷射力。 // Randomly set ejection force. // ランダムに噴射力を設定。
-                    if (ejectForceRandomRange.y > ejectForceRandomRange.x && ejectForceRandomRange.x >= 0f)
-                    {
-                        forceEject *= UnityEngine.Random.Range(ejectForceRandomRange.x, ejectForceRandomRange.y);
-                    }
-                    rb.AddForce(dir * forceEject, ForceMode2D.Impulse);
-                }
-                
-                lp.SetLifetime(liquid2DParticleConfig.lifetime);
-                
-                onSpawned?.Invoke(lp);
-            });
+            Vector3 spawnPos3 = TransformGet.position + (Vector3)(normal * offset);
+            float2 spawnPos = new float2(spawnPos3.x, spawnPos3.y);
+
+            // 随机尺寸缩放。 // Random size scale. // ランダムサイズスケール。
+            float sizeScale = 1f;
+            if (sizeRandomRange.y > sizeRandomRange.x && sizeRandomRange.x > 0f)
+                sizeScale = UnityEngine.Random.Range(sizeRandomRange.x, sizeRandomRange.y);
+
+            // 喷射力 → 初速度（冲量/质量）。 // Ejection force → initial velocity (impulse/mass). // 噴射力 → 初速度（力積/質量）。
+            float forceEject = _ejectForceUse;
+            if (ejectForceRandomRange.y > ejectForceRandomRange.x && ejectForceRandomRange.x >= 0f)
+                forceEject *= UnityEngine.Random.Range(ejectForceRandomRange.x, ejectForceRandomRange.y);
+
+            float mass = config.descriptor.material != null ? Mathf.Max(0.0001f, config.descriptor.material.mass) : 1f;
+            float2 velocity = new float2(dir.x, dir.y) * (forceEject / mass);
+
+            var handle = sim.Spawn(config.descriptor, spawnPos, velocity, sizeScale, config.lifetime);
+            onSpawned?.Invoke(handle);
         }
 
         #if UNITY_EDITOR
@@ -454,14 +435,10 @@ namespace Fs.Liquid2D
         {
             if (liquidParticles.Count > 0)
             {
-                var go = liquidParticles[0].liquidPrefab;
-                if (go)
+                var d = liquidParticles[0].descriptor;
+                if (d && d.renderSettings != null)
                 {
-                    var p = go.GetComponent<Liquid2DParticle>();
-                    if (p)
-                    {
-                        _gizmosBodyColor = p.RenderSettings.color;
-                    }
+                    _gizmosBodyColor = d.renderSettings.color;
                 }
             }
         }
@@ -551,33 +528,32 @@ namespace Fs.Liquid2D
     [Serializable]
     public class Liquid2DParticleConfig : IRandomData
     {
-        [LocalizationTooltip("流体粒子预制体（需挂载Liquid2DParticleRenderer）。",
-             "Fluid particle prefab (requires Liquid2DParticleRenderer component).",
-             "流体パーティクルプレハブ（Liquid2DParticleRendererコンポーネントが必要）。")]
-        public GameObject liquidPrefab;
-        
+        [LocalizationTooltip("流体粒子描述符（定义外观/混色/材质/尺寸）。",
+             "Fluid particle descriptor (defines appearance/mixing/material/size).",
+             "流体パーティクル記述子（外観/混色/マテリアル/サイズを定義）。")]
+        public Liquid2DParticleDescriptor descriptor;
+
         [LocalizationTooltip("权重，决定被选中的概率。",
              "Weight, determines the probability of being selected.",
              "重み、選択される確率を決定します。")]
         public int weight = 1;
-        
-        [LocalizationTooltip("生命周期，单位秒。大于0则在时间到后自动销毁。",
-             "Lifetime in seconds. If greater than 0, automatically destroys after time expires.",
-             "ライフタイム（秒単位）。0より大きい場合、時間が経過すると自動的に破棄されます。")]
+
+        [LocalizationTooltip("生命周期，单位秒。大于0则覆盖描述符默认寿命并在到时后自动销毁。",
+             "Lifetime in seconds. If greater than 0, overrides the descriptor default and auto-destroys after expiry.",
+             "ライフタイム（秒）。0より大きい場合、記述子の既定を上書きし期限後に自動破棄。")]
         public float lifetime = 0f;
 
         public int GetWeight()
         {
             return weight;
         }
-        
+
 #if UNITY_EDITOR
         public void OnValidate()
         {
-            if (liquidPrefab && !liquidPrefab.GetComponent<Liquid2DParticle>())
+            if (descriptor && !descriptor.IsValid())
             {
-                Debug.LogWarning($"预制体 {liquidPrefab.name} 未挂载 Liquid2DParticleRenderer，已清空。");
-                liquidPrefab = null;
+                Debug.LogWarning($"Liquid2DParticleDescriptor {descriptor.name} 缺少 Sprite/Material，渲染将被跳过。");
             }
         }
 #endif

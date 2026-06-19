@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using Fs.Liquid2D.Volumes;
 using UnityEngine;
+using Unity.Mathematics;
 using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.RenderGraphModule;
@@ -524,52 +525,52 @@ namespace Fs.Liquid2D
             var matrices = data.matricesCache;
             var colors = data.colorArrayCache;
 
-            // 绘制所有流体粒子到 流体绘制RT。这里使用 GPU Instancing 来批量绘制。
-            // Draw all fluid particles to fluid rendering RT. Here we use GPU Instancing for batch drawing.
-            // すべての流体粒子を流体レンダリングRTに描画します。ここではGPUインスタンシングを使用してバッチ描画を行います。
+            // 从模拟器（SoA）取数据绘制，绕过 Transform。按描述符（typeId）分组使用 GPU Instancing 批量绘制。
+            // Read data from the simulation (SoA) and draw, bypassing Transform. Group by descriptor (typeId) and batch via GPU Instancing.
+            // シミュレータ（SoA）からデータを取得して描画し、Transform を迂回します。記述子（typeId）でグループ化し GPU インスタンシングで描画。
             string nameTag = data.settings.nameTag;
-            foreach (var kvp in Liquid2DFeature.ParticlesDic)
+            if (!Liquid2DSimulation.TryGetRenderData(out var store, out var active, out var activeCount, out var descriptors))
+                return;
+
+            var positions = store.positions;
+            var radiiArr = store.radii;
+            var colorArr = store.colors;
+            var typeArr = store.typeId;
+
+            for (int t = 0; t < descriptors.Count; t++)
             {
-                var settings = kvp.Key;
-                var list = kvp.Value;
-                // 跳过无效组（缺少贴图或材质则无法绘制）。 // Skip invalid groups (cannot draw without sprite or material). // 無効なグループをスキップ（スプライトまたはマテリアルがないと描画できません）。
-                if (list.Count == 0 || !settings.sprite || !settings.material) continue;
+                var d = descriptors[t];
+                // 跳过无效组（缺少贴图或材质则无法绘制）。 // Skip invalid groups (cannot draw without sprite or material). // 無効なグループをスキップ。
+                if (d == null || !d.IsValid()) continue;
+                var settings = d.renderSettings;
+
+                // 当描述符 NameTag 不为空时，仅由相同 NameTag 的 Feature 渲染。
+                // When the descriptor NameTag is not empty, only the Feature with the same NameTag renders it.
+                // 記述子の NameTag が空でない場合、同じ NameTag の Feature のみが描画します。
+                if (!string.IsNullOrEmpty(settings.nameTag) && !settings.nameTag.Equals(nameTag)) continue;
 
                 mpb.Clear();
                 mpb.SetTexture(ShaderIds.MainTexId, settings.sprite.texture);
 
-                // 填充流体粒子绘制用数据，按 1023 为上限分批绘制。
-                // Fill in fluid particle drawing data, drawing in batches capped at 1023.
-                // 流体粒子描画用データを入力し、1023を上限にバッチ描画します。
-                int count = 0; // 当前批次已填充的粒子数量。 // Number of particles filled in the current batch. // 現在のバッチに充填された粒子数。
-                for (int i = 0; i < list.Count; i++)
+                int count = 0; // 当前批次已填充的粒子数量。 // Number of particles in the current batch. // 現在のバッチの粒子数。
+                for (int k = 0; k < activeCount; k++)
                 {
-                    var item = list[i];
+                    int slot = active[k];
+                    if (typeArr[slot] != t) continue;
 
-                    // 跳过无效或禁用的粒子。 // Skip invalid or disabled particles. // 無効または無効になっている粒子をスキップします。
-                    if (!item || !item.isActiveAndEnabled) continue;
+                    float2 p = positions[slot];
+                    float diameter = radiiArr[slot] * 2f;
+                    var center = new Vector3(p.x, p.y, 0f);
 
-                    // 当粒子 NameTag 不为空时，渲染相同 NameTag 的对象。
-                    // When the particle NameTag is not empty, render objects with the same NameTag.
-                    // 粒子のNameTagが空でない場合、同じNameTagを持つオブジェクトをレンダリングします。
-                    if (!string.IsNullOrEmpty(item.RenderSettings.nameTag) && !item.RenderSettings.nameTag.Equals(nameTag)) continue;
-
-                    var ts = item.TransformGet;
-
-                    // 计算粒子的包围盒，不在相机视锥体内的不渲染。使用 lossyScale 以正确处理带缩放的父节点。
-                    // Calculate the bounding box of the particle, do not render those not in the camera frustum. Use lossyScale to correctly handle scaled parents.
-                    // 粒子の境界ボックスを計算し、カメラの視錐台内にないものは描画しません。スケールされた親を正しく扱うため lossyScale を使用します。
-                    var bounds = new Bounds(ts.position, ts.lossyScale);
+                    // 视锥剔除。 // Frustum cull. // 視錐台カリング。
+                    var bounds = new Bounds(center, new Vector3(diameter, diameter, diameter));
                     if (!GeometryUtility.TestPlanesAABB(data.frustumPlanes, bounds)) continue;
 
-                    // 填充矩阵和颜色数据。使用 localToWorldMatrix 以包含父级层级的缩放/旋转。
-                    // Fill in matrix and color data. Use localToWorldMatrix to include parent hierarchy scale/rotation.
-                    // 行列と色データを入力します。親階層のスケール/回転を含めるため localToWorldMatrix を使用します。
-                    matrices[count] = ts.localToWorldMatrix;
-                    colors[count] = item.RenderSettings.color;
+                    matrices[count] = Matrix4x4.TRS(center, Quaternion.identity, new Vector3(diameter, diameter, 1f));
+                    float4 c = colorArr[slot];
+                    colors[count] = new Vector4(c.x, c.y, c.z, c.w);
                     count++;
 
-                    // 当前批次填满，先绘制一批再继续。 // Current batch is full; draw this batch before continuing. // 現在のバッチが満杯になったら、このバッチを描画してから続行します。
                     if (count == MaxInstancesPerBatch)
                     {
                         mpb.SetVectorArray(ShaderIds.ColorId, colors);
