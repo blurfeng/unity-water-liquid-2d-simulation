@@ -37,9 +37,9 @@ namespace Fs.Liquid2D
     }
 
     /// <summary>
-    /// 流体求解器接口。CPU/GPU 双模式 seam：本期实现 <see cref="PbfCpuSolver"/>，GPU 预留。
-    /// Fluid solver interface. CPU/GPU dual-mode seam: <see cref="PbfCpuSolver"/> is implemented now, GPU reserved.
-    /// 流体ソルバーインターフェース。CPU/GPU デュアルモード seam：今回 <see cref="PbfCpuSolver"/> を実装、GPU は予約。
+    /// 流体求解器接口。CPU/GPU 双模式 seam：<see cref="SphCpuSolver"/>（CPU，已实现）与 SphGpuSolver（GPU，Phase 2）。
+    /// Fluid solver interface. CPU/GPU dual-mode seam: <see cref="SphCpuSolver"/> (CPU, implemented) and SphGpuSolver (GPU, Phase 2).
+    /// 流体ソルバーインターフェース。CPU/GPU デュアルモード seam：<see cref="SphCpuSolver"/>（CPU）と SphGpuSolver（GPU、Phase 2）。
     /// </summary>
     public interface ILiquid2DSolver : IDisposable
     {

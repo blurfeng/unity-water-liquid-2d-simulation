@@ -163,6 +163,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ae45dd1dce65f354a975434a0a9d015d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  spawningEnabled: 1
   startOnAwake: 1
   firstStartDelay: 0.5
   startDelay: 0.5
@@ -190,7 +191,6 @@ GameObject:
   m_Component:
   - component: {fileID: 500201}
   - component: {fileID: 500202}
-  - component: {fileID: 500203}
   m_Layer: 0
   m_Name: Liquid2DPhysicsConfig
   m_TagString: Untagged
@@ -228,33 +228,16 @@ MonoBehaviour:
   applyOnAwake: 1
   mode: 0
   gravity: {x: 0, y: -9.8}
-  restDensity: 80
   smoothingRadius: 0.4
-  constraintIterations: 3
+  targetDensity: 55
+  pressureMultiplier: 25
+  nearPressureMultiplier: 8
+  viscosityStrength: 0.06
+  collisionDamping: 0.4
   substeps: 2
-  viscosity: 0.01
-  surfaceTension: 0.0001
-  relaxEps: 200
   maxParticlesPerTag: 4000
   overrideFixedTimestep: 0
   fixedTimestep: 0.02
---- !u!114 &500203
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 500200}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6ae8ab339f0d3324a8db36096804e3ed, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DDebugGizmos
-  drawPhysicsRadius: 1
-  physicsColor: {r: 0.2, g: 1, b: 0.4, a: 0.9}
-  drawRenderSize: 1
-  renderColor: {r: 1, g: 0.6, b: 0.1, a: 0.4}
-  maxDraw: 2000
 --- !u!1 &500300
 GameObject:
   m_ObjectHideFlags: 0
@@ -422,11 +405,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6ae8ab339f0d3324a8db36096804e3ed, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DDebugGizmos
+  showGizmos: 1
   drawPhysicsRadius: 1
   physicsColor: {r: 0.2, g: 1, b: 0.4, a: 0.9}
   drawRenderSize: 1
   renderColor: {r: 1, g: 0.6, b: 0.1, a: 0.4}
-  maxDraw: 2000
+  maxDraw: 6000
+  currentParticleCount: 0
 --- !u!4 &437264683
 Transform:
   m_ObjectHideFlags: 0
@@ -548,7 +533,7 @@ Camera:
   far clip plane: 1000
   field of view: 34
   orthographic: 1
-  orthographic size: 6
+  orthographic size: 4
   m_Depth: -1
   m_CullingMask:
     serializedVersion: 2
@@ -573,7 +558,7 @@ Transform:
   m_GameObject: {fileID: 1088916021}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: -10}
+  m_LocalPosition: {x: 0, y: -1, z: -10}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []

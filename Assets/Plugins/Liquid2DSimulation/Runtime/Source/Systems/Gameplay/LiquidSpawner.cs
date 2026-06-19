@@ -10,39 +10,45 @@ namespace Fs.Liquid2D
     public class LiquidSpawner : MonoBehaviour
     {
         [Header("Common")]
-        [LocalizationTooltip(
+        [SerializeField, LocalizationTooltip(
+            "总开关：关闭后暂停所有粒子喷射，但不改变 IsSpawning 状态，重新开启后立即恢复。",
+            "Master toggle: disables all particle spawning when off, without changing IsSpawning state; resumes immediately when re-enabled.",
+            "マスタースイッチ：オフにすると IsSpawning 状態を変えずに噴射を一時停止し、オンに戻すと即座に再開します。")]
+        private bool spawningEnabled = true;
+
+        [SerializeField, LocalizationTooltip(
             "是否在启动时自动开始喷射", 
             "Whether to automatically start spraying on startup", 
             "起動時に自動的にスプレーを開始するかどうか")]
-        public bool startOnAwake = true;
+        private bool startOnAwake = true;
         
-        [LocalizationTooltip(
-            "初次启动时的延迟时间", 
-            "Delay time for the first start", 
-            "最初の起動時の遅延時間")]
-        public float firstStartDelay = 1f;
+        [SerializeField, LocalizationTooltip(
+             "初次启动时的延迟时间", 
+             "Delay time for the first start", 
+             "最初の起動時の遅延時間")]
+        private float firstStartDelay = 1f;
         
-        [LocalizationTooltip(
-            "启动延迟时间（每次StartSpawn时都会应用）", 
-            "Start delay time (applied every time StartSpawn is called)", 
-            "開始遅延時間（StartSpawn呼び出し毎に適用）")]
-        public float startDelay = 0.5f;
+        [SerializeField, LocalizationTooltip(
+             "启动延迟时间（每次StartSpawn时都会应用）", 
+             "Start delay time (applied every time StartSpawn is called)", 
+             "開始遅延時間（StartSpawn呼び出し毎に適用）")]
+        private float startDelay = 0.5f;
         
-        [LocalizationTooltip(
-            "持续时间（0表示无限持续）", 
-            "Duration time (0 means infinite duration)", 
-            "持続時間（0は無限持続を意味する）")]
-        public float duration;
+        [SerializeField, LocalizationTooltip(
+             "持续时间（0表示无限持续）", 
+             "Duration time (0 means infinite duration)", 
+             "持続時間（0は無限持続を意味する）")]
+        private float duration;
         
         [Header("Liquid Particle Settings")]
-        [LocalizationTooltip(
-            "流体粒子预制体（需挂载Liquid2DParticleRenderer）", 
-            "Fluid particle prefab (requires Liquid2DParticleRenderer component)", 
-            "流体パーティクルプレハブ（Liquid2DParticleRendererコンポーネントが必要）")]
-        public List<Liquid2DParticleConfig> liquidParticles = new List<Liquid2DParticleConfig>();
+        [SerializeField, LocalizationTooltip(
+             "流体粒子预制体（需挂载Liquid2DParticleRenderer）", 
+             "Fluid particle prefab (requires Liquid2DParticleRenderer component)", 
+             "流体パーティクルプレハブ（Liquid2DParticleRendererコンポーネントが必要）")]
+        private List<Liquid2DParticleConfig> liquidParticles = new List<Liquid2DParticleConfig>();
 
-        [Range(0.01f, 100f), LocalizationTooltip("喷嘴宽度。", "Nozzle width.", "ノズル幅。")]
-        public float nozzleWidth = 1f;
+        [SerializeField, Range(0.01f, 100f), LocalizationTooltip("喷嘴宽度。", "Nozzle width.", "ノズル幅。")]
+        private float nozzleWidth = 1f;
         
         [SerializeField, LocalizationTooltip(
             "流量。每秒喷射的粒子数量。", 
@@ -53,11 +59,11 @@ namespace Fs.Liquid2D
         [SerializeField, LocalizationTooltip("流量调整系数", "Flow rate adjustment factor", "流量調整係数")]
         private float flowRateFactor = 1f;
         
-        [LocalizationTooltip(
-            "尺寸随机范围（最小值，最大值）", 
-            "Size random range (minimum, maximum)", 
-            "サイズランダム範囲（最小値、最大値）")]
-        public Vector2 sizeRandomRange = new Vector2(0.9f, 1.2f);
+        [SerializeField, LocalizationTooltip(
+             "尺寸随机范围（最小值，最大值）", 
+             "Size random range (minimum, maximum)", 
+             "サイズランダム範囲（最小値、最大値）")]
+        private Vector2 sizeRandomRange = new Vector2(0.9f, 1.2f);
 
         [SerializeField, LocalizationTooltip("喷射力大小", "Ejection force magnitude", "噴射力の大きさ")]
         private float ejectForce = 40f;
@@ -65,24 +71,24 @@ namespace Fs.Liquid2D
         [SerializeField, LocalizationTooltip("喷射力调整系数", "Ejection force adjustment factor", "噴射力調整係数")]
         private float ejectForceFactor = 1f;
         
-        [LocalizationTooltip(
-            "喷射力随机范围（最小值，最大值）",
-            "Ejection force random range (minimum, maximum)", 
-            "噴射力ランダム範囲（最小値、最大値）")]
-        public Vector2 ejectForceRandomRange = new Vector2(0.9f, 1.2f);
+        [SerializeField, LocalizationTooltip(
+             "喷射力随机范围（最小值，最大值）",
+             "Ejection force random range (minimum, maximum)", 
+             "噴射力ランダム範囲（最小値、最大値）")]
+        private Vector2 ejectForceRandomRange = new Vector2(0.9f, 1.2f);
         
         [Header("Swing")]
-        [LocalizationTooltip(
-            "摆动角度范围（最大偏移，单位度）", 
-            "Swing angle range (maximum offset, in degrees)", 
-            "スイング角度範囲（最大オフセット、度単位）")]
-        public float swingAngleRange = 0f;
+        [SerializeField, LocalizationTooltip(
+             "摆动角度范围（最大偏移，单位度）", 
+             "Swing angle range (maximum offset, in degrees)", 
+             "スイング角度範囲（最大オフセット、度単位）")]
+        private float swingAngleRange;
 
-        [LocalizationTooltip(
-            "摆动速度（周期/秒）", 
-            "Swing speed (cycles per second)", 
-            "スイング速度（サイクル/秒）")]
-        public float swingSpeed = 0.2f;
+        [SerializeField, LocalizationTooltip(
+             "摆动速度（周期/秒）", 
+             "Swing speed (cycles per second)", 
+             "スイング速度（サイクル/秒）")]
+        private float swingSpeed = 0.2f;
 
         public Transform TransformGet
         {
@@ -307,6 +313,9 @@ namespace Fs.Liquid2D
         
         protected virtual void Update()
         {
+            // 总开关关闭时暂停，不影响内部状态。 // Master toggle off: pause without touching internal state. // マスタースイッチがオフのとき、内部状態を変えずに一時停止。
+            if (!spawningEnabled) return;
+
             // 未在喷射中。 // Not spawning. // 噴射中ではない。
             if (!IsSpawning) return;
             

@@ -21,39 +21,65 @@ namespace Fs.Liquid2D
     [AddComponentMenu("Liquid2D/Liquid2D Debug Gizmos")]
     public class Liquid2DDebugGizmos : MonoBehaviour
     {
-        [LocalizationTooltip(
+        [SerializeField, LocalizationTooltip(
+             "Gizmo 总开关：关闭后所有调试可视化均不绘制。",
+             "Master toggle: when disabled, no debug visualization is drawn at all.",
+             "マスタースイッチ：無効にするとすべてのデバッグ可視化が描画されません。")]
+        private bool showGizmos = true;
+
+        [SerializeField, LocalizationTooltip(
              "绘制粒子的物理半径（实际碰撞/邻居半径）。",
              "Draw the particle's physics radius (actual collision/neighbor radius).",
              "粒子の物理半径（実際の衝突/近傍半径）を描画します。")]
-        public bool drawPhysicsRadius = true;
+        private bool drawPhysicsRadius = true;
 
-        [LocalizationTooltip(
+        [SerializeField, LocalizationTooltip(
              "物理半径圆的颜色。",
              "Color of the physics-radius circle.",
              "物理半径円の色。")]
-        public Color physicsColor = new Color(0.2f, 1f, 0.4f, 0.9f);
+        private Color physicsColor = new Color(0.2f, 1f, 0.4f, 0.9f);
 
-        [LocalizationTooltip(
+        [SerializeField, LocalizationTooltip(
              "绘制渲染可视尺寸（radius × renderScale，即 Sprite 融合用大小）。",
              "Draw the render visual size (radius × renderScale, i.e. the sprite fusion size).",
              "描画サイズ（radius × renderScale、Sprite 融合サイズ）を描画します。")]
-        public bool drawRenderSize = true;
+        private bool drawRenderSize = true;
 
-        [LocalizationTooltip(
+        [SerializeField, LocalizationTooltip(
              "渲染尺寸圆的颜色。",
              "Color of the render-size circle.",
              "描画サイズ円の色。")]
-        public Color renderColor = new Color(1f, 0.6f, 0.1f, 0.4f);
+        private Color renderColor = new Color(1f, 0.6f, 0.1f, 0.4f);
 
-        [Min(0f), LocalizationTooltip(
+        [SerializeField, Min(0f), LocalizationTooltip(
              "最多绘制的粒子数（0 表示不限）。粒子很多时限制以保持 Scene 视图流畅。",
              "Max particles to draw (0 = unlimited). Cap this when there are many particles to keep the Scene view responsive.",
              "描画する最大粒子数（0 は無制限）。粒子が多い場合は Scene ビューの応答性のため制限します。")]
-        public int maxDraw = 2000;
+        private int maxDraw = 2000;
+
+        [SerializeField, LocalizationTooltip(
+             "当前帧活跃粒子总数（运行时自动更新，只读，与 showGizmos 无关）。",
+             "Total active particle count for the current frame (auto-updated at runtime, read-only, independent of showGizmos).",
+             "現在フレームのアクティブ粒子総数（実行時に自動更新、読み取り専用、showGizmos とは無関係）。")]
+        private int currentParticleCount;
 
 #if UNITY_EDITOR
+        private void Update()
+        {
+            if (!Application.isPlaying)
+            {
+                currentParticleCount = 0;
+                return;
+            }
+            if (Liquid2DSimulation.TryGetRenderData(out _, out _, out int count, out _))
+                currentParticleCount = count;
+            else
+                currentParticleCount = 0;
+        }
+
         private void OnDrawGizmos()
         {
+            if (!showGizmos) return;
             if (!Application.isPlaying) return;
             if (!drawPhysicsRadius && !drawRenderSize) return;
             if (!Liquid2DSimulation.TryGetRenderData(out var store, out NativeArray<int> active, out int activeCount,

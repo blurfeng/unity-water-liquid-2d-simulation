@@ -6,10 +6,10 @@ using UnityEngine;
 namespace Fs.Liquid2D
 {
     /// <summary>
-    /// 2D 流体模拟中枢（运行时单例）。取代旧 Liquid2DParticleManager：拥有粒子 SoA 存储、PBF 求解器、碰撞体缓冲、
+    /// 2D 流体模拟中枢（运行时单例）。取代旧 Liquid2DParticleManager：拥有粒子 SoA 存储、SPH 求解器、碰撞体缓冲、
     /// 描述符/材质表，在 FixedUpdate 驱动求解，并对外提供生成/销毁/查询 API。渲染层（Liquid2DPass）从这里取数据绕过 Transform。
     /// 2D fluid simulation hub (runtime singleton). Replaces the old Liquid2DParticleManager: owns the particle SoA store,
-    /// PBF solver, collider buffer, descriptor/material tables; drives solving in FixedUpdate and exposes spawn/despawn/query
+    /// SPH solver, collider buffer, descriptor/material tables; drives solving in FixedUpdate and exposes spawn/despawn/query
     /// APIs. The render layer (Liquid2DPass) reads data here, bypassing Transform.
     /// 2D 流体シミュレーションハブ（ランタイムシングルトン）。旧 Liquid2DParticleManager を置き換え。
     /// </summary>
@@ -79,9 +79,10 @@ namespace Fs.Liquid2D
             _solver?.Dispose();
             if (Mode == Liquid2DSimulationMode.Gpu)
             {
-                Debug.LogWarning("[Liquid2DSimulation] GPU mode is reserved and not implemented; falling back to CPU.");
+                // GPU SPH 求解器将在 Phase 2 接入；当前回退到 CPU SPH。 // GPU SPH solver lands in Phase 2; fall back to CPU SPH for now. // GPU は Phase 2 で接続、当面は CPU にフォールバック。
+                Debug.LogWarning("[Liquid2DSimulation] GPU mode is not implemented yet; falling back to CPU.");
             }
-            _solver = new PbfCpuSolver();
+            _solver = new SphCpuSolver();
         }
 
         #region Descriptor / group 描述符与分组 // 記述子とグループ
