@@ -354,6 +354,8 @@ namespace Fs.Liquid2D
         [ReadOnly] public NativeArray<float2> points;
         public float dt;
         public float collisionDamping;
+        /// <summary>最大速度限制（0 = 不限制）。 // Max speed clamp (0 = unlimited). // 最大速度制限（0 = 無制限）。</summary>
+        public float maxSpeed;
         public byte hasColliders;
         public byte accumulate;                            // 1 时记录冲量。 // record impulse when 1. // 1 のとき力積記録。
         [WriteOnly] public NativeArray<float2> outImpulse;  // 长度 activeCount。 // length activeCount.
@@ -363,6 +365,17 @@ namespace Fs.Liquid2D
         {
             int i = activeIndices[k];
             float2 v = velocities[i];
+
+            // 速度限幅：防止压力爆炸导致粒子速度失控乱飞。
+            // Speed clamp: prevents runaway particle velocities from pressure explosions.
+            // 速度制限：圧力爆発によるパーティクル速度暴走を防ぐ。
+            if (maxSpeed > 0f)
+            {
+                float spd2 = dot(v, v);
+                if (spd2 > maxSpeed * maxSpeed)
+                    v = v * (maxSpeed / sqrt(spd2));
+            }
+
             float2 p = positions[i] + v * dt;
 
             float2 totalImpulse = float2.zero;

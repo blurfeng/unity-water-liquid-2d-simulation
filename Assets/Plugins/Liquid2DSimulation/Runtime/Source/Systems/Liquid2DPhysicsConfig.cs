@@ -47,7 +47,7 @@ namespace Fs.Liquid2D
              "压力系数 k。密度偏差转换为压力的强度，越大越不可压缩、越“弹”。",
              "Pressure multiplier k. Converts density deviation to pressure; higher is more incompressible/springy.",
              "圧力係数 k。密度偏差を圧力に変換する強度。大きいほど非圧縮的で弾性的。")]
-        private float pressureMultiplier = 25f;
+        private float pressureMultiplier = 125f;
 
         [SerializeField, Min(0f), LocalizationTooltip(
              "近密度压力系数。增强近距离刚性，防止粒子相互重叠/穿插。",
@@ -73,18 +73,24 @@ namespace Fs.Liquid2D
              "サブステップ数（固定ステップを細分し高速運動/高圧の安定性向上）。")]
         private int substeps = 3;
 
+        [SerializeField, Min(0f), LocalizationTooltip(
+             "最大粒子速度（世界单位/秒，0 表示不限制）。防止压力参数过大导致粒子速度失控乱飞，建议设为喷射力的 3–5 倍。",
+             "Maximum particle speed (world units/s; 0 = unlimited). Prevents runaway velocities from high pressure settings; recommend 3–5× the ejection velocity.",
+             "最大パーティクル速度（ワールド単位/秒、0 は無制限）。圧力過大による速度暴走を防ぎます。噴射速度の 3～5 倍を推奨。")]
+        private float maxSpeed = 20f;
+
         [Header("Limits")]
         [SerializeField, Min(0), LocalizationTooltip(
              "每个 nameTag 的最大存活粒子数（0 表示不限制）。超出回收最旧。",
              "Max alive particles per nameTag (0 = no limit). Oldest recycled when exceeded.",
              "nameTag ごとの最大生存粒子数（0 は無制限）。超過時は最古を回収。")]
-        private int maxParticlesPerTag = 0;
+        private int maxParticlesPerTag;
 
         [SerializeField, LocalizationTooltip(
              "是否覆盖物理固定时间步长（fixedDeltaTime）。",
              "Whether to override the physics fixed timestep (fixedDeltaTime).",
              "物理の固定タイムステップ（fixedDeltaTime）を上書きするか。")]
-        private bool overrideFixedTimestep = false;
+        private bool overrideFixedTimestep;
 
         [SerializeField, Min(0.001f), LocalizationTooltip(
              "物理固定时间步长（秒）。引擎默认 0.02（50Hz）。",
@@ -117,10 +123,19 @@ namespace Fs.Liquid2D
                 collisionDamping = collisionDamping,
                 predictionFactor = 1f / 120f,
                 substeps = substeps,
+                maxSpeed = maxSpeed,
             };
 
             if (overrideFixedTimestep && fixedTimestep > 0f)
                 Time.fixedDeltaTime = fixedTimestep;
         }
+        
+#if UNITY_EDITOR
+            private void OnValidate()
+            {
+               if (applyOnAwake && Application.isPlaying)
+                     Apply();
+            }
+#endif
     }
 }

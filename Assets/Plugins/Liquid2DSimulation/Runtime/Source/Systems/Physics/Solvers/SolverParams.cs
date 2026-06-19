@@ -55,6 +55,14 @@ namespace Fs.Liquid2D
         public int substeps;
 
         /// <summary>
+        /// 最大粒子速度限制（世界单位/秒，0 表示不限制）。防止压力爆炸或参数配置不当导致粒子速度失控。
+        /// Maximum particle speed limit (world units/second; 0 = unlimited). Prevents runaway velocities from pressure
+        /// explosions or misconfigured parameters.
+        /// 最大粒子速度制限（ワールド単位/秒、0 は無制限）。圧力爆発やパラメータ設定ミスによる速度暴走を防ぐ。
+        /// </summary>
+        public float maxSpeed;
+
+        /// <summary>
         /// 推荐默认值（参考 SebLague 2D Fluid-Sim 取值，最终以 Unity 内手感为准）。
         /// Recommended defaults (from SebLague's 2D Fluid-Sim; final tuning happens in Unity).
         /// 推奨デフォルト（SebLague の 2D Fluid-Sim 値。最終調整は Unity 内で）。
@@ -70,6 +78,7 @@ namespace Fs.Liquid2D
             collisionDamping = 0.4f,
             predictionFactor = 1f / 120f,
             substeps = 3,
+            maxSpeed = 0f,
         };
     }
 }

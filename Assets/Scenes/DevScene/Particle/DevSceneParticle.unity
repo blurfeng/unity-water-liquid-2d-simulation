@@ -145,7 +145,7 @@ Transform:
   m_GameObject: {fileID: 500100}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 4, z: 0}
+  m_LocalPosition: {x: 0, y: 3, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -168,12 +168,15 @@ MonoBehaviour:
   firstStartDelay: 0.5
   startDelay: 0.5
   duration: 0
+  maxSpawnCount: 6000
+  spawnedCount: 0
   liquidParticles:
-  - descriptor: {fileID: 11400000, guid: a1b2c3d4e5f6071829304a5b6c7d8e90, type: 2}
-    weight: 1
-    lifetime: 0
-  nozzleWidth: 2
-  flowRate: 120
+  - Descriptor: {fileID: 11400000, guid: f35c2bc9e2e98fd4387aaeabc88c127f, type: 2}
+    Weight: 1
+    Lifetime: 0
+  nozzleWidth: 0.6
+  spawnDepthJitter: 0
+  flowRate: 220
   flowRateFactor: 1
   sizeRandomRange: {x: 0.9, y: 1.1}
   ejectForce: 20
@@ -230,12 +233,13 @@ MonoBehaviour:
   gravity: {x: 0, y: -9.8}
   smoothingRadius: 0.4
   targetDensity: 55
-  pressureMultiplier: 25
+  pressureMultiplier: 125
   nearPressureMultiplier: 8
   viscosityStrength: 0.06
   collisionDamping: 0.4
-  substeps: 2
-  maxParticlesPerTag: 4000
+  substeps: 3
+  maxSpeed: 60
+  maxParticlesPerTag: 0
   overrideFixedTimestep: 0
   fixedTimestep: 0.02
 --- !u!1 &500300
@@ -264,7 +268,7 @@ Transform:
   m_GameObject: {fileID: 500300}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: -4, z: 0}
+  m_LocalPosition: {x: 0, y: 5, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -283,7 +287,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   isDynamic: 0
-  size: {x: 10, y: 0.5}
+  size: {x: 22, y: 1}
 --- !u!1 &500400
 GameObject:
   m_ObjectHideFlags: 0
@@ -310,7 +314,7 @@ Transform:
   m_GameObject: {fileID: 500400}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -4.75, y: -1.5, z: 0}
+  m_LocalPosition: {x: -10.5, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -329,7 +333,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   isDynamic: 0
-  size: {x: 0.5, y: 5.5}
+  size: {x: 1, y: 11}
 --- !u!1 &500500
 GameObject:
   m_ObjectHideFlags: 0
@@ -356,7 +360,7 @@ Transform:
   m_GameObject: {fileID: 500500}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 4.75, y: -1.5, z: 0}
+  m_LocalPosition: {x: 10.5, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -375,7 +379,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   isDynamic: 0
-  size: {x: 0.5, y: 5.5}
+  size: {x: 1, y: 11}
 --- !u!1 &437264681
 GameObject:
   m_ObjectHideFlags: 0
@@ -386,8 +390,9 @@ GameObject:
   m_Component:
   - component: {fileID: 437264683}
   - component: {fileID: 437264682}
+  - component: {fileID: 437264684}
   m_Layer: 0
-  m_Name: Liquid2DDebugGizmos
+  m_Name: Liquid2DDebugDisplay
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -406,9 +411,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DDebugGizmos
   showGizmos: 1
-  drawPhysicsRadius: 1
+  drawPhysicsRadius: 0
   physicsColor: {r: 0.2, g: 1, b: 0.4, a: 0.9}
-  drawRenderSize: 1
+  drawRenderSize: 0
   renderColor: {r: 1, g: 0.6, b: 0.1, a: 0.4}
   maxDraw: 6000
   currentParticleCount: 0
@@ -427,6 +432,55 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &437264684
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 437264681}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3347b827bf391cd4bb88c9d458911050, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DParticleDisplay
+  displayEnabled: 1
+  mesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
+  material: {fileID: 2100000, guid: 6cde42e39ffc3cb45ad10b8a0fe3f1e7, type: 2}
+  scale: 0.4
+  colourMode: 1
+  colourMap:
+    serializedVersion: 2
+    key0: {r: 0.13363299, g: 0.34235913, b: 0.7264151, a: 1}
+    key1: {r: 0.2980392, g: 1, b: 0.56327766, a: 1}
+    key2: {r: 1, g: 0.9309917, b: 0, a: 0}
+    key3: {r: 0.96862745, g: 0.28555763, b: 0.031372573, a: 0}
+    key4: {r: 0, g: 0, b: 0, a: 0}
+    key5: {r: 0, g: 0, b: 0, a: 0}
+    key6: {r: 0, g: 0, b: 0, a: 0}
+    key7: {r: 0, g: 0, b: 0, a: 0}
+    ctime0: 4064
+    ctime1: 33191
+    ctime2: 46738
+    ctime3: 65535
+    ctime4: 0
+    ctime5: 0
+    ctime6: 0
+    ctime7: 0
+    atime0: 0
+    atime1: 65535
+    atime2: 0
+    atime3: 0
+    atime4: 0
+    atime5: 0
+    atime6: 0
+    atime7: 0
+    m_Mode: 2
+    m_ColorSpace: -1
+    m_NumColorKeys: 4
+    m_NumAlphaKeys: 2
+  gradientResolution: 64
+  velocityDisplayMax: 10
 --- !u!1 &1088916021
 GameObject:
   m_ObjectHideFlags: 0
@@ -533,7 +587,7 @@ Camera:
   far clip plane: 1000
   field of view: 34
   orthographic: 1
-  orthographic size: 4
+  orthographic size: 7
   m_Depth: -1
   m_CullingMask:
     serializedVersion: 2
@@ -558,7 +612,53 @@ Transform:
   m_GameObject: {fileID: 1088916021}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: -1, z: -10}
+  m_LocalPosition: {x: 0, y: 0, z: -10}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1404626018
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1404626020}
+  - component: {fileID: 1404626019}
+  m_Layer: 0
+  m_Name: Container Up
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1404626019
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1404626018}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4604536c1b2ac6644b9380bdbb57c3fd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  isDynamic: 0
+  size: {x: 22, y: 1}
+--- !u!4 &1404626020
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1404626018}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: -5, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -660,10 +760,11 @@ SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
   - {fileID: 437264683}
-  - {fileID: 1088916025}
-  - {fileID: 500101}
   - {fileID: 500201}
+  - {fileID: 500101}
+  - {fileID: 1088916025}
   - {fileID: 500301}
+  - {fileID: 1404626020}
   - {fileID: 500401}
   - {fileID: 500501}
   - {fileID: 2084783509}

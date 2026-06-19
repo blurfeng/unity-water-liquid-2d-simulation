@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: WaterDescriptor
   m_EditorClassIdentifier: 
   radius: 0.1
-  renderScale: 2.5
+  renderScale: 1
   defaultLifetime: 0
   renderSettings:
     sprite: {fileID: 21300000, guid: 474aa5d06b976c5449aa374d5c77d9aa, type: 3}

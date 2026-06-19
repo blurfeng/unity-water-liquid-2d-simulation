@@ -9,13 +9,13 @@ namespace Fs.Liquid2D
 {
     public class LiquidSpawner : MonoBehaviour
     {
-        [Header("Common")]
         [SerializeField, LocalizationTooltip(
-            "总开关：关闭后暂停所有粒子喷射，但不改变 IsSpawning 状态，重新开启后立即恢复。",
-            "Master toggle: disables all particle spawning when off, without changing IsSpawning state; resumes immediately when re-enabled.",
-            "マスタースイッチ：オフにすると IsSpawning 状態を変えずに噴射を一時停止し、オンに戻すと即座に再開します。")]
+             "总开关：关闭后暂停所有粒子喷射，但不改变 IsSpawning 状态，重新开启后立即恢复。",
+             "Master toggle: disables all particle spawning when off, without changing IsSpawning state; resumes immediately when re-enabled.",
+             "マスタースイッチ：オフにすると IsSpawning 状態を変えずに噴射を一時停止し、オンに戻すと即座に再開します。")]
         private bool spawningEnabled = true;
-
+        
+        [Header("Common")]
         [SerializeField, LocalizationTooltip(
             "是否在启动时自动开始喷射", 
             "Whether to automatically start spraying on startup", 
@@ -39,6 +39,20 @@ namespace Fs.Liquid2D
              "Duration time (0 means infinite duration)", 
              "持続時間（0は無限持続を意味する）")]
         private float duration;
+
+        [SerializeField, Min(0), LocalizationTooltip(
+             "生成数量上限（0 表示无限制）。达到上限后自动停止喷射。",
+             "Maximum spawn count (0 means unlimited). Spawning stops automatically when the limit is reached.",
+             "生成数量の上限（0 は無制限）。上限に達すると自動的に噴射を停止します。")]
+        private int maxSpawnCount;
+
+#if UNITY_EDITOR
+        [SerializeField, LocalizationTooltip(
+             "已生成粒子总数（只读，运行时显示）", 
+             "Total spawned particle count (read-only, displayed at runtime)", 
+             "生成済みパーティクル総数（読み取り専用、実行時に表示）")]
+        private int spawnedCount;
+#endif
         
         [Header("Liquid Particle Settings")]
         [SerializeField, LocalizationTooltip(
@@ -49,6 +63,17 @@ namespace Fs.Liquid2D
 
         [SerializeField, Range(0.01f, 100f), LocalizationTooltip("喷嘴宽度。", "Nozzle width.", "ノズル幅。")]
         private float nozzleWidth = 1f;
+
+        [SerializeField, Min(0f), LocalizationTooltip(
+            "喷射深度抖动范围（沿喷射方向的随机偏移距离，世界单位）。大于 0 时，每颗粒子在喷射方向上额外随机偏移 [0, 此值]，" +
+            "防止同帧多颗粒子叠在喷嘴同一位置而引起 SPH 压力爆炸。建议设置为光滑核半径（smoothingRadius）的 1–2 倍。",
+            "Spawn depth jitter along the ejection direction (world units). When > 0, each particle is offset by a random " +
+            "distance in [0, this value] along the ejection axis, preventing multiple same-frame particles from stacking " +
+            "at the nozzle and triggering SPH pressure explosions. Recommended: 1–2× the smoothing radius.",
+            "噴射深度ジッター（噴射方向のランダムオフセット距離、ワールド単位）。0 より大きい場合、各粒子が噴射方向に " +
+            "[0, この値] のランダムオフセットを受け、同フレームの粒子がノズル同位置に積み重なり SPH 圧力爆発を起こすのを防ぐ。" +
+            "平滑核半径（smoothingRadius）の 1～2 倍を推奨。")]
+        private float spawnDepthJitter;
         
         [SerializeField, LocalizationTooltip(
             "流量。每秒喷射的粒子数量。", 
@@ -132,6 +157,7 @@ namespace Fs.Liquid2D
         private float _swingTime; // 摆动时间计时器。 // Swing time timer. // スイング時間タイマー。
         private bool _checkDelayStart = true; // 是否检查启动延迟。 // Whether to check start delay. // 開始遅延をチェックするかどうか。
         private bool _checkDuration = true; // 是否检查持续时间。 // Whether to check duration. // 持続時間をチェックするかどうか。
+        private int _spawnedCount; // 已生成粒子总数。 // Total spawned particle count. // 生成済みパーティクル総数。
 
         public bool IsSpawning { get; private set; } // 是否正在喷射中。 // Whether it is currently spawning. // 現在噴射中かどうか。
         private static bool _isInitForJit; // 是否已为JIT预热。 // Whether JIT has been warmed up. // JITがウォームアップされているかどうか。
@@ -145,7 +171,8 @@ namespace Fs.Liquid2D
         /// </summary>
         /// <param name="resetDelayStart">重置启动延迟计时器。假设设置了有效的启动延迟，那么在开始喷射前会有一段延迟时间。// reset start delay timer. Assuming a valid start delay is set, there will be a delay before spawning starts. // 開始遅延タイマーをリセット。 有効な開始遅延が設定されていると仮定すると、噴射が開始される前に遅延があります。</param>
         /// <param name="resetDuration">重置持续时间计时器。假设设置了有效的持续时间，那么在运行一段时间后会停止喷射。// reset duration timer. Assuming a valid duration is set, spawning will stop after running for a period of time. // 持続時間タイマーをリセット。 有効な持続時間が設定されていると仮定すると、一定期間実行した後に噴射が停止します。</param>
-        public void StartSpawn(bool resetDelayStart = true, bool resetDuration = true)
+        /// <param name="resetSpawnCount">重置已生成粒子计数器。// Reset the spawned particle counter. // 生成済みパーティクルカウンターをリセット。</param>
+        public void StartSpawn(bool resetDelayStart = true, bool resetDuration = true, bool resetSpawnCount = false)
         {
             if (IsSpawning) return;
             IsSpawning = true;
@@ -155,6 +182,9 @@ namespace Fs.Liquid2D
 
             // 重置持续时间计时器。 // Reset duration timer. // 持続時間タイマーをリセット。
             if (resetDuration) ResetDuration();
+
+            // 重置生成计数器。 // Reset spawn counter. // 生成カウンターをリセット。
+            if (resetSpawnCount) ResetSpawnCount();
             
             // 标记非首次启动。 // Mark as not first start. // 初回開始ではないことをマーク。
             _isFirstStart = false;
@@ -285,6 +315,32 @@ namespace Fs.Liquid2D
             _checkDuration = true;
             _durationTimer = 0f;
         }
+
+        /// <summary>
+        /// 重置已生成粒子计数器。
+        /// Reset the spawned particle counter.
+        /// 生成済みパーティクルカウンターをリセット。
+        /// </summary>
+        public void ResetSpawnCount()
+        {
+            _spawnedCount = 0;
+#if UNITY_EDITOR
+            spawnedCount = _spawnedCount;
+#endif
+        }
+
+        /// <summary>
+        /// 设置生成数量上限（0 表示无限制）。
+        /// Set the maximum spawn count (0 means unlimited).
+        /// 生成数量の上限を設定します（0 は無制限）。
+        /// </summary>
+        /// <param name="aMaxSpawnCount"></param>
+        /// <param name="resetCount">同时重置已生成计数器。// Also reset the spawned counter. // 生成済みカウンターも同時にリセット。</param>
+        public void SetMaxSpawnCount(int aMaxSpawnCount, bool resetCount = true)
+        {
+            maxSpawnCount = Mathf.Max(0, aMaxSpawnCount);
+            if (resetCount) ResetSpawnCount();
+        }
         #endregion
         
         protected virtual void Awake()
@@ -406,7 +462,7 @@ namespace Fs.Liquid2D
             // 随机选择一个流体粒子描述符。 // Randomly select a fluid particle descriptor. // ランダムに流体粒子記述子を選択。
             if (liquidParticles.Count == 0) return;
             Liquid2DParticleConfig config = liquidParticles.RandomWeight();
-            if (config == null || config.descriptor == null) return;
+            if (config == null || config.Descriptor == null) return;
 
             var sim = Liquid2DSimulation.Instance;
             if (sim == null) return;
@@ -417,7 +473,12 @@ namespace Fs.Liquid2D
             // 随机获取生成位置。 // Randomly get spawn position. // ランダムに生成位置を取得。
             Vector2 normal = new Vector2(-dir.y, dir.x); // 计算法线 // Calculate normal // 法線を計算
             float offset = UnityEngine.Random.Range(-nozzleWidth * 0.5f, nozzleWidth * 0.5f);
-            Vector3 spawnPos3 = TransformGet.position + (Vector3)(normal * offset);
+            // 喷射方向深度抖动：防止同帧多颗粒子堆叠在喷嘴同一位置引发 SPH 压力爆炸。
+            // Ejection-direction depth jitter: prevents multiple same-frame particles from stacking at the nozzle,
+            // which would trigger SPH pressure explosions and scatter particles in random directions.
+            // 噴射方向の深度ジッター：同フレームの粒子がノズル同位置に積み重なって SPH 圧力爆発を起こすのを防ぐ。
+            float depthOffset = spawnDepthJitter > 0f ? UnityEngine.Random.Range(0f, spawnDepthJitter) : 0f;
+            Vector3 spawnPos3 = TransformGet.position + (Vector3)(normal * offset) + (Vector3)(dir * depthOffset);
             float2 spawnPos = new float2(spawnPos3.x, spawnPos3.y);
 
             // 随机尺寸缩放。 // Random size scale. // ランダムサイズスケール。
@@ -430,11 +491,21 @@ namespace Fs.Liquid2D
             if (ejectForceRandomRange.y > ejectForceRandomRange.x && ejectForceRandomRange.x >= 0f)
                 forceEject *= UnityEngine.Random.Range(ejectForceRandomRange.x, ejectForceRandomRange.y);
 
-            float mass = config.descriptor.material != null ? Mathf.Max(0.0001f, config.descriptor.material.mass) : 1f;
+            float mass = config.Descriptor.material != null ? Mathf.Max(0.0001f, config.Descriptor.material.mass) : 1f;
             float2 velocity = new float2(dir.x, dir.y) * (forceEject / mass);
 
-            var handle = sim.Spawn(config.descriptor, spawnPos, velocity, sizeScale, config.lifetime);
+            var handle = sim.Spawn(config.Descriptor, spawnPos, velocity, sizeScale, config.Lifetime);
             onSpawned?.Invoke(handle);
+
+            // 数量上限检查。 // Max spawn count check. // 生成数上限チェック。
+            _spawnedCount++;
+#if UNITY_EDITOR
+            spawnedCount = _spawnedCount;
+#endif
+            if (maxSpawnCount > 0 && _spawnedCount >= maxSpawnCount)
+            {
+                StopSpawn();
+            }
         }
 
         #if UNITY_EDITOR
@@ -444,12 +515,18 @@ namespace Fs.Liquid2D
         {
             if (liquidParticles.Count > 0)
             {
-                var d = liquidParticles[0].descriptor;
+                var d = liquidParticles[0].Descriptor;
                 if (d && d.renderSettings != null)
                 {
                     _gizmosBodyColor = d.renderSettings.color;
                 }
             }
+            
+            // 流量参数即时生效：Inspector 修改后立即同步运行时计算值。
+            // Immediately sync flow rate runtime values when Inspector values change.
+            // Inspector 変更時に流量のランタイム計算値を即座に同期。
+            SetFlowRate(flowRate);
+            SetEjectForce(ejectForce);
         }
 
         private void OnDrawGizmos()
@@ -480,7 +557,7 @@ namespace Fs.Liquid2D
                     // 距離が小さすぎる場合（カメラがオブジェクト内にある場合）、NaN/0を避けるために最小値を使用します。
                     distance = Mathf.Max(distance, 0.0001f);
                     float frustumHeight = 2f * distance * Mathf.Tan(cam.fieldOfView * Mathf.Deg2Rad * 0.5f);
-                    worldPerPixel = frustumHeight / (float)cam.pixelHeight;
+                    worldPerPixel = frustumHeight / cam.pixelHeight;
                 }
             }
 
@@ -494,7 +571,7 @@ namespace Fs.Liquid2D
             Gizmos.color = Color.cyan;
             Vector3 start = TransformGet.position;
             Vector2 dir2D = GetCurrentEjectDirection();
-            Vector3 dir = (Vector3)dir2D.normalized;
+            Vector3 dir = dir2D.normalized;
             Vector3 end = start + dir * lineLengthWorld;
             Gizmos.DrawLine(start, end);
 
@@ -515,7 +592,7 @@ namespace Fs.Liquid2D
             
             // 绘制喷嘴宽度线（真实世界单位，不随相机变化）
             Vector2 normal2D = new Vector2(-dir2D.y, dir2D.x).normalized;
-            Vector3 normal = (Vector3)normal2D;
+            Vector3 normal = normal2D;
             Vector3 leftPos = start + normal * (nozzleWidth * 0.5f);
             Vector3 rightPos = start - normal * (nozzleWidth * 0.5f);
 
@@ -540,29 +617,29 @@ namespace Fs.Liquid2D
         [LocalizationTooltip("流体粒子描述符（定义外观/混色/材质/尺寸）。",
              "Fluid particle descriptor (defines appearance/mixing/material/size).",
              "流体パーティクル記述子（外観/混色/マテリアル/サイズを定義）。")]
-        public Liquid2DParticleDescriptor descriptor;
+        public Liquid2DParticleDescriptor Descriptor;
 
         [LocalizationTooltip("权重，决定被选中的概率。",
              "Weight, determines the probability of being selected.",
              "重み、選択される確率を決定します。")]
-        public int weight = 1;
+        public int Weight = 1;
 
         [LocalizationTooltip("生命周期，单位秒。大于0则覆盖描述符默认寿命并在到时后自动销毁。",
              "Lifetime in seconds. If greater than 0, overrides the descriptor default and auto-destroys after expiry.",
              "ライフタイム（秒）。0より大きい場合、記述子の既定を上書きし期限後に自動破棄。")]
-        public float lifetime = 0f;
+        public float Lifetime;
 
         public int GetWeight()
         {
-            return weight;
+            return Weight;
         }
 
 #if UNITY_EDITOR
         public void OnValidate()
         {
-            if (descriptor && !descriptor.IsValid())
+            if (Descriptor && !Descriptor.IsValid())
             {
-                Debug.LogWarning($"Liquid2DParticleDescriptor {descriptor.name} 缺少 Sprite/Material，渲染将被跳过。");
+                Debug.LogWarning($"Liquid2DParticleDescriptor {Descriptor.name} 缺少 Sprite/Material，渲染将被跳过。");
             }
         }
 #endif

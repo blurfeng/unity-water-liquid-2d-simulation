@@ -112,7 +112,8 @@ namespace Fs.Liquid2D
                     activeIndices = ctx.activeIndices, positions = store.positions, velocities = store.velocities,
                     radii = store.radii, invMass = store.invMass, typeId = store.typeId, materials = ctx.materials,
                     colliders = ctx.colliders.colliders, points = ctx.colliders.points, dt = subDt,
-                    collisionDamping = p.collisionDamping, hasColliders = (byte)(hasColliders ? 1 : 0),
+                    collisionDamping = p.collisionDamping, maxSpeed = p.maxSpeed,
+                    hasColliders = (byte)(hasColliders ? 1 : 0),
                     accumulate = (byte)(accumulate ? 1 : 0), outImpulse = outImpulse, outBody = outBody,
                 }.Schedule(count, 64, h);
 
