@@ -559,7 +559,14 @@ namespace Fs.Liquid2D
                     if (typeArr[slot] != t) continue;
 
                     float2 p = positions[slot];
-                    float diameter = radiiArr[slot] * 2f;
+                    // 可视直径 = 物理直径 × 描述符渲染倍率。metaball 融合需要远大于物理半径的可视 blob，
+                    // 故渲染尺寸与物理半径解耦：radius 只管物理（碰撞/邻居/堆积），renderScale 单独管可视大小。
+                    // Visual diameter = physical diameter × descriptor render multiplier; metaball fusion needs visual blobs
+                    // much larger than the physics radius, so visual size is decoupled from physics radius: radius drives
+                    // physics (collision/neighbor/packing) only, while renderScale drives the visual size.
+                    // 可視直径 = 物理直径 × 記述子の描画倍率。メタボール融合には物理半径より大きい可視 blob が必要なため、
+                    // 描画サイズは物理半径から分離：radius は物理（衝突/近傍/堆積）のみ、renderScale が可視サイズを担う。
+                    float diameter = radiiArr[slot] * 2f * d.renderScale;
                     var center = new Vector3(p.x, p.y, 0f);
 
                     // 视锥剔除。 // Frustum cull. // 視錐台カリング。

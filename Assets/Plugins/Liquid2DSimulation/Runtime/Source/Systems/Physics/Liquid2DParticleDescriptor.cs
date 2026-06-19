@@ -18,6 +18,24 @@ namespace Fs.Liquid2D
     [CreateAssetMenu(fileName = "Liquid2DParticleDescriptor", menuName = "Liquid2D/Particle Descriptor", order = 0)]
     public class Liquid2DParticleDescriptor : ScriptableObject
     {
+        [Min(0.001f), LocalizationTooltip(
+             "粒子半径（世界单位）。影响碰撞/邻居半径与物理间距。",
+             "Particle radius (world units). Affects collision/neighbor radius and physics spacing.",
+             "粒子半径（ワールド単位）。衝突/近傍半径と物理間隔に影響します。")]
+        public float radius = 0.125f;
+
+        [Min(0.1f), LocalizationTooltip(
+             "渲染可视倍率：绘制 quad 直径 = 半径 × 2 × 此值。metaball 融合需要远大于物理半径的可视 blob，建议 4~8。",
+             "Render visual multiplier: drawn quad diameter = radius × 2 × this. Metaball fusion needs visual blobs much larger than the physics radius; 4~8 recommended.",
+             "描画倍率：quad 直径 = 半径 × 2 × この値。メタボール融合には物理半径より大きな可視 blob が必要（4~8 推奨）。")]
+        public float renderScale = 5f;
+
+        [Min(0f), LocalizationTooltip(
+             "默认生命时间（秒），0 表示无限。可被生成参数覆盖。",
+             "Default lifetime (seconds), 0 = infinite. Can be overridden by spawn parameters.",
+             "既定の寿命（秒）、0 は無限。生成パラメータで上書き可能。")]
+        public float defaultLifetime = 0f;
+        
         [LocalizationTooltip(
              "流体粒子渲染设置（贴图/材质/默认颜色/nameTag）。",
              "Fluid particle render settings (sprite/material/default color/nameTag).",
@@ -35,18 +53,6 @@ namespace Fs.Liquid2D
              "Physics material (mass/viscosity/tension/friction, etc. to simulate water/lava/foam/sand).",
              "物理マテリアル（質量/粘性/張力/摩擦など。水/溶岩/泡/砂の表現用）。")]
         public Liquid2DParticleMaterial material = new Liquid2DParticleMaterial();
-
-        [Min(0.001f), LocalizationTooltip(
-             "粒子半径（世界单位）。同时影响碰撞/邻居半径与渲染尺寸。",
-             "Particle radius (world units). Affects collision/neighbor radius and render size.",
-             "粒子半径（ワールド単位）。衝突/近傍半径と描画サイズに影響します。")]
-        public float radius = 0.125f;
-
-        [Min(0f), LocalizationTooltip(
-             "默认生命时间（秒），0 表示无限。可被生成参数覆盖。",
-             "Default lifetime (seconds), 0 = infinite. Can be overridden by spawn parameters.",
-             "既定の寿命（秒）、0 は無限。生成パラメータで上書き可能。")]
-        public float defaultLifetime = 0f;
 
         /// <summary>
         /// 运行时由 <see cref="Liquid2DSimulation"/> 分配的类型索引（typeId）。-1 表示未注册。
