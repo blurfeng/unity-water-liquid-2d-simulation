@@ -7,7 +7,12 @@ using Unity.Mathematics;
 
 namespace Fs.Liquid2D
 {
-    public class LiquidSpawner : MonoBehaviour
+    /// <summary>
+    /// 粒子生成器。持续喷射流体粒子到模拟器中，支持各种参数控制和随机化。
+    /// Particle spawner. Continuously spawns fluid particles into the simulation, with various parameter controls and randomization.
+    /// 粒子スポーナー。さまざまなパラメーター制御とランダム化を備えたシミュレーションへの流体粒子の継続的なスポーン。
+    /// </summary>
+    public class Liquid2DSpawner : MonoBehaviour
     {
         [SerializeField, LocalizationTooltip(
              "总开关：关闭后暂停所有粒子喷射，但不改变 IsSpawning 状态，重新开启后立即恢复。",

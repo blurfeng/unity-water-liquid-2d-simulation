@@ -5,14 +5,14 @@ namespace Fs.Liquid2D
 {
     /// <summary>
     /// 流体粒子类型描述符。纯数据架构下取代「粒子 prefab」，定义一类粒子的外观（渲染设置）、混色规则、
-    /// 物理材质与默认尺寸/寿命。生成时由 <see cref="LiquidSpawner"/> 引用，注册进 <see cref="Liquid2DSimulation"/> 得到 typeId，
+    /// 物理材质与默认尺寸/寿命。生成时由 <see cref="Liquid2DSpawner"/> 引用，注册进 <see cref="Liquid2DSimulation"/> 得到 typeId，
     /// 渲染按描述符分组批量绘制。
     /// Fluid particle type descriptor. In the pure-data architecture it replaces the "particle prefab": it defines a
     /// particle class's appearance (render settings), mixing rules, physics material, and default size/lifetime.
-    /// Referenced by <see cref="LiquidSpawner"/>, registered into <see cref="Liquid2DSimulation"/> for a typeId, and
+    /// Referenced by <see cref="Liquid2DSpawner"/>, registered into <see cref="Liquid2DSimulation"/> for a typeId, and
     /// rendered in descriptor-grouped instanced batches.
     /// 流体パーティクル型記述子。純データアーキテクチャで「パーティクル prefab」を置き換え、外観（描画設定）、
-    /// 混色ルール、物理マテリアル、既定サイズ/寿命を定義します。<see cref="LiquidSpawner"/> が参照し、
+    /// 混色ルール、物理マテリアル、既定サイズ/寿命を定義します。<see cref="Liquid2DSpawner"/> が参照し、
     /// <see cref="Liquid2DSimulation"/> に登録して typeId を得て、記述子ごとにまとめて描画されます。
     /// </summary>
     [CreateAssetMenu(fileName = "Liquid2DParticleDescriptor", menuName = "Liquid2D/Particle Descriptor", order = 0)]
