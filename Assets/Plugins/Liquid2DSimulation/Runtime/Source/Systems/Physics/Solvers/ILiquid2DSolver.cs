@@ -35,6 +35,21 @@ namespace Fs.Liquid2D
         /// <summary>动态碰撞体的本帧累积冲量（双向耦合用，长度=动态体数）。 // Per-frame accumulated impulse for dynamic colliders (two-way coupling). // 動的コライダーのフレーム累積力積。</summary>
         public NativeArray<float2> colliderImpulse;
 
+        /// <summary>销毁区域集合（区域内粒子本帧被回收）。 // Dead-zone set (particles inside are recycled this frame). // 破棄領域集合。</summary>
+        public Liquid2DDeadZoneBuffer deadZones;
+
+        /// <summary>销毁区域数量（>0 时才执行/回读销毁标记）。 // Dead-zone count (kill marking runs/reads back only when >0). // 破棄領域数。</summary>
+        public int deadZoneCount;
+
+        /// <summary>
+        /// 销毁标记输出（按 active 索引 k，长度=activeCount）。求解器置 1 表示第 k 个活动粒子落入某销毁区域；
+        /// Step 后由 <see cref="Liquid2DSimulation"/> 回收对应 slot。
+        /// Kill flag output (indexed by active index k, length = activeCount). The solver sets 1 when the k-th active
+        /// particle falls inside a dead zone; <see cref="Liquid2DSimulation"/> recycles the slot after Step.
+        /// 破棄フラグ出力（active 索引 k、長さ=activeCount）。
+        /// </summary>
+        public NativeArray<byte> killFlags;
+
         /// <summary>当前时间（Time.time），用于混色节流等。 // Current time, for mix throttling etc. // 現在時刻（混色スロットリング等）。</summary>
         public float time;
 

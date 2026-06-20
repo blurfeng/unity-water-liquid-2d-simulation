@@ -66,6 +66,41 @@ namespace Fs.Liquid2D
     }
 
     /// <summary>
+    /// 销毁区域的 GPU 上传结构（与 Liquid2DSph.compute 的 GpuDeadZone 对齐）。形状字段同 <see cref="Liquid2DGpuCollider"/>，
+    /// 末尾改为 groupId/matchAll/invert。enum/byte → int 避免对齐问题。stride = 48 bytes。
+    /// GPU-upload form of a dead zone (matches GpuDeadZone in Liquid2DSph.compute). Shape fields mirror
+    /// <see cref="Liquid2DGpuCollider"/>, ending with groupId/matchAll/invert instead. enum/byte → int. stride = 48 bytes.
+    /// 破棄領域の GPU アップロード構造（GpuDeadZone と整合）。stride = 48 bytes。
+    /// </summary>
+    public struct Liquid2DGpuDeadZone
+    {
+        public int shape;
+        public float2 center;
+        public float2 size;
+        public float rotation;
+        public float radius;
+        public int pointStart;
+        public int pointCount;
+        public int groupId;
+        public int matchAll;
+        public int invert;
+
+        public static Liquid2DGpuDeadZone From(in Liquid2DDeadZoneData z) => new Liquid2DGpuDeadZone
+        {
+            shape = (int)z.shape.shape,
+            center = z.shape.center,
+            size = z.shape.size,
+            rotation = z.shape.rotation,
+            radius = z.shape.radius,
+            pointStart = z.shape.pointStart,
+            pointCount = z.shape.pointCount,
+            groupId = z.groupId,
+            matchAll = z.matchAll,
+            invert = z.invert,
+        };
+    }
+
+    /// <summary>
     /// 混色参数的 GPU 上传结构（与 Liquid2DSph.compute 的 MixData 对齐）。byte → int。stride = 20 bytes。
     /// GPU-upload form of mix params (matches MixData in Liquid2DSph.compute). byte → int. stride = 20 bytes.
     /// 混色パラメータの GPU アップロード構造（MixData と整合）。stride = 20 bytes。

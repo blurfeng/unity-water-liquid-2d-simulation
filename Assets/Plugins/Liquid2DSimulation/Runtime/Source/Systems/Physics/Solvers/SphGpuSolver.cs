@@ -31,18 +31,19 @@ namespace Fs.Liquid2D
         private readonly bool _valid;
 
         private readonly int _kSpawn, _kExternal, _kClearGrid, _kCount, _kPrefix, _kScatter, _kDensity, _kPressure,
-            _kViscosity, _kCopyVel, _kClearImpulse, _kIntegrate, _kMix, _kCopyColor;
+            _kViscosity, _kCopyVel, _kClearImpulse, _kIntegrate, _kMix, _kCopyColor, _kDeadZone;
         private readonly int[] _allKernels;
 
         // 容量级缓冲（slot 索引，扩容时保状态重建）。 // Capacity-level buffers (slot-indexed). // 容量レベルバッファ。
         private ComputeBuffer _positions, _predicted, _velocities, _velNext, _densities, _colors, _colorsNext, _lastMix;
         private ComputeBuffer _radii, _invMass, _typeId, _groupId;
         // count 级。 // count-level.
-        private ComputeBuffer _active, _bucketOf, _sortedSlots;
+        private ComputeBuffer _active, _bucketOf, _sortedSlots, _killFlags;
         // tableSize 级。 // table-level.
         private ComputeBuffer _counts, _cellStart, _cursor;
         // 辅助。 // aux.
         private ComputeBuffer _materials, _mixDatas, _colliders, _points, _impulseX, _impulseY, _forceFields;
+        private ComputeBuffer _deadZones, _deadZonePoints;
         // 生成上传（仅动态状态；静态属性由 store 整块 SetData）。 // spawn upload (dynamic only). // 生成アップロード。
         private ComputeBuffer _upSlots, _upPos, _upVel, _upColor;
 
@@ -55,6 +56,7 @@ namespace Fs.Liquid2D
         private int[] _activeA;
         private Liquid2DGpuCollider[] _colA; private Liquid2DGpuMixData[] _mixA; private float2[] _pointsA;
         private Liquid2DGpuForceField[] _ffA;
+        private Liquid2DGpuDeadZone[] _dzA; private float2[] _dzPointsA; private int[] _killA;
         private int[] _impXA, _impYA;
         private int[] _upSlotsA; private float2[] _upPosA, _upVelA; private float4[] _upColorA;
 
@@ -77,10 +79,11 @@ namespace Fs.Liquid2D
             _kIntegrate = _cs.FindKernel("IntegrateCollide");
             _kMix = _cs.FindKernel("MixColor");
             _kCopyColor = _cs.FindKernel("CopyColor");
+            _kDeadZone = _cs.FindKernel("DeadZoneKill");
             _allKernels = new[]
             {
                 _kSpawn, _kExternal, _kClearGrid, _kCount, _kPrefix, _kScatter, _kDensity, _kPressure,
-                _kViscosity, _kCopyVel, _kClearImpulse, _kIntegrate, _kMix, _kCopyColor,
+                _kViscosity, _kCopyVel, _kClearImpulse, _kIntegrate, _kMix, _kCopyColor, _kDeadZone,
             };
             _valid = true;
         }
@@ -113,16 +116,21 @@ namespace Fs.Liquid2D
             int numPoints = ctx.colliders.IsCreated ? Mathf.Max(1, ctx.colliders.points.Length) : 1;
             int numBodies = Mathf.Max(1, ctx.dynamicBodyCount);
             int numForceFields = ctx.forceFields.Count;
+            int numDeadZones = ctx.deadZoneCount;
+            int numDeadZonePoints = numDeadZones > 0 && ctx.deadZones.points.IsCreated ? Mathf.Max(1, ctx.deadZones.points.Length) : 1;
             int tableSize = NextPrime(math.max(16, count * 2));
 
             EnsureCountBuffers(count);
             EnsureTableBuffers(tableSize);
             EnsureAuxBuffers(numTypes, numColliders, numPoints, numBodies, numForceFields);
+            EnsureDeadZoneBuffers(Mathf.Max(1, numDeadZones), numDeadZonePoints);
 
             UploadActiveIndices(ctx, count);
             UploadAux(ctx, numTypes, numColliders, numPoints, numForceFields);
+            UploadDeadZones(ctx, numDeadZones, numDeadZonePoints);
             BindAll();
             SetConstants(p, count, tableSize, numColliders, numBodies, numForceFields);
+            _cs.SetInt("numDeadZones", numDeadZones);
 
             int substeps = math.max(1, p.substeps);
             float subDt = dt / substeps;
@@ -156,11 +164,19 @@ namespace Fs.Liquid2D
                     SortPass(gP, gT);
                     _cs.Dispatch(_kMix, gP, 1, 1);
                     _cs.Dispatch(_kCopyColor, gP, 1, 1);
+
+                    // 销毁区域标记（最终位置）：求解后回读 KillFlags 由 CPU 回收 slot。
+                    // Dead-zone marking (final positions); KillFlags is read back so the CPU recycles slots after solve.
+                    // 破棄領域マーキング（最終位置）。求解後 KillFlags を回読し CPU が slot を回収。
+                    if (numDeadZones > 0) _cs.Dispatch(_kDeadZone, gP, 1, 1);
                 }
             }
 
             // 仅有动态碰撞体时回读冲量（双向耦合）；否则不产生 CPU 同步点。 // Read impulse only when dynamic bodies exist. // 動的体がある時のみ回読。
             if (ctx.dynamicBodyCount > 0) ReadbackImpulse(ctx, numBodies);
+
+            // 有销毁区域时回读销毁标记（小数组，count 字节级）。 // Read back kill flags when dead zones exist (small array). // 破棄領域がある時のみ回読。
+            if (numDeadZones > 0) ReadbackKillFlags(ctx, count);
 
             _lastCount = count;
         }
@@ -265,6 +281,11 @@ namespace Fs.Liquid2D
         private void EnsureCountBuffers(int count)
         {
             Ensure(ref _active, count, 4); Ensure(ref _bucketOf, count, 4); Ensure(ref _sortedSlots, count, 4);
+            Ensure(ref _killFlags, count, 4);
+        }
+        private void EnsureDeadZoneBuffers(int numDeadZones, int numDeadZonePoints)
+        {
+            Ensure(ref _deadZones, numDeadZones, 48); Ensure(ref _deadZonePoints, numDeadZonePoints, 8);
         }
         private void EnsureTableBuffers(int tableSize)
         {
@@ -320,6 +341,21 @@ namespace Fs.Liquid2D
             }
         }
 
+        private void UploadDeadZones(in Liquid2DSolveContext ctx, int numDeadZones, int numDeadZonePoints)
+        {
+            if (numDeadZones > 0)
+            {
+                EnsureArray(ref _dzA, numDeadZones);
+                for (int i = 0; i < numDeadZones; i++) _dzA[i] = Liquid2DGpuDeadZone.From(ctx.deadZones.zones[i]);
+                _deadZones.SetData(_dzA, 0, 0, numDeadZones);
+            }
+
+            EnsureArray(ref _dzPointsA, numDeadZonePoints);
+            int pN = numDeadZones > 0 && ctx.deadZones.points.IsCreated ? ctx.deadZones.points.Length : 0;
+            for (int i = 0; i < numDeadZonePoints; i++) _dzPointsA[i] = i < pN ? ctx.deadZones.points[i] : float2.zero;
+            _deadZonePoints.SetData(_dzPointsA, 0, 0, numDeadZonePoints);
+        }
+
         private void BindAll()
         {
             Bind("Positions", _positions); Bind("Predicted", _predicted); Bind("Velocities", _velocities);
@@ -329,6 +365,7 @@ namespace Fs.Liquid2D
             Bind("ActiveIndices", _active); Bind("Materials", _materials); Bind("MixDatas", _mixDatas);
             Bind("Colliders", _colliders); Bind("ColliderPoints", _points); Bind("ImpulseX", _impulseX); Bind("ImpulseY", _impulseY);
             Bind("ForceFields", _forceFields);
+            Bind("DeadZones", _deadZones); Bind("DeadZonePoints", _deadZonePoints); Bind("KillFlags", _killFlags);
             Bind("BucketOf", _bucketOf); Bind("Counts", _counts); Bind("CellStart", _cellStart);
             Bind("Cursor", _cursor); Bind("SortedSlots", _sortedSlots);
         }
@@ -368,6 +405,17 @@ namespace Fs.Liquid2D
             _impulseY.GetData(_impYA, 0, 0, numBodies);
             for (int b = 0; b < numBodies && b < impulseOut.Length; b++)
                 impulseOut[b] += new float2(_impXA[b] / ImpulseScale, _impYA[b] / ImpulseScale);
+        }
+
+        // 回读销毁标记到 ctx.killFlags（按 k 索引，1=该活动粒子待回收）。 // Read kill flags back into ctx.killFlags (indexed by k). // 破棄フラグを回読。
+        private void ReadbackKillFlags(in Liquid2DSolveContext ctx, int count)
+        {
+            var flagsOut = ctx.killFlags;
+            if (!flagsOut.IsCreated || _killFlags == null || count <= 0) return;
+            EnsureArray(ref _killA, count);
+            _killFlags.GetData(_killA, 0, 0, count);
+            for (int k = 0; k < count && k < flagsOut.Length; k++)
+                flagsOut[k] = (byte)(_killA[k] != 0 ? 1 : 0);
         }
 
         /// <summary>
@@ -419,8 +467,9 @@ namespace Fs.Liquid2D
             void R(ComputeBuffer b) => b?.Release();
             R(_positions); R(_predicted); R(_velocities); R(_velNext); R(_densities); R(_colors); R(_colorsNext); R(_lastMix);
             R(_radii); R(_invMass); R(_typeId); R(_groupId);
-            R(_active); R(_bucketOf); R(_sortedSlots); R(_counts); R(_cellStart); R(_cursor);
+            R(_active); R(_bucketOf); R(_sortedSlots); R(_killFlags); R(_counts); R(_cellStart); R(_cursor);
             R(_materials); R(_mixDatas); R(_colliders); R(_points); R(_impulseX); R(_impulseY); R(_forceFields);
+            R(_deadZones); R(_deadZonePoints);
             R(_upSlots); R(_upPos); R(_upVel); R(_upColor);
             _positions = null; _active = null;
             _capacity = 0; _lastCount = 0; _needFullReupload = false;

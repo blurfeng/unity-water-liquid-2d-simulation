@@ -465,6 +465,57 @@ namespace Fs.Liquid2D
     }
 
     /// <summary>
+    /// 销毁区域标记：对每个活动粒子（最终位置）遍历销毁区域，命中组过滤且点落在实心形状内时置 killFlags[k]=1。
+    /// 复用 <see cref="Liquid2DColliderMath.Project"/>（particleRadius=0 即"点在形状内"判定）。实际回收 slot 在
+    /// <see cref="Liquid2DSimulation"/> 的 Step 后进行。
+    /// Dead-zone marking: for each active particle (final position) scan dead zones; when the group filter passes and the
+    /// point lies inside the solid shape, set killFlags[k]=1. Reuses <see cref="Liquid2DColliderMath.Project"/>
+    /// (particleRadius=0 = point-inside test). Slots are actually recycled after Step in <see cref="Liquid2DSimulation"/>.
+    /// 破棄領域マーキング。各活動粒子（最終位置）について破棄領域を走査し、グループ絞り込みを通過かつ点が実心形状内なら
+    /// killFlags[k]=1 を設定。
+    /// </summary>
+    [BurstCompile]
+    public struct DeadZoneKillJob : IJobParallelFor
+    {
+        [ReadOnly] public NativeArray<int> activeIndices;
+        [ReadOnly] public NativeArray<float2> positions;
+        [ReadOnly] public NativeArray<int> groupId;
+        [ReadOnly] public NativeArray<Liquid2DDeadZoneData> deadZones;
+        [ReadOnly] public NativeArray<float2> points;
+        public int deadZoneCount;
+        [WriteOnly] public NativeArray<byte> killFlags;
+
+        public void Execute(int k)
+        {
+            int i = activeIndices[k];
+            float2 p = positions[i];
+            int gi = groupId[i];
+
+            byte kill = 0;
+            for (int z = 0; z < deadZoneCount; z++)
+            {
+                var dz = deadZones[z];
+                // 组过滤：matchAll（空 nameTag）销毁全部，否则仅销毁 groupId 匹配的粒子。
+                // Group filter: matchAll (empty nameTag) kills all; otherwise only matching groupId.
+                // グループ絞り込み：matchAll は全破棄、それ以外は groupId 一致のみ。
+                if (dz.matchAll == 0 && dz.groupId != gi) continue;
+                // particleRadius=0 → "点是否在实心形状内"。Bounds 模式（invert）反转为"在形状外"。
+                // particleRadius=0 → point-inside-solid test. Bounds mode (invert) flips it to "outside the shape".
+                // particleRadius=0 → 点が実心形状内か。Bounds モード（invert）は"形状外"に反転。
+                bool inside = Liquid2DColliderMath.Project(dz.shape, points, p, 0f, out _, out _);
+                if (dz.invert != 0) inside = !inside;
+                if (inside)
+                {
+                    kill = 1;
+                    break;
+                }
+            }
+
+            killFlags[k] = kill;
+        }
+    }
+
+    /// <summary>
     /// 邻居混色（Jacobi 双缓冲：读 colors，写 colorsNext）。按 groupId 兼容、接触距离、时间间隔节流。
     /// 在最终位置上重建的网格上执行（grid 由 positions 构建）。
     /// Neighbor color mixing (Jacobi double-buffer). Gated by groupId compatibility, contact distance, per-particle time

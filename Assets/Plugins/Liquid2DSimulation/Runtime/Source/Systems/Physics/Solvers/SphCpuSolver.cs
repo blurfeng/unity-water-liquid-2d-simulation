@@ -134,6 +134,19 @@ namespace Fs.Liquid2D
                         mixData = ctx.mixData, cellStart = cellStart, sortedSlots = sortedSlots, tableSize = tableSize,
                         invCellSize = invCell, time = ctx.time, lastMixTime = store.lastMixTime, colorsNext = store.colorsNext,
                     }.Schedule(count, 64, h);
+
+                    // 销毁区域标记（在最终位置上）：求解后由 Liquid2DSimulation 回收命中粒子。
+                    // Dead-zone marking (on final positions); Liquid2DSimulation recycles hit particles after solving.
+                    // 破棄領域マーキング（最終位置）。求解後に Liquid2DSimulation が命中粒子を回収。
+                    if (ctx.deadZoneCount > 0 && ctx.killFlags.IsCreated)
+                    {
+                        h = new DeadZoneKillJob
+                        {
+                            activeIndices = ctx.activeIndices, positions = store.positions, groupId = store.groupId,
+                            deadZones = ctx.deadZones.zones, points = ctx.deadZones.points,
+                            deadZoneCount = ctx.deadZoneCount, killFlags = ctx.killFlags,
+                        }.Schedule(count, 64, h);
+                    }
                 }
 
                 h.Complete();

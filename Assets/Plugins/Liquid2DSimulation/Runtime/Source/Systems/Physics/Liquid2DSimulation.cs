@@ -271,6 +271,13 @@ namespace Fs.Liquid2D
             var impulse = new NativeArray<float2>(math.max(1, _dynamicReceivers.Count), Allocator.TempJob, NativeArrayOptions.ClearMemory);
             var forceFields = Liquid2DForceFieldRegistry.BuildBuffer(Allocator.TempJob);
 
+            // 销毁区域：扁平化为缓冲，并分配按 active 索引的 killFlags（求解器置位，Step 后回收 slot）。
+            // Dead zones: flatten to a buffer and allocate active-indexed killFlags (solver sets them, slots recycled after Step).
+            // 破棄領域：バッファに平坦化し、active 索引の killFlags を確保（ソルバーが設定、Step 後に slot 回収）。
+            var deadZones = Liquid2DDeadZoneRegistry.BuildBuffer(Allocator.TempJob, GetGroup);
+            int deadZoneCount = deadZones.Count;
+            var killFlags = new NativeArray<byte>(math.max(1, count), Allocator.TempJob, NativeArrayOptions.ClearMemory);
+
             var ctx = new Liquid2DSolveContext
             {
                 store = _store,
@@ -281,6 +288,9 @@ namespace Fs.Liquid2D
                 colliders = colliders,
                 colliderImpulse = impulse,
                 forceFields = forceFields,
+                deadZones = deadZones,
+                deadZoneCount = deadZoneCount,
+                killFlags = killFlags,
                 time = now,
                 dynamicBodyCount = _dynamicReceivers.Count,
                 gpuPendingSpawns = _gpuPendingSpawns,
@@ -304,6 +314,9 @@ namespace Fs.Liquid2D
                 }
 
                 DispatchImpulses(impulse);
+
+                // 回收落入销毁区域的粒子（killFlags 由 CPU/GPU 求解器置位）。 // Recycle particles inside dead zones (killFlags set by CPU/GPU solver). // 破棄領域内の粒子を回収。
+                if (deadZoneCount > 0) ApplyKills(killFlags, count);
             }
             finally
             {
@@ -311,6 +324,9 @@ namespace Fs.Liquid2D
                 colliders.points.Dispose();
                 impulse.Dispose();
                 if (forceFields.fields.IsCreated) forceFields.fields.Dispose();
+                if (deadZones.zones.IsCreated) deadZones.zones.Dispose();
+                if (deadZones.points.IsCreated) deadZones.points.Dispose();
+                if (killFlags.IsCreated) killFlags.Dispose();
             }
         }
 
@@ -355,6 +371,16 @@ namespace Fs.Liquid2D
                 float2 imp = impulse[b];
                 if (math.lengthsq(imp) > 1e-8f) r.ApplyLiquidImpulse(imp);
             }
+        }
+
+        // 按 killFlags 回收落入销毁区域的粒子。killFlags[k] 对应本步活动索引 _activeIndices[k]。
+        // Recycle particles flagged by killFlags. killFlags[k] maps to this step's active index _activeIndices[k].
+        // killFlags に従って破棄領域内の粒子を回収。killFlags[k] は本ステップの _activeIndices[k] に対応。
+        private void ApplyKills(NativeArray<byte> killFlags, int count)
+        {
+            if (!killFlags.IsCreated) return;
+            for (int k = 0; k < count && k < killFlags.Length; k++)
+                if (killFlags[k] != 0) FreeSlot(_activeIndices[k]);
         }
 
         #endregion

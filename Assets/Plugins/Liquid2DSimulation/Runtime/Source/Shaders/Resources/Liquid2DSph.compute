@@ -23,6 +23,7 @@
 #pragma kernel IntegrateCollide
 #pragma kernel MixColor
 #pragma kernel CopyColor
+#pragma kernel DeadZoneKill
 
 static const int NumThreads = 64;
 static const float PI = 3.14159265358979f;
@@ -71,6 +72,13 @@ StructuredBuffer<ForceField> ForceFields;
 RWStructuredBuffer<int> ImpulseX;
 RWStructuredBuffer<int> ImpulseY;
 
+// ---- 销毁区域（与 Liquid2DGpuDeadZone 对齐）。形状字段同 GpuCollider，末尾换为 groupId/matchAll。 ----
+// ---- Dead zones (matches Liquid2DGpuDeadZone). Shape fields mirror GpuCollider, ending with groupId/matchAll. ----
+struct GpuDeadZone { int shape; float2 center; float2 size; float rotation; float radius; int pointStart; int pointCount; int groupId; int matchAll; int invert; };
+StructuredBuffer<GpuDeadZone> DeadZones;
+StructuredBuffer<float2> DeadZonePoints; // 销毁区域多边形顶点（与碰撞体 ColliderPoints 分离）。 // dead-zone polygon vertices (separate from ColliderPoints).
+RWStructuredBuffer<int> KillFlags;       // 按 k 索引，1=该活动粒子落入销毁区域。 // indexed by k, 1 = active particle inside a dead zone.
+
 // ---- 空间哈希（计数排序，与 CPU 一致）。SortedSlots 存 slot。 ----
 RWStructuredBuffer<float2> SortPositions; // 绑定到 Predicted（主排序）或 Positions（混色排序）。
 RWStructuredBuffer<int> BucketOf;   // 索引 k（紧凑）。 // indexed by k (compact).
@@ -92,6 +100,7 @@ int tableSize;
 int numColliders;
 int numBodies;
 int numForceFields;
+int numDeadZones;
 int accumulateImpulse;
 float h;
 float invCellSize;
@@ -573,4 +582,59 @@ void CopyColor(uint3 id : SV_DispatchThreadID)
     int k = (int)id.x; if (k >= numParticles) return;
     int i = ActiveIndices[k];
     Colors[i] = ColorsNext[i];
+}
+
+// 销毁区域多边形内判定（读 DeadZonePoints，与 PointInPoly 同算法）。 // Dead-zone polygon inside test (reads DeadZonePoints). // 破棄領域の多角形内判定。
+bool DZPointInPoly(int start, int count, float2 p)
+{
+    bool inside = false; int j = count - 1;
+    for (int i = 0; i < count; i++)
+    {
+        float2 vi = DeadZonePoints[start + i];
+        float2 vj = DeadZonePoints[start + j];
+        if (((vi.y > p.y) != (vj.y > p.y)) && (p.x < (vj.x - vi.x) * (p.y - vi.y) / (vj.y - vi.y) + vi.x)) inside = !inside;
+        j = i;
+    }
+    return inside;
+}
+
+// 点是否在销毁区域实心形状内。Circle/Box/Capsule 复用 ProjectCollider（pr=0）；Polygon 走 DeadZonePoints。
+// Whether a point is inside a dead-zone solid shape. Circle/Box/Capsule reuse ProjectCollider (pr=0); Polygon uses DeadZonePoints.
+// 点が破棄領域の実心形状内かどうか。
+bool DeadZoneInside(GpuDeadZone dz, float2 p)
+{
+    if (dz.shape == 3) // Polygon
+    {
+        if (dz.pointCount < 3) return false;
+        return DZPointInPoly(dz.pointStart, dz.pointCount, p);
+    }
+    GpuCollider c;
+    c.shape = dz.shape; c.center = dz.center; c.size = dz.size; c.rotation = dz.rotation;
+    c.radius = dz.radius; c.pointStart = dz.pointStart; c.pointCount = dz.pointCount;
+    c.dynamic = 0; c.bodyIndex = -1;
+    float2 corr, n;
+    return ProjectCollider(c, p, 0.0f, corr, n); // pr=0 → 点在实心形状内。 // pr=0 → point inside solid shape.
+}
+
+// 销毁区域标记：落入区域且组过滤通过的活动粒子置 KillFlags[k]=1（求解后由 CPU 回收 slot）。
+// Dead-zone marking: active particles inside a zone (group filter passing) set KillFlags[k]=1 (CPU recycles after solve).
+// 破棄領域マーキング：領域内かつグループ絞り込み通過の活動粒子に KillFlags[k]=1。
+[numthreads(NumThreads,1,1)]
+void DeadZoneKill(uint3 id : SV_DispatchThreadID)
+{
+    int k = (int)id.x; if (k >= numParticles) return;
+    int i = ActiveIndices[k];
+    float2 p = Positions[i];
+    int gi = GroupId[i];
+
+    int kill = 0;
+    for (int z = 0; z < numDeadZones; z++)
+    {
+        GpuDeadZone dz = DeadZones[z];
+        if (dz.matchAll == 0 && dz.groupId != gi) continue;
+        bool inside = DeadZoneInside(dz, p);
+        if (dz.invert != 0) inside = !inside; // Bounds 模式：销毁形状外的粒子。 // bounds mode: kill outside.
+        if (inside) { kill = 1; break; }
+    }
+    KillFlags[k] = kill;
 }
