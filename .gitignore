@@ -2,9 +2,6 @@
 #
 # Get latest from https://github.com/github/gitignore/blob/main/Unity.gitignore
 
-# Claude Code guidance file (local only)
-CLAUDE.md
-
 # JetBrains Rider
 .idea/
 *.DotSettings.user
