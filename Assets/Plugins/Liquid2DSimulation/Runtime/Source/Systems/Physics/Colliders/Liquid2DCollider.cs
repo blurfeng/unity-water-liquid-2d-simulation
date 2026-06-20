@@ -19,7 +19,7 @@ namespace Fs.Liquid2D
              "是否动态：动态碰撞体接收流体反作用冲量（双向耦合），可用于被水流推动的物体。",
              "Whether dynamic: dynamic colliders receive fluid reaction impulse (two-way coupling), for objects pushed by flow.",
              "動的かどうか：動的コライダーは流体の反作用力積を受け取り（双方向）、水流に押される物体に使えます。")]
-        private bool isDynamic = false;
+        private bool isDynamic;
 
         protected Transform CachedTransform;
 

@@ -11,8 +11,8 @@ namespace Fs.Liquid2D
     [AddComponentMenu("Liquid2D/Colliders/Liquid2D Circle Collider")]
     public class Liquid2DCircleCollider : Liquid2DCollider
     {
-        [Min(0f), LocalizationTooltip("半径（受物体缩放影响）。", "Radius (scaled by transform).", "半径（スケール影響）。")]
-        public float radius = 0.5f;
+        [SerializeField, Min(0f), LocalizationTooltip("半径（受物体缩放影响）。", "Radius (scaled by transform).", "半径（スケール影響）。")]
+        private float radius = 0.5f;
 
         public override Liquid2DColliderShape Shape => Liquid2DColliderShape.Circle;
 

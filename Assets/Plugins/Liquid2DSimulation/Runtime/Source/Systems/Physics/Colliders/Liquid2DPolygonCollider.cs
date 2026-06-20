@@ -16,14 +16,14 @@ namespace Fs.Liquid2D
     [AddComponentMenu("Liquid2D/Colliders/Liquid2D Polygon Collider")]
     public class Liquid2DPolygonCollider : Liquid2DCollider
     {
-        [LocalizationTooltip(
+        [SerializeField, LocalizationTooltip(
              "闭合：作为凸多边形实心阻挡。非闭合：作为开放折线薄壁双面阻挡。",
              "Closed: solid convex polygon. Open: two-sided thin polyline barrier.",
              "閉じる：中実の凸多角形。開く：両面の薄い折れ線バリア。")]
-        public bool closed = true;
+        private bool closed = true;
 
-        [LocalizationTooltip("局部顶点（按顺序）。", "Local vertices (in order).", "ローカル頂点（順序通り）。")]
-        public Vector2[] points = { new Vector2(-0.5f, -0.5f), new Vector2(0.5f, -0.5f), new Vector2(0.5f, 0.5f), new Vector2(-0.5f, 0.5f) };
+        [SerializeField, LocalizationTooltip("局部顶点（按顺序）。", "Local vertices (in order).", "ローカル頂点（順序通り）。")]
+        private Vector2[] points = { new Vector2(-0.5f, -0.5f), new Vector2(0.5f, -0.5f), new Vector2(0.5f, 0.5f), new Vector2(-0.5f, 0.5f) };
 
         public override Liquid2DColliderShape Shape => closed ? Liquid2DColliderShape.Polygon : Liquid2DColliderShape.EdgeChain;
 
@@ -33,12 +33,16 @@ namespace Fs.Liquid2D
             data.center = WorldCenter;
             data.pointStart = pointsAccum.Count;
 
-            int n = points != null ? points.Length : 0;
-            for (int i = 0; i < n; i++)
+            int n = points?.Length ?? 0;
+            if (points != null)
             {
-                Vector3 w = CachedTransform.TransformPoint(points[i]);
-                pointsAccum.Add(new float2(w.x, w.y));
+                for (int i = 0; i < n; i++)
+                {
+                    Vector3 w = CachedTransform.TransformPoint(points[i]);
+                    pointsAccum.Add(new float2(w.x, w.y));
+                }
             }
+
             data.pointCount = n;
         }
 

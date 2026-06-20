@@ -11,11 +11,11 @@ namespace Fs.Liquid2D
     [AddComponentMenu("Liquid2D/Colliders/Liquid2D Capsule Collider")]
     public class Liquid2DCapsuleCollider : Liquid2DCollider
     {
-        [Min(0f), LocalizationTooltip("线段全长（沿局部 X 轴）。", "Segment full length (along local X).", "線分の全長（ローカル X 軸）。")]
-        public float length = 1f;
+        [SerializeField, Min(0f), LocalizationTooltip("线段全长（沿局部 X 轴）。", "Segment full length (along local X).", "線分の全長（ローカル X 軸）。")]
+        private float length = 1f;
 
-        [Min(0f), LocalizationTooltip("胶囊半径。", "Capsule radius.", "カプセル半径。")]
-        public float radius = 0.25f;
+        [SerializeField, Min(0f), LocalizationTooltip("胶囊半径。", "Capsule radius.", "カプセル半径。")]
+        private float radius = 0.25f;
 
         public override Liquid2DColliderShape Shape => Liquid2DColliderShape.Capsule;
 

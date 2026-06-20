@@ -1,9 +1,5 @@
 using Unity.Collections;
-using Unity.Mathematics;
 using static Unity.Mathematics.math;
-// 类型别名：避免 `using static math` 引入的 float2(...) 方法在类型位置遮蔽 float2 类型（CS0119）。
-// Type aliases: prevent the float2(...) method from `using static math` from shadowing the float2 type in type position (CS0119).
-// 型エイリアス：`using static math` の float2(...) メソッドが型位置で float2 型を隠すのを防ぐ（CS0119）。
 using float2 = Unity.Mathematics.float2;
 
 namespace Fs.Liquid2D

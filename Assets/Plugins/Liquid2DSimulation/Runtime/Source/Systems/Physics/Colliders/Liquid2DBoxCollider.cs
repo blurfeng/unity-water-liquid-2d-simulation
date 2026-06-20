@@ -11,8 +11,8 @@ namespace Fs.Liquid2D
     [AddComponentMenu("Liquid2D/Colliders/Liquid2D Box Collider")]
     public class Liquid2DBoxCollider : Liquid2DCollider
     {
-        [LocalizationTooltip("盒尺寸（全尺寸，受物体缩放影响）。", "Box size (full size, scaled by transform).", "ボックスサイズ（全サイズ、スケール影響）。")]
-        public Vector2 size = Vector2.one;
+        [SerializeField, LocalizationTooltip("盒尺寸（全尺寸，受物体缩放影响）。", "Box size (full size, scaled by transform).", "ボックスサイズ（全サイズ、スケール影響）。")]
+        private Vector2 size = Vector2.one;
 
         public override Liquid2DColliderShape Shape => Liquid2DColliderShape.Box;
 
