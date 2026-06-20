@@ -313,7 +313,7 @@ SpriteRenderer:
   m_SmallMeshCulling: 1
   m_ForceMeshLod: -1
   m_MeshLodSelectionBias: 0
-  m_RenderingLayerMask: 1
+  m_RenderingLayerMask: 2
   m_RendererPriority: 0
   m_Materials:
   - {fileID: 2100000, guid: a97c105638bdf8b4a8650670310a4cd3, type: 2}
@@ -419,7 +419,7 @@ SpriteRenderer:
   m_SmallMeshCulling: 1
   m_ForceMeshLod: -1
   m_MeshLodSelectionBias: 0
-  m_RenderingLayerMask: 1
+  m_RenderingLayerMask: 2
   m_RendererPriority: 0
   m_Materials:
   - {fileID: 2100000, guid: a97c105638bdf8b4a8650670310a4cd3, type: 2}
@@ -525,7 +525,7 @@ SpriteRenderer:
   m_SmallMeshCulling: 1
   m_ForceMeshLod: -1
   m_MeshLodSelectionBias: 0
-  m_RenderingLayerMask: 1
+  m_RenderingLayerMask: 2
   m_RendererPriority: 0
   m_Materials:
   - {fileID: 2100000, guid: a97c105638bdf8b4a8650670310a4cd3, type: 2}
@@ -627,7 +627,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DParticleDisplay
   displayEnabled: 1
   material: {fileID: 2100000, guid: 6cde42e39ffc3cb45ad10b8a0fe3f1e7, type: 2}
-  scale: 0.4
+  scale: 0.3
   colourMode: 1
   colourMap:
     serializedVersion: 2
@@ -1105,7 +1105,7 @@ MonoBehaviour:
   - Descriptor: {fileID: 11400000, guid: f35c2bc9e2e98fd4387aaeabc88c127f, type: 2}
     Weight: 1
     Lifetime: 0
-  spawnDensity: 40
+  spawnDensity: 50
   initialVelocity: {x: 0, y: 0}
   jitterStr: 0.05
   refillEnabled: 0
@@ -1118,7 +1118,7 @@ MonoBehaviour:
     OverrideParticles: 0
     Particles: []
   showGizmos: 1
-  estimatedParticleCount: 2888
+  estimatedParticleCount: 3655
 --- !u!4 &1656945275
 Transform:
   m_ObjectHideFlags: 0

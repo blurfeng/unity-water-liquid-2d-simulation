@@ -418,17 +418,21 @@ namespace Fs.Liquid2D
                 _refillInterval = 1f / refillFlowRate;
         }
 
-        // 网格间距与粒子直径的比值阈值。 // Grid-spacing-to-diameter ratio thresholds. // グリッド間隔と直径の比率閾値。
-        private const float FitThresholdOk    = 1.5f; // spacing >= 1.5× diameter → OK
-        private const float FitThresholdTight = 1.0f; // spacing >= 1.0× diameter → Tight (touching)
-                                                       // spacing <  1.0× diameter → Overlap (danger)
+        // 间距 / 直径（2r）的比值阈值。基准为「粒子圆是否恰好盖住空间」：间距≈直径即相切/略重叠=填满。
+        // Spacing-to-diameter (2r) ratio thresholds. Anchored on "do particle circles just cover the area":
+        // spacing ≈ diameter means circles touch/slightly overlap = filled.
+        // 間隔/直径（2r）の比率閾値。「粒子円が空間をちょうど覆うか」を基準とする：間隔≈直径＝接触/微重なり＝充填。
+        private const float FitRatioSparse = 1.5f; // ratio >= 1.5 → Sparse（间隙过大，难连成液面）
+        private const float FitRatioOk     = 0.6f; // 0.6 <= ratio < 1.5 → OK（正合适）
+        private const float FitRatioTight  = 0.4f; // 0.4 <= ratio < 0.6 → Tight（偏密，明显重叠）
+                                                   // ratio < 0.4 → Overlap（过密，启动排斥飞开）
 
         // 返回一个区域的粒子适配信息：粒子数、加权平均半径、最小网格间距、适配状态。
         // Returns fit info for a region: particle count, weighted average radius, minimum grid spacing, fit status.
         // 領域の適合情報を返す：粒子数、加重平均半径、最小グリッド間隔、適合状態。
         private (int count, float avgRadius, float minSpacing, int status) GetRegionFit(Liquid2DSpawnRegion region)
         {
-            // status: 0 = Unknown (no descriptor), 1 = OK, 2 = Tight, 3 = Overlap
+            // status: 0 = Unknown (no descriptor), 1 = OK, 2 = Tight, 3 = Overlap, 4 = Sparse
             var gs = CalculateGridSize(region.Size, spawnDensity);
             int count = gs.x * gs.y;
 
@@ -454,7 +458,10 @@ namespace Fs.Liquid2D
 
             float avgRadius = weightedRadius / totalWeight;
             float ratio = minSpacing / (2f * avgRadius); // spacing / diameter
-            int s = ratio >= FitThresholdOk ? 1 : ratio >= FitThresholdTight ? 2 : 3;
+            int s = ratio >= FitRatioSparse ? 4  // 稀疏 // Sparse // 稀疏
+                  : ratio >= FitRatioOk     ? 1  // 正合适 // OK // 適正
+                  : ratio >= FitRatioTight  ? 2  // 偏密 // Tight // やや密
+                  : 3;                           // 过密 // Overlap // 過密
             return (count, avgRadius, minSpacing, s);
         }
 
@@ -478,10 +485,11 @@ namespace Fs.Liquid2D
                 // 適合状態に基づく外枠カラー（記述子なしの場合はデバッグカラーを使用）。
                 Color borderColor = status switch
                 {
-                    3 => Color.red,
-                    2 => Color.yellow,
-                    1 => Color.green,
-                    _ => Color.aquamarine
+                    4 => new Color(0.3f, 0.6f, 1f), // Sparse 稀疏
+                    3 => Color.red,                 // Overlap 过密
+                    2 => Color.yellow,              // Tight 偏密
+                    1 => Color.green,               // OK 正合适
+                    _ => Color.aquamarine           // Unknown 无描述符
                 };
 
                 Gizmos.color = borderColor;
@@ -501,6 +509,7 @@ namespace Fs.Liquid2D
                 // 上部ラベル：粒子数 / 平均半径 / 最小間隔 / 状態。
                 string statusStr = status switch
                 {
+                    4 => "≈ Sparse",
                     3 => "⚠ Overlap",
                     2 => "~ Tight",
                     1 => "✓ OK",
