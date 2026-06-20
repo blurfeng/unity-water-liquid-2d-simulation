@@ -119,6 +119,21 @@ namespace Fs.Liquid2D
 
         private MaterialPropertyBlock _gpuMpb;
 
+        // Editor 下由 Liquid2DPass 的 Overlay Pass 负责绘制（在 Effect Pass 之后），所以需要缓存数据供其读取。
+        // In Editor, drawing is handled by Liquid2DPass's Overlay Pass (after the Effect Pass), so data is cached for it.
+        // Editor では Liquid2DPass の Overlay Pass が描画（Effect Pass の後）するため、データをキャッシュします。
+        private bool _pendingDraw;
+        private int  _pendingCount;
+        private bool _pendingGpuDraw;
+        private ComputeBuffer _cachedGpuPositions;
+        private ComputeBuffer _cachedGpuColors;
+        private ComputeBuffer _cachedGpuRadii;
+        private ComputeBuffer _cachedGpuTypeIds;
+        private ComputeBuffer _cachedGpuActive;
+        private ComputeBuffer _cachedGpuVelocities;
+        private int _cachedGpuCount;
+        private IReadOnlyList<Liquid2DParticleDescriptor> _cachedGpuDescriptors;
+
         private void LateUpdate()
         {
             if (!displayEnabled) return;
@@ -133,13 +148,15 @@ namespace Fs.Liquid2D
             if (Liquid2DSimulation.Mode == Liquid2DSimulationMode.Gpu)
             {
                 material.EnableKeyword(GpuProceduralKeyword);
-                if (Liquid2DSimulation.TryGetRenderBuffers(
-                        out var gpuPositions, out var gpuColors, out var gpuRadii, out var gpuTypeIds,
-                        out var gpuActive, out var gpuVelocities, out int gpuCount,
-                        out IReadOnlyList<Liquid2DParticleDescriptor> gpuDescriptors))
-                {
-                    DrawGpu(gpuPositions, gpuColors, gpuRadii, gpuTypeIds, gpuActive, gpuVelocities, gpuCount, gpuDescriptors);
-                }
+                _pendingGpuDraw = Liquid2DSimulation.TryGetRenderBuffers(
+                    out _cachedGpuPositions, out _cachedGpuColors, out _cachedGpuRadii, out _cachedGpuTypeIds,
+                    out _cachedGpuActive, out _cachedGpuVelocities, out _cachedGpuCount,
+                    out _cachedGpuDescriptors);
+#if !UNITY_EDITOR
+                if (_pendingGpuDraw)
+                    DrawGpu(_cachedGpuPositions, _cachedGpuColors, _cachedGpuRadii, _cachedGpuTypeIds,
+                            _cachedGpuActive, _cachedGpuVelocities, _cachedGpuCount, _cachedGpuDescriptors);
+#endif
                 return;
             }
 
@@ -161,23 +178,24 @@ namespace Fs.Liquid2D
             UploadBuffers(activeCount);
             ApplyMaterial(activeCount);
 
+            _pendingDraw  = true;
+            _pendingCount = activeCount;
+#if !UNITY_EDITOR
             var bounds = new Bounds(Vector3.zero, Vector3.one * 100000f);
             Graphics.DrawProcedural(material, bounds, MeshTopology.Triangles, 6, activeCount);
+            _pendingDraw = false;
+#endif
         }
 
         // ── GPU 程序化绘制 GPU procedural draw GPU プロシージャル描画 ────────────
-        private void DrawGpu(
+
+        // 设置 GPU 绘制所需的 MaterialPropertyBlock（供 DrawGpu 和 Editor Overlay Pass 共用）。
+        // Set up the MaterialPropertyBlock for GPU drawing (shared by DrawGpu and the Editor Overlay Pass).
+        // GPU 描画に必要な MaterialPropertyBlock を設定します（DrawGpu と Editor Overlay Pass で共用）。
+        private void SetupGpuMpb(
             ComputeBuffer positions, ComputeBuffer colors, ComputeBuffer radii, ComputeBuffer typeIds,
-            ComputeBuffer active, ComputeBuffer velocities, int count,
-            IReadOnlyList<Liquid2DParticleDescriptor> descriptors)
+            ComputeBuffer active, ComputeBuffer velocities)
         {
-            if (positions == null || active == null || count <= 0) return;
-
-            // 关键字 _GPU_PROCEDURAL 已在 LateUpdate 统一开启，这里不再重复设置。
-            // The _GPU_PROCEDURAL keyword is enabled in LateUpdate; not set again here.
-            // キーワードは LateUpdate で有効化済み。
-
-            // 速度渐变模式需要烘焙渐变贴图。 // Velocity-gradient mode needs the baked gradient texture. // 速度グラデーションはベイク要。
             if (colourMode == ColourMode.VelocityGradient && _gradientDirty)
             {
                 _gradientDirty = false;
@@ -197,9 +215,22 @@ namespace Fs.Liquid2D
             _gpuMpb.SetFloat(_idDisplayScale, scale);
             if (colourMode == ColourMode.VelocityGradient && _gradientTexture != null)
                 _gpuMpb.SetTexture(_idColourMap, _gradientTexture);
+        }
+
+        private void DrawGpu(
+            ComputeBuffer positions, ComputeBuffer colors, ComputeBuffer radii, ComputeBuffer typeIds,
+            ComputeBuffer active, ComputeBuffer velocities, int count,
+            IReadOnlyList<Liquid2DParticleDescriptor> descriptors)
+        {
+            if (positions == null || active == null || count <= 0 || descriptors == null) return;
+
+            // 关键字 _GPU_PROCEDURAL 已在 LateUpdate 统一开启，这里不再重复设置。
+            // The _GPU_PROCEDURAL keyword is enabled in LateUpdate; not set again here.
+            // キーワードは LateUpdate で有効化済み。
+            SetupGpuMpb(positions, colors, radii, typeIds, active, velocities);
 
             var bounds = new Bounds(Vector3.zero, Vector3.one * 100000f);
-            int typeCount = descriptors?.Count ?? 0;
+            int typeCount = (int)descriptors?.Count;
 
             // 按描述符类型分别绘制：每次发 count 个实例，shader 内剔除类型不匹配者并应用该类型 renderScale。
             // 无描述符表（typeCount==0）时退化为单次绘制：targetType=0、renderScale=1。
@@ -220,8 +251,51 @@ namespace Fs.Liquid2D
             }
 
             for (int t = 0; t < typeCount; t++)
-                DrawType(t, descriptors[t] != null ? descriptors[t].renderScale : 1f);
+                DrawType(t, descriptors[t] ? descriptors[t].renderScale : 1f);
         }
+
+#if UNITY_EDITOR
+        /// <summary>
+        /// 由 Liquid2DPass 的 Editor-only Overlay Pass 调用，在 Effect Pass 之后将粒子绘制到当前渲染目标。
+        /// Called by Liquid2DPass's Editor-only Overlay Pass to draw particles into the current render target after the Effect Pass.
+        /// Liquid2DPass の Editor 専用 Overlay Pass から呼ばれ、Effect Pass の後に現在のレンダーターゲットへ粒子を描画します。
+        /// </summary>
+        public void ExecuteDraw(UnityEngine.Rendering.RasterCommandBuffer cmd)
+        {
+            if (!displayEnabled || !material) return;
+
+            if (Liquid2DSimulation.Mode == Liquid2DSimulationMode.Gpu)
+            {
+                if (!_pendingGpuDraw || _cachedGpuPositions == null || _cachedGpuActive == null || _cachedGpuCount <= 0 || _cachedGpuDescriptors == null) return;
+                
+                SetupGpuMpb(_cachedGpuPositions, _cachedGpuColors, _cachedGpuRadii, _cachedGpuTypeIds, _cachedGpuActive, _cachedGpuVelocities);
+                
+                int typeCount = _cachedGpuDescriptors?.Count ?? 0;
+                if (typeCount == 0)
+                {
+                    _gpuMpb.SetInteger(_idTargetType, 0);
+                    _gpuMpb.SetFloat(_idRenderScale, 1f);
+                    cmd.DrawProcedural(Matrix4x4.identity, material, 0, MeshTopology.Triangles, 6, _cachedGpuCount, _gpuMpb);
+                }
+                else
+                {
+                    for (int t = 0; t < typeCount; t++)
+                    {
+                        _gpuMpb.SetInteger(_idTargetType, t);
+                        _gpuMpb.SetFloat(_idRenderScale, _cachedGpuDescriptors[t] ? _cachedGpuDescriptors[t].renderScale : 1f);
+                        cmd.DrawProcedural(Matrix4x4.identity, material, 0, MeshTopology.Triangles, 6, _cachedGpuCount, _gpuMpb);
+                    }
+                }
+                _pendingGpuDraw = false;
+            }
+            else
+            {
+                if (!_pendingDraw) return;
+                cmd.DrawProcedural(Matrix4x4.identity, material, 0, MeshTopology.Triangles, 6, _pendingCount);
+                _pendingDraw = false;
+            }
+        }
+#endif
 
         // ── 容量管理 Capacity management 容量管理 ─────────────────────────────
 

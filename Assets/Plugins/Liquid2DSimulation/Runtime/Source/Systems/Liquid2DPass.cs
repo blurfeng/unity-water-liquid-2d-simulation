@@ -217,6 +217,11 @@ namespace Fs.Liquid2D
             // 水体效果 Pass 相关。 // Water effect Pass related. // 水体エフェクトPass関連。
             public Material materialEffect;
             public TextureHandle blurFinalTh;
+
+#if UNITY_EDITOR
+            // Display Overlay Pass 相关（Editor only）。 // Display Overlay Pass related (Editor only). // Display Overlay Pass 関連（Editor 専用）。
+            public Liquid2DParticleDisplay[] displays;
+#endif
         }
 
         public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData)
@@ -557,6 +562,32 @@ namespace Fs.Liquid2D
                 builder.SetRenderFunc((PassData data, RasterGraphContext context) => ExecutePassEffect(data, context));
             }
             #endregion
+
+#if UNITY_EDITOR
+            #region Display Overlay（Editor only）// Display Overlay (Editor only) // Display Overlay（Editor 専用）
+
+            // Effect Pass 之后，将 Liquid2DParticleDisplay 粒子叠加绘制到相机颜色缓冲，使其覆盖在水体效果之上。
+            // After the Effect Pass, draw Liquid2DParticleDisplay particles into the camera colour buffer so they appear above the water effect.
+            // Effect Pass の後、Liquid2DParticleDisplay の粒子を相機カラーバッファに描画し、水体エフェクトの上に重ねます。
+            var activeDisplays = UnityEngine.Object.FindObjectsByType<Liquid2DParticleDisplay>(
+                UnityEngine.FindObjectsSortMode.None);
+            if (activeDisplays.Length > 0)
+            {
+                using (var builder = renderGraph.AddRasterRenderPass<PassData>(
+                    GetName("Particle Display Overlay"), out var passData))
+                {
+                    passData.displays = activeDisplays;
+                    builder.SetRenderAttachment(sourceTextureHandle, 0, AccessFlags.Write);
+                    builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
+                    {
+                        foreach (var d in data.displays)
+                            d.ExecuteDraw(context.cmd);
+                    });
+                }
+            }
+
+            #endregion
+#endif
         }
         
         /// <summary>
