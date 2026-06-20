@@ -1,6 +1,6 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
---- !u!1 &2691621520676375978
+--- !u!1 &2576970959602243540
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -8,22 +8,22 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 7161268558125503702}
-  - component: {fileID: 3884703522941435215}
+  - component: {fileID: 3616119019485894971}
+  - component: {fileID: 8065927890518322416}
   m_Layer: 0
-  m_Name: GameInstance
+  m_Name: Liquid2DPhysicsConfig
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!4 &7161268558125503702
+--- !u!4 &3616119019485894971
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2691621520676375978}
+  m_GameObject: {fileID: 2576970959602243540}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -32,15 +32,30 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &3884703522941435215
+--- !u!114 &8065927890518322416
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2691621520676375978}
+  m_GameObject: {fileID: 2576970959602243540}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f14e7480e5474600a573d6ff9f7abd47, type: 3}
+  m_Script: {fileID: 11500000, guid: f099200c0aa7d7b4f9e9fda0d2f33595, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Source.GameInstance
+  m_EditorClassIdentifier: 
+  applyOnAwake: 1
+  mode: 1
+  gpuReadbackToStore: 0
+  gravity: {x: 0, y: -9.8}
+  smoothingRadius: 0.35
+  targetDensity: 55
+  pressureMultiplier: 125
+  nearPressureMultiplier: 5
+  viscosityStrength: 0.03
+  collisionDamping: 0.95
+  substeps: 3
+  maxSpeed: 60
+  maxParticlesPerTag: 0
+  overrideFixedTimestep: 0
+  fixedTimestep: 0.02

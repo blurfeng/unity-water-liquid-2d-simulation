@@ -1,6 +1,6 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
---- !u!1 &2155624610036930552
+--- !u!1 &6700325846959352308
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -8,22 +8,22 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 6729538587706341266}
-  - component: {fileID: 1236614623622671160}
+  - component: {fileID: 4965547366258666345}
+  - component: {fileID: 6903353142189711327}
   m_Layer: 0
-  m_Name: LiquidSpawner
+  m_Name: DeadZone
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!4 &6729538587706341266
+--- !u!4 &4965547366258666345
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2155624610036930552}
+  m_GameObject: {fileID: 6700325846959352308}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -32,33 +32,22 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1236614623622671160
+--- !u!114 &6903353142189711327
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2155624610036930552}
+  m_GameObject: {fileID: 6700325846959352308}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ae45dd1dce65f354a975434a0a9d015d, type: 3}
+  m_Script: {fileID: 11500000, guid: a2e3853f6b8c6fe458b7a5e0afc5ef62, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Fs.Liquid2D.LiquidSpawner
-  spawningEnabled: 1
-  startOnAwake: 1
-  firstStartDelay: 1
-  startDelay: 0.5
-  duration: 0
-  maxSpawnCount: 0
-  spawnedCount: 0
-  liquidParticles: []
-  nozzleWidth: 1
-  spawnDepthJitter: 0
-  flowRate: 60
-  flowRateFactor: 1
-  sizeRandomRange: {x: 0.9, y: 1.2}
-  ejectForce: 30
-  ejectForceFactor: 1
-  ejectForceRandomRange: {x: 0.9, y: 1.2}
-  swingAngleRange: 90
-  swingSpeed: 0.2
+  m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DDeadZone
+  shape: 0
+  boundsMode: 1
+  size: {x: 100, y: 60}
+  radius: 1
+  length: 2
+  points: []
+  nameTag: 

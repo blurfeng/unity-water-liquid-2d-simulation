@@ -70,6 +70,12 @@ namespace Fs.Liquid2D
             "Velocity gradient upper bound: at or above this speed the gradient end colour is shown.",
             "速度グラデーション上限：この速度以上でグラデーション末端色を表示。")]
         private float velocityDisplayMax = 10f;
+        
+        [SerializeField, LocalizationTooltip(
+            "当前帧活跃粒子数（仅用于调试显示）。",
+            "Active particle count this frame (debug display only).",
+            "現在フレームのアクティブ粒子数（デバッグ表示のみ）。")]
+        private int currentParticleCount;
 
         // ── 颜色模式枚举 ColourMode enum カラーモード列挙 ──────────────────────
         /// <summary>
@@ -136,9 +142,21 @@ namespace Fs.Liquid2D
 
         private void LateUpdate()
         {
+            if (!Application.isPlaying)
+            {
+                currentParticleCount = 0;
+                return;
+            }
+            // 更新当前粒子数以供调试显示，数据来源于 Simulation 的 TryGetRenderData（GPU 模式下该数据由 Simulation 内部维护并更新，非每帧都能拿到）。
+            // Update current particle count for debug display, sourced from Simulation's TryGetRenderData (under GPU mode this data is maintained and updated internally by Simulation, not guaranteed every frame).
+            // デバッグ表示用の現在の粒子数を更新します。Simulation の TryGetRenderData から取得します（GPU モードではこのデータは Simulation 内部で管理・更新され、毎フレーム取得できるとは限りません）。
+            if (Liquid2DSimulation.TryGetRenderData(out _, out _, out int count, out _))
+                currentParticleCount = count;
+            else
+                currentParticleCount = 0;
+            
             if (!displayEnabled) return;
             if (!material) return;
-            if (!Application.isPlaying) return;
 
             // GPU 模式：直读常驻 GPU 缓冲，程序化绘制（每帧最新、零回读，与正式 Feature 路径一致）。
             // GPU 模式下无论本帧是否拿到缓冲都直接返回，绝不回落到读 CPU store 的 CPU 路径（store 在 GPU 模式下是陈旧数据）。

@@ -79,7 +79,7 @@ namespace Fs.Liquid2D
             "生成区域列表。每个区域可独立配置粒子类型，位置为相对于本 Transform 的偏移。",
             "Spawn region list. Each region can independently configure particle types; position is an offset from this Transform.",
             "スポーン領域リスト。各領域で粒子タイプを個別設定でき、位置はこのTransformからのオフセットです。")]
-        private List<Liquid2DSpawnRegion> spawnRegions = new List<Liquid2DSpawnRegion>();
+        private List<Liquid2DSpawnRegion> spawnRegions;
 
 #if UNITY_EDITOR
         [Space]
@@ -400,18 +400,18 @@ namespace Fs.Liquid2D
         private void OnValidate()
         {
             estimatedParticleCount = 0;
+            
+            // 初始化新添加的数据。序列化数据无法通过构造函数自动初始化，需在编辑器回调中手动检查并初始化。
+            Liquid2DParticleConfig.TryInitOnEditorForList(particles);
+            Liquid2DSpawnRegion.TryInitOnEditorForList(spawnRegions);
+            
             if (spawnRegions != null)
             {
                 foreach (var r in spawnRegions)
                 {
+                    // 估算粒子总数（仅供 Inspector 显示参考，实际生成数可能因配置和补充模式而异）。
                     var gs = CalculateGridSize(r.Size, spawnDensity);
                     estimatedParticleCount += gs.x * gs.y;
-
-                    if (!r.IsInit)
-                    {
-                        r.IsInit = true;
-                        r.Size = new Vector2(2f, 2f);
-                    }
                 }
             }
 
@@ -538,10 +538,6 @@ namespace Fs.Liquid2D
     [Serializable]
     public class Liquid2DSpawnRegion
     {
-#if UNITY_EDITOR
-        public bool IsInit;
-#endif
-        
         [LocalizationTooltip(
             "区域中心位置（相对于生成器 Transform 的偏移，世界单位）。",
             "Region center position (offset from the spawner's Transform, in world units).",
@@ -565,5 +561,28 @@ namespace Fs.Liquid2D
             "Particle config list for this region (only active when overrideParticles is true).",
             "この領域のパーティクル設定リスト（overrideParticles が true の場合のみ有効）。")]
         public List<Liquid2DParticleConfig> Particles;
+        
+#if UNITY_EDITOR
+        [SerializeField, HideInInspector]
+        public bool IsInit;
+        
+        public void TryInitOnEditor()
+        {
+            if (IsInit) return;
+            
+            IsInit = true;
+            Size = new Vector2(4f, 4f);
+        }
+
+        public static void TryInitOnEditorForList(IEnumerable<Liquid2DSpawnRegion> list)
+        {
+            if (list == null) return;
+
+            foreach (var i in list)
+            {
+                i.TryInitOnEditor();
+            }
+        }
+#endif
     }
 }

@@ -74,7 +74,7 @@ namespace Fs.Liquid2D
              "局部顶点（按顺序，凸多边形）。仅 Polygon 形状使用。",
              "Local vertices (in order, convex polygon). Used by Polygon shape only.",
              "ローカル頂点（順序通り、凸多角形）。Polygon 形状のみ使用。")]
-        private Vector2[] points = { new Vector2(-1f, -1f), new Vector2(1f, -1f), new Vector2(1f, 1f), new Vector2(-1f, 1f) };
+        private Vector2[] points;
 
         [SerializeField, LocalizationTooltip(
              "过滤的目标 nameTag。留空 = 销毁区域内全部流体粒子；填写 = 仅销毁该 nameTag 的流体粒子。",
