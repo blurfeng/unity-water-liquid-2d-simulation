@@ -925,6 +925,60 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1101620317
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1101620319}
+  - component: {fileID: 1101620318}
+  m_Layer: 0
+  m_Name: Liquid2DMouseInteractor
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1101620318
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1101620317}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ef680104d6d26084b873ec545a88131c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DMouseInteractor
+  radius: 2
+  strength: 200
+  velocityDamping: 1
+  swirlStrength: 0
+  gravityAttenuation: 1
+  falloff: 1
+  forceMode: 0
+  interactionCamera: {fileID: 0}
+  enablePull: 1
+  enablePush: 1
+--- !u!4 &1101620319
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1101620317}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1646027096
 GameObject:
   m_ObjectHideFlags: 0
@@ -1051,7 +1105,7 @@ MonoBehaviour:
   - Descriptor: {fileID: 11400000, guid: f35c2bc9e2e98fd4387aaeabc88c127f, type: 2}
     Weight: 1
     Lifetime: 0
-  spawnDensity: 30
+  spawnDensity: 40
   initialVelocity: {x: 0, y: 0}
   jitterStr: 0.05
   refillEnabled: 0
@@ -1064,7 +1118,7 @@ MonoBehaviour:
     OverrideParticles: 0
     Particles: []
   showGizmos: 1
-  estimatedParticleCount: 2178
+  estimatedParticleCount: 2888
 --- !u!4 &1656945275
 Transform:
   m_ObjectHideFlags: 0
@@ -1178,6 +1232,7 @@ SceneRoots:
   - {fileID: 500201}
   - {fileID: 500101}
   - {fileID: 1656945275}
+  - {fileID: 1101620319}
   - {fileID: 437264683}
   - {fileID: 471646947}
   - {fileID: 1646027099}

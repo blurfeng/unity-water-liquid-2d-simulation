@@ -30,11 +30,11 @@ namespace Fs.Liquid2D
     }
 
     /// <summary>
-    /// 2D SPH 双密度光滑核（与参考 SebLague Fluid-Sim 对齐）：
+    /// 2D SPH 双密度光滑核：
     /// 密度用 SpikyPow2、近密度用 SpikyPow3、粘性用 Poly6；压力梯度用对应导数核。
-    /// 2D SPH dual-density smoothing kernels (aligned with SebLague's Fluid-Sim): density uses SpikyPow2, near-density uses
+    /// 2D SPH dual-density smoothing kernels: density uses SpikyPow2, near-density uses
     /// SpikyPow3, viscosity uses Poly6; pressure gradient uses the matching derivative kernels.
-    /// 2D SPH デュアル密度平滑核（SebLague Fluid-Sim と整合）。密度 SpikyPow2、近密度 SpikyPow3、粘性 Poly6。
+    /// 2D SPH デュアル密度平滑核。密度 SpikyPow2、近密度 SpikyPow3、粘性 Poly6。
     /// </summary>
     internal static class KernelMath
     {
@@ -88,9 +88,10 @@ namespace Fs.Liquid2D
     }
 
     /// <summary>
-    /// 外力 + 预测：v += gravity·gravityScale·dt；predicted = pos + v·predictionFactor。
-    /// External forces + prediction: v += gravity·gravityScale·dt; predicted = pos + v·predictionFactor.
-    /// 外力 + 予測。
+    /// 外力 + 预测：v += gravity·gravityScale·dt；叠加力场（吸引/排斥）后 predicted = pos + v·predictionFactor。
+    /// External forces + prediction: v += gravity·gravityScale·dt; add force fields (attract/repel), then
+    /// predicted = pos + v·predictionFactor. 
+    /// 外力 + 予測。力場（引力/斥力）を加算（GPU ExternalForces kernel と同一式）。
     /// </summary>
     [BurstCompile]
     public struct ExternalForcesJob : IJobParallelFor
@@ -101,6 +102,8 @@ namespace Fs.Liquid2D
         [NativeDisableParallelForRestriction] public NativeArray<float2> velocities;
         [ReadOnly] public NativeArray<float2> positions;
         [WriteOnly, NativeDisableParallelForRestriction] public NativeArray<float2> predicted;
+        [ReadOnly] public NativeArray<Liquid2DForceFieldData> forceFields;
+        public int forceFieldCount;
         public float2 gravity;
         public float dt;
         public float predictionFactor;
@@ -109,9 +112,45 @@ namespace Fs.Liquid2D
         {
             int i = activeIndices[k];
             float gs = materials[typeId[i]].gravityScale;
-            float2 v = velocities[i] + gravity * gs * dt;
+            float2 pos = positions[i];
+            float2 v = velocities[i];
+
+            // 重力按力场重力衰减加权 + 累积径向/切向力场加速度 + 累积速度制动系数（结构对齐参考 ExternalForces）。
+            // Gravity weighted by field gravity-attenuation + accumulated radial/swirl field accel + accumulated velocity
+            // damping coefficient (structure matches the reference ExternalForces). Must stay in sync with the GPU kernel.
+            // 重力を力場の重力減衰で重み付け + 径方向/接線方向の力場加速度を累積 + 速度制動係数を累積（参考と同構造）。
+            float gWeight = 1f;
+            float2 fieldAccel = float2.zero;
+            float damp = 0f;
+
+            for (int f = 0; f < forceFieldCount; f++)
+            {
+                var ff = forceFields[f];
+                float2 offset = ff.center - pos;
+                float sqrDst = lengthsq(offset);
+                float r = ff.radius;
+                if (sqrDst >= r * r) continue;
+
+                float dst = sqrt(sqrDst);
+                float centreT = 1f - dst / r;                  // 线性，1=中心 0=边缘。 // linear, 1=center 0=edge. // 線形。
+                float profile = ff.mode == Liquid2DForceFieldMode.Constant
+                    ? 1f
+                    : (ff.falloff == 1f ? centreT : pow(centreT, ff.falloff));
+
+                float2 dir = dst > 1e-6f ? offset / dst : float2.zero;
+                float2 perp = new float2(-dir.y, dir.x);       // 逆时针切向。 // CCW tangent. // 反時計回り接線。
+
+                fieldAccel += dir * (profile * ff.strength);
+                fieldAccel += perp * (profile * ff.swirlStrength);
+                gWeight = min(gWeight, 1f - centreT * ff.gravityAttenuation);
+                damp += centreT * ff.velocityDamping;
+            }
+
+            v += (gravity * gs * gWeight + fieldAccel) * dt;
+            if (damp > 0f) v -= v * saturate(damp * dt);
+
             velocities[i] = v;
-            predicted[i] = positions[i] + v * predictionFactor;
+            predicted[i] = pos + v * predictionFactor;
         }
     }
 

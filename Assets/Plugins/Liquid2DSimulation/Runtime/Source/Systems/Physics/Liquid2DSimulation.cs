@@ -269,6 +269,7 @@ namespace Fs.Liquid2D
 
             var colliders = Liquid2DColliderRegistry.BuildBuffer(Allocator.TempJob, _dynamicReceivers);
             var impulse = new NativeArray<float2>(math.max(1, _dynamicReceivers.Count), Allocator.TempJob, NativeArrayOptions.ClearMemory);
+            var forceFields = Liquid2DForceFieldRegistry.BuildBuffer(Allocator.TempJob);
 
             var ctx = new Liquid2DSolveContext
             {
@@ -279,6 +280,7 @@ namespace Fs.Liquid2D
                 mixData = _mixData,
                 colliders = colliders,
                 colliderImpulse = impulse,
+                forceFields = forceFields,
                 time = now,
                 dynamicBodyCount = _dynamicReceivers.Count,
                 gpuPendingSpawns = _gpuPendingSpawns,
@@ -308,6 +310,7 @@ namespace Fs.Liquid2D
                 colliders.colliders.Dispose();
                 colliders.points.Dispose();
                 impulse.Dispose();
+                if (forceFields.fields.IsCreated) forceFields.fields.Dispose();
             }
         }
 

@@ -64,6 +64,10 @@ struct GpuCollider { int shape; float2 center; float2 size; float rotation; floa
 StructuredBuffer<GpuCollider> Colliders;
 StructuredBuffer<float2> ColliderPoints;
 
+// ---- 力场（吸引/排斥/旋流，与 Liquid2DGpuForceField 对齐）。mode: 0=Falloff, 1=Constant。 ----
+struct ForceField { float2 center; float radius; float strength; float velocityDamping; float swirlStrength; float gravityAttenuation; float falloff; int mode; };
+StructuredBuffer<ForceField> ForceFields;
+
 RWStructuredBuffer<int> ImpulseX;
 RWStructuredBuffer<int> ImpulseY;
 
@@ -87,6 +91,7 @@ int numUploads;
 int tableSize;
 int numColliders;
 int numBodies;
+int numForceFields;
 int accumulateImpulse;
 float h;
 float invCellSize;
@@ -278,9 +283,42 @@ void ExternalForces(uint3 id : SV_DispatchThreadID)
     int k = (int)id.x; if (k >= numParticles) return;
     int i = ActiveIndices[k];
     float gs = Materials[TypeId[i]].gravityScale;
-    float2 v = Velocities[i] + gravity * gs * dt;
+    float2 pos = Positions[i];
+    float2 v = Velocities[i];
+
+    // 力场（径向吸引/排斥 + 切向旋流 + 重力衰减 + 速度制动）：公式与 CPU ExternalForcesJob 保持一致。
+    // Force fields (radial attract/repel + tangential swirl + gravity attenuation + velocity damping): same as CPU ExternalForcesJob.
+    // 力場（径方向 + 接線旋流 + 重力減衰 + 速度制動）：CPU と同一式。
+    float gWeight = 1.0f;
+    float2 fieldAccel = float2(0, 0);
+    float damp = 0.0f;
+
+    for (int f = 0; f < numForceFields; f++)
+    {
+        ForceField ff = ForceFields[f];
+        float2 offset = ff.center - pos;
+        float sqrDst = dot(offset, offset);
+        float r = ff.radius;
+        if (sqrDst >= r * r) continue;
+
+        float dst = sqrt(sqrDst);
+        float centreT = 1.0f - dst / r;
+        float profile = ff.mode == 1 ? 1.0f : (ff.falloff == 1.0f ? centreT : pow(centreT, ff.falloff));
+
+        float2 dir = dst > 1e-6f ? offset / dst : float2(0, 0);
+        float2 perp = float2(-dir.y, dir.x);
+
+        fieldAccel += dir * (profile * ff.strength);
+        fieldAccel += perp * (profile * ff.swirlStrength);
+        gWeight = min(gWeight, 1.0f - centreT * ff.gravityAttenuation);
+        damp += centreT * ff.velocityDamping;
+    }
+
+    v += (gravity * gs * gWeight + fieldAccel) * dt;
+    if (damp > 0.0f) v -= v * saturate(damp * dt);
+
     Velocities[i] = v;
-    Predicted[i] = Positions[i] + v * predictionFactor;
+    Predicted[i] = pos + v * predictionFactor;
 }
 
 [numthreads(NumThreads,1,1)]

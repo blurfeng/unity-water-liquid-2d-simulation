@@ -5,14 +5,14 @@ using Unity.Mathematics;
 namespace Fs.Liquid2D
 {
     /// <summary>
-    /// SPH 双密度流体求解器的 CPU 实现（Unity Job System + Burst + 空间哈希）。算法对齐参考 SebLague Fluid-Sim：
+    /// SPH 双密度流体求解器的 CPU 实现（Unity Job System + Burst + 空间哈希）。
     /// 每子步执行 外力+预测 → 建哈希 → 密度(双) → 压力力 → 粘性 → 积分+碰撞；帧末在最终位置网格上做一次邻居混色，
     /// 并把动态碰撞体的反作用冲量规约回 colliderImpulse（双向耦合 seam）。
-    /// CPU implementation of the SPH dual-density fluid solver (Unity Job System + Burst + spatial hash), aligned with
-    /// SebLague's Fluid-Sim. Per substep: external forces+predict → build hash → dual density → pressure force → viscosity →
+    /// CPU implementation of the SPH dual-density fluid solver (Unity Job System + Burst + spatial hash).
+    /// Per substep: external forces+predict → build hash → dual density → pressure force → viscosity →
     /// integrate+collide. Once per frame it mixes neighbor colors (on a grid rebuilt from final positions) and reduces
     /// dynamic-collider reaction impulses into colliderImpulse (two-way coupling seam).
-    /// SPH デュアル密度流体ソルバーの CPU 実装（Unity Job System + Burst + 空間ハッシュ）。SebLague Fluid-Sim と整合。
+    /// SPH デュアル密度流体ソルバーの CPU 実装（Unity Job System + Burst + 空間ハッシュ）。
     /// </summary>
     public sealed class SphCpuSolver : ILiquid2DSolver
     {
@@ -61,6 +61,7 @@ namespace Fs.Liquid2D
                 {
                     activeIndices = ctx.activeIndices, typeId = store.typeId, materials = ctx.materials,
                     velocities = store.velocities, positions = store.positions, predicted = store.predicted,
+                    forceFields = ctx.forceFields.fields, forceFieldCount = ctx.forceFields.Count,
                     gravity = p.gravity, dt = subDt, predictionFactor = p.predictionFactor,
                 }.Schedule(count, 64, h);
 

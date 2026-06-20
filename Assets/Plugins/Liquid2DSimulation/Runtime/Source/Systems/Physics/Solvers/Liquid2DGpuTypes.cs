@@ -36,6 +36,36 @@ namespace Fs.Liquid2D
     }
 
     /// <summary>
+    /// 力场的 GPU 上传结构（与 Liquid2DSph.compute 的 ForceField 对齐）。enum → int。
+    /// stride = 36 bytes（center8 + radius4 + strength4 + damping4 + swirl4 + gravityAttenuation4 + falloff4 + mode4）。
+    /// GPU-upload form of a force field (matches ForceField in Liquid2DSph.compute). enum → int. stride = 36 bytes.
+    /// 力場の GPU アップロード構造（Liquid2DSph.compute の ForceField と整合）。enum → int。stride = 36 bytes。
+    /// </summary>
+    public struct Liquid2DGpuForceField
+    {
+        public float2 center;
+        public float radius;
+        public float strength;
+        public float velocityDamping;
+        public float swirlStrength;
+        public float gravityAttenuation;
+        public float falloff;
+        public int mode;
+
+        public static Liquid2DGpuForceField From(in Liquid2DForceFieldData f) => new Liquid2DGpuForceField
+        {
+            center = f.center,
+            radius = f.radius,
+            strength = f.strength,
+            velocityDamping = f.velocityDamping,
+            swirlStrength = f.swirlStrength,
+            gravityAttenuation = f.gravityAttenuation,
+            falloff = f.falloff,
+            mode = (int)f.mode,
+        };
+    }
+
+    /// <summary>
     /// 混色参数的 GPU 上传结构（与 Liquid2DSph.compute 的 MixData 对齐）。byte → int。stride = 20 bytes。
     /// GPU-upload form of mix params (matches MixData in Liquid2DSph.compute). byte → int. stride = 20 bytes.
     /// 混色パラメータの GPU アップロード構造（MixData と整合）。stride = 20 bytes。

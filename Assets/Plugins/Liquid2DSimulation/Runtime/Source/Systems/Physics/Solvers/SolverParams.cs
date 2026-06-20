@@ -63,9 +63,9 @@ namespace Fs.Liquid2D
         public float maxSpeed;
 
         /// <summary>
-        /// 推荐默认值（参考 SebLague 2D Fluid-Sim 取值，最终以 Unity 内手感为准）。
-        /// Recommended defaults (from SebLague's 2D Fluid-Sim; final tuning happens in Unity).
-        /// 推奨デフォルト（SebLague の 2D Fluid-Sim 値。最終調整は Unity 内で）。
+        /// 推荐默认值。
+        /// Recommended defaults.
+        /// 推奨デフォルト。
         /// </summary>
         public static SolverParams Default => new SolverParams
         {

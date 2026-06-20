@@ -29,6 +29,9 @@ namespace Fs.Liquid2D
         /// <summary>碰撞体集合。 // Collider set. // コライダー集合。</summary>
         public Liquid2DColliderBuffer colliders;
 
+        /// <summary>力场集合（吸引/排斥，外力阶段施加）。 // Force-field set (attract/repel, applied in external-forces stage). // 力場集合。</summary>
+        public Liquid2DForceFieldBuffer forceFields;
+
         /// <summary>动态碰撞体的本帧累积冲量（双向耦合用，长度=动态体数）。 // Per-frame accumulated impulse for dynamic colliders (two-way coupling). // 動的コライダーのフレーム累積力積。</summary>
         public NativeArray<float2> colliderImpulse;
 

@@ -42,7 +42,7 @@ namespace Fs.Liquid2D
         // tableSize 级。 // table-level.
         private ComputeBuffer _counts, _cellStart, _cursor;
         // 辅助。 // aux.
-        private ComputeBuffer _materials, _mixDatas, _colliders, _points, _impulseX, _impulseY;
+        private ComputeBuffer _materials, _mixDatas, _colliders, _points, _impulseX, _impulseY, _forceFields;
         // 生成上传（仅动态状态；静态属性由 store 整块 SetData）。 // spawn upload (dynamic only). // 生成アップロード。
         private ComputeBuffer _upSlots, _upPos, _upVel, _upColor;
 
@@ -54,6 +54,7 @@ namespace Fs.Liquid2D
         private float2[] _pos, _vel; private float4[] _col; private float[] _lastMixA;
         private int[] _activeA;
         private Liquid2DGpuCollider[] _colA; private Liquid2DGpuMixData[] _mixA; private float2[] _pointsA;
+        private Liquid2DGpuForceField[] _ffA;
         private int[] _impXA, _impYA;
         private int[] _upSlotsA; private float2[] _upPosA, _upVelA; private float4[] _upColorA;
 
@@ -111,16 +112,17 @@ namespace Fs.Liquid2D
             int numColliders = ctx.colliders.IsCreated ? ctx.colliders.Count : 0;
             int numPoints = ctx.colliders.IsCreated ? Mathf.Max(1, ctx.colliders.points.Length) : 1;
             int numBodies = Mathf.Max(1, ctx.dynamicBodyCount);
+            int numForceFields = ctx.forceFields.Count;
             int tableSize = NextPrime(math.max(16, count * 2));
 
             EnsureCountBuffers(count);
             EnsureTableBuffers(tableSize);
-            EnsureAuxBuffers(numTypes, numColliders, numPoints, numBodies);
+            EnsureAuxBuffers(numTypes, numColliders, numPoints, numBodies, numForceFields);
 
             UploadActiveIndices(ctx, count);
-            UploadAux(ctx, numTypes, numColliders, numPoints);
+            UploadAux(ctx, numTypes, numColliders, numPoints, numForceFields);
             BindAll();
-            SetConstants(p, count, tableSize, numColliders, numBodies);
+            SetConstants(p, count, tableSize, numColliders, numBodies, numForceFields);
 
             int substeps = math.max(1, p.substeps);
             float subDt = dt / substeps;
@@ -268,11 +270,12 @@ namespace Fs.Liquid2D
         {
             Ensure(ref _counts, tableSize, 4); Ensure(ref _cellStart, tableSize + 1, 4); Ensure(ref _cursor, tableSize, 4);
         }
-        private void EnsureAuxBuffers(int numTypes, int numColliders, int numPoints, int numBodies)
+        private void EnsureAuxBuffers(int numTypes, int numColliders, int numPoints, int numBodies, int numForceFields)
         {
             Ensure(ref _materials, numTypes, 28); Ensure(ref _mixDatas, numTypes, 20);
             Ensure(ref _colliders, Mathf.Max(1, numColliders), 44); Ensure(ref _points, Mathf.Max(1, numPoints), 8);
             Ensure(ref _impulseX, numBodies, 4); Ensure(ref _impulseY, numBodies, 4);
+            Ensure(ref _forceFields, Mathf.Max(1, numForceFields), 36);
         }
         private void EnsureUploadBuffers(int n)
         {
@@ -287,7 +290,7 @@ namespace Fs.Liquid2D
             _active.SetData(_activeA, 0, 0, count);
         }
 
-        private void UploadAux(in Liquid2DSolveContext ctx, int numTypes, int numColliders, int numPoints)
+        private void UploadAux(in Liquid2DSolveContext ctx, int numTypes, int numColliders, int numPoints, int numForceFields)
         {
             if (ctx.materials.IsCreated && ctx.materials.Length > 0)
                 _materials.SetData(ctx.materials, 0, 0, ctx.materials.Length);
@@ -308,6 +311,13 @@ namespace Fs.Liquid2D
             int pN = ctx.colliders.IsCreated ? ctx.colliders.points.Length : 0;
             for (int i = 0; i < numPoints; i++) _pointsA[i] = i < pN ? ctx.colliders.points[i] : float2.zero;
             _points.SetData(_pointsA, 0, 0, numPoints);
+
+            if (numForceFields > 0)
+            {
+                EnsureArray(ref _ffA, numForceFields);
+                for (int i = 0; i < numForceFields; i++) _ffA[i] = Liquid2DGpuForceField.From(ctx.forceFields.fields[i]);
+                _forceFields.SetData(_ffA, 0, 0, numForceFields);
+            }
         }
 
         private void BindAll()
@@ -318,6 +328,7 @@ namespace Fs.Liquid2D
             Bind("InvMass", _invMass); Bind("TypeId", _typeId); Bind("GroupId", _groupId);
             Bind("ActiveIndices", _active); Bind("Materials", _materials); Bind("MixDatas", _mixDatas);
             Bind("Colliders", _colliders); Bind("ColliderPoints", _points); Bind("ImpulseX", _impulseX); Bind("ImpulseY", _impulseY);
+            Bind("ForceFields", _forceFields);
             Bind("BucketOf", _bucketOf); Bind("Counts", _counts); Bind("CellStart", _cellStart);
             Bind("Cursor", _cursor); Bind("SortedSlots", _sortedSlots);
         }
@@ -328,12 +339,13 @@ namespace Fs.Liquid2D
             for (int i = 0; i < _allKernels.Length; i++) _cs.SetBuffer(_allKernels[i], name, buf);
         }
 
-        private void SetConstants(in SolverParams p, int count, int tableSize, int numColliders, int numBodies)
+        private void SetConstants(in SolverParams p, int count, int tableSize, int numColliders, int numBodies, int numForceFields)
         {
             _cs.SetInt("numParticles", count);
             _cs.SetInt("tableSize", tableSize);
             _cs.SetInt("numColliders", numColliders);
             _cs.SetInt("numBodies", numBodies);
+            _cs.SetInt("numForceFields", numForceFields);
             _cs.SetFloat("h", p.h);
             _cs.SetFloat("invCellSize", 1f / math.max(1e-4f, p.h));
             _cs.SetFloat("targetDensity", p.targetDensity);
@@ -408,7 +420,7 @@ namespace Fs.Liquid2D
             R(_positions); R(_predicted); R(_velocities); R(_velNext); R(_densities); R(_colors); R(_colorsNext); R(_lastMix);
             R(_radii); R(_invMass); R(_typeId); R(_groupId);
             R(_active); R(_bucketOf); R(_sortedSlots); R(_counts); R(_cellStart); R(_cursor);
-            R(_materials); R(_mixDatas); R(_colliders); R(_points); R(_impulseX); R(_impulseY);
+            R(_materials); R(_mixDatas); R(_colliders); R(_points); R(_impulseX); R(_impulseY); R(_forceFields);
             R(_upSlots); R(_upPos); R(_upVel); R(_upColor);
             _positions = null; _active = null;
             _capacity = 0; _lastCount = 0; _needFullReupload = false;
