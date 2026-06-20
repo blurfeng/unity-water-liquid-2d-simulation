@@ -1,19 +1,19 @@
-// 流体粒子独立显示着色器。两条路径：
-//   · CPU 模式：DrawMeshInstancedIndirect，缓冲为密实数组，SV_InstanceID 直接索引；
-//   · GPU 模式（关键字 _GPU_PROCEDURAL）：DrawProcedural，缓冲为常驻 GPU（slot 索引），slot = _ActiveIndices[SV_InstanceID]，
+// 流体粒子独立显示着色器。两条路径均为 DrawProcedural（无 mesh），shader 内程序化生成 quad，片元按 UV 裁出圆形：
+//   · CPU 模式：缓冲为密实数组，SV_InstanceID 直接索引；
+//   · GPU 模式（关键字 _GPU_PROCEDURAL）：缓冲为常驻 GPU（slot 索引），slot = _ActiveIndices[SV_InstanceID]，
 //     与正式 Feature 的 Liquid2DParticleGpu 流程一致（全程 GPU、零回读、每帧最新）。
 // 两路径均支持模拟颜色与速度渐变两种模式。
-// Standalone fluid particle display shader. Two paths:
-//   · CPU mode: DrawMeshInstancedIndirect, dense buffers indexed directly by SV_InstanceID;
-//   · GPU mode (keyword _GPU_PROCEDURAL): DrawProcedural over resident GPU buffers (slot-indexed),
+// Standalone fluid particle display shader. Both paths use DrawProcedural (no mesh); the quad is generated in-shader and
+// the fragment carves a circle from it by UV:
+//   · CPU mode: dense buffers indexed directly by SV_InstanceID;
+//   · GPU mode (keyword _GPU_PROCEDURAL): resident GPU buffers (slot-indexed),
 //     slot = _ActiveIndices[SV_InstanceID], mirroring the official Feature's Liquid2DParticleGpu path (fully GPU, zero readback).
 // Both paths support simulation-colour and velocity-gradient modes.
-// 流体パーティクル独立表示シェーダー。CPU=DrawMeshInstancedIndirect、GPU(_GPU_PROCEDURAL)=DrawProcedural（常駐 GPU 直読）。
+// 流体パーティクル独立表示シェーダー。両パスとも DrawProcedural（mesh 不要）、quad はシェーダー内生成、フラグメントで UV により円形を切り出す。
 Shader "Custom/URP/2D/Liquid2DParticleDisplay"
 {
     Properties
     {
-        _MainTex ("Sprite Texture", 2D) = "white" {}
     }
     SubShader
     {
@@ -44,22 +44,14 @@ Shader "Custom/URP/2D/Liquid2DParticleDisplay"
             StructuredBuffer<float2> _Velocities;  // 世界速度。 // World velocity. // ワールド速度。
             StructuredBuffer<float4> _Colors;      // RGBA（模拟色）。 // RGBA (simulation colour). // RGBA（シミュレーション色）。
 
-            TEXTURE2D(_MainTex);    SAMPLER(sampler_MainTex);
             TEXTURE2D(_ColourMap);  SAMPLER(sampler_ColourMap);
 
             float _VelocityMax;
             int   _ColourMode;  // 0 = 模拟颜色, 1 = 速度渐变。 // 0 = simulation, 1 = velocity gradient. // 0 = シミュレーション色, 1 = 速度グラデーション。
 
-#if defined(_GPU_PROCEDURAL)
-            // GPU 常驻模式额外缓冲/参数。 // Extra buffers/params for GPU resident mode. // GPU 常駐モード用。
-            StructuredBuffer<float>  _Radii;          // 物理半径（slot 索引）。 // Physics radius (slot-indexed). // 物理半径。
-            StructuredBuffer<int>    _TypeIds;        // 粒子类型（slot 索引）。 // Particle type (slot-indexed). // 粒子タイプ。
-            StructuredBuffer<int>    _ActiveIndices;  // 密实 instanceID → slot。 // dense instanceID → slot. // 密実 → slot。
-            int   _TargetType;    // 仅绘制此类型，其余剔除。 // Draw only this type; cull others. // このタイプのみ描画。
-            float _RenderScale;   // 当前类型的 renderScale。 // renderScale of the current type. // 当該タイプの renderScale。
-            float _DisplayScale;  // 全局可视倍率（组件 scale）。 // Global visual scale (component scale). // 全体倍率。
-
-            // 两个三角形拼出四边形（[-0.5,0.5]）。 // Two triangles form a quad ([-0.5,0.5]). // 四角形。
+            // 两个三角形拼出四边形（[-0.5,0.5]）+ [0,1] UV。两路径共用。
+            // Two triangles form a quad ([-0.5,0.5]) with [0,1] UV. Shared by both paths.
+            // 2 つの三角形で四角形（[-0.5,0.5]）+ [0,1] UV。両パス共用。
             static const float2 QCorner[6] =
             {
                 float2(-0.5, -0.5), float2(0.5, -0.5), float2(0.5, 0.5),
@@ -70,8 +62,17 @@ Shader "Custom/URP/2D/Liquid2DParticleDisplay"
                 float2(0, 0), float2(1, 0), float2(1, 1),
                 float2(0, 0), float2(1, 1), float2(0, 1)
             };
+
+#if defined(_GPU_PROCEDURAL)
+            // GPU 常驻模式额外缓冲/参数。 // Extra buffers/params for GPU resident mode. // GPU 常駐モード用。
+            StructuredBuffer<float>  _Radii;          // 物理半径（slot 索引）。 // Physics radius (slot-indexed). // 物理半径。
+            StructuredBuffer<int>    _TypeIds;        // 粒子类型（slot 索引）。 // Particle type (slot-indexed). // 粒子タイプ。
+            StructuredBuffer<int>    _ActiveIndices;  // 密实 instanceID → slot。 // dense instanceID → slot. // 密実 → slot。
+            int   _TargetType;    // 仅绘制此类型，其余剔除。 // Draw only this type; cull others. // このタイプのみ描画。
+            float _RenderScale;   // 当前类型的 renderScale。 // renderScale of the current type. // 当該タイプの renderScale。
+            float _DisplayScale;  // 全局可视倍率（组件 scale）。 // Global visual scale (component scale). // 全体倍率。
 #else
-            StructuredBuffer<float>  _Scales;      // 可视半径（世界单位，已含 renderScale×scale）。 // Visual radius. // 可視半径。
+            StructuredBuffer<float>  _Scales;      // 可视直径（世界单位，已含 renderScale×scale）。 // Visual diameter. // 可視直径。
 #endif
 
             struct Varyings
@@ -115,36 +116,40 @@ Shader "Custom/URP/2D/Liquid2DParticleDisplay"
                 return OUT;
             }
 #else
-            struct Attributes
+            Varyings Vert(uint vid : SV_VertexID, uint iid : SV_InstanceID)
             {
-                float4 positionOS : POSITION;
-                float2 uv         : TEXCOORD0;
-                uint   instanceID : SV_InstanceID;
-            };
+                Varyings OUT = (Varyings)0;
 
-            Varyings Vert(Attributes IN)
-            {
-                Varyings OUT;
-                uint id = IN.instanceID;
+                // 密实数组直接用 SV_InstanceID 索引；程序化生成 quad 顶点（z=0 Billboard）。
+                // Dense arrays indexed directly by SV_InstanceID; quad vertices generated procedurally (z=0 billboard).
+                // 密実配列を SV_InstanceID で直接索引；quad 頂点をプロシージャル生成（z=0 ビルボード）。
+                float2 center   = _Positions[iid];
+                float  diameter = _Scales[iid];   // 已含 renderScale×scale。 // already includes renderScale×scale. // renderScale×scale 込み。
+                float2 world    = center + QCorner[vid] * diameter;
 
-                float2 center = _Positions[id];
-                float  radius = _Scales[id];
-
-                // 以粒子世界坐标为中心，用 OS 顶点坐标缩放成 Billboard（z=0）。
-                // Billboard centred on the particle world position; OS vertex offsets scaled by visual radius (z=0).
-                // 粒子ワールド座標を中心に OS 頂点を可視半径でスケールしたビルボード（z=0）。
-                float3 worldPos = float3(center + IN.positionOS.xy * radius, 0.0);
-                OUT.positionCS  = TransformWorldToHClip(worldPos);
-                OUT.uv          = IN.uv;
-                OUT.color       = (_ColourMode == 1) ? ColourFromVelocity(_Velocities[id]) : _Colors[id];
+                OUT.positionCS = TransformWorldToHClip(float3(world, 0.0));
+                OUT.uv         = QUV[vid];
+                OUT.color      = (_ColourMode == 1) ? ColourFromVelocity(_Velocities[iid]) : _Colors[iid];
                 return OUT;
             }
 #endif
 
             float4 Frag(Varyings IN) : SV_Target
             {
-                half4 tex = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, IN.uv);
-                return tex * IN.color;
+                // 在方形 quad 的 UV 空间内按到中心距离裁出圆形（严格参照 Instanced/Particle2D）：
+                // UV [0,1] 映射到 [-1,1]，到中心距离 ≤1 保留、四角裁掉，fwidth+smoothstep 做抗锯齿边。
+                // Carve a circle from the square quad in UV space (mirrors Instanced/Particle2D):
+                // map UV [0,1]→[-1,1], keep pixels within radius 1, drop the corners; fwidth+smoothstep for AA edge.
+                // 四角形 quad の UV 空間で中心からの距離により円形を切り出す（Instanced/Particle2D 準拠）。
+                float2 centreOffset = (IN.uv - 0.5) * 2.0;
+                float  sqrDst       = dot(centreOffset, centreOffset);
+                float  delta        = fwidth(sqrt(sqrDst));
+                float  alpha        = 1.0 - smoothstep(1.0 - delta, 1.0 + delta, sqrDst);
+
+                // rgb 取实例颜色，alpha 叠加模拟颜色自带透明度，保证本项目两种模式可用。
+                // rgb from the instance colour; alpha multiplied by the simulation colour's own alpha.
+                // rgb はインスタンス色、alpha はシミュレーション色の alpha を乗算。
+                return float4(IN.color.rgb, IN.color.a * alpha);
             }
             ENDHLSL
         }

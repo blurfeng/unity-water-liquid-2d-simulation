@@ -7,14 +7,14 @@ using UnityEngine;
 namespace Fs.Liquid2D
 {
     /// <summary>
-    /// 测试用粒子显示组件（正式流程是走 Renderer 2D Data 中配置的 Feature）。运行时流体粒子独立可视化组件。通过 <c>Graphics.DrawMeshInstancedIndirect</c> 将所有活跃粒子渲染到场景，
+    /// 测试用粒子显示组件（正式流程是走 Renderer 2D Data 中配置的 Feature）。运行时流体粒子独立可视化组件。通过 <c>Graphics.DrawProcedural</c> 将所有活跃粒子渲染到场景（quad 由 shader 程序化生成，无需 mesh），
     /// 数据直接来自 <see cref="Liquid2DSimulation"/> SoA，不依赖 URP Render Feature。
     /// 支持模拟颜色与速度渐变两种着色模式；配套着色器 <c>Custom/URP/2D/Liquid2DParticleDisplay</c>。
     /// Runtime standalone fluid-particle visualization. Renders all active particles via
-    /// <c>Graphics.DrawMeshInstancedIndirect</c>, reading data directly from <see cref="Liquid2DSimulation"/> SoA
-    /// without a URP Render Feature. Supports simulation-colour and velocity-gradient shading modes;
-    /// companion shader: <c>Custom/URP/2D/Liquid2DParticleDisplay</c>.
-    /// ランタイム流体パーティクル独立可視化。<c>Graphics.DrawMeshInstancedIndirect</c> でアクティブ粒子を描画。
+    /// <c>Graphics.DrawProcedural</c> (the quad is generated in-shader, no mesh required), reading data directly from
+    /// <see cref="Liquid2DSimulation"/> SoA without a URP Render Feature. Supports simulation-colour and velocity-gradient
+    /// shading modes; companion shader: <c>Custom/URP/2D/Liquid2DParticleDisplay</c>.
+    /// ランタイム流体パーティクル独立可視化。<c>Graphics.DrawProcedural</c> でアクティブ粒子を描画（quad はシェーダー生成、mesh 不要）。
     /// URP Render Feature 不要で <see cref="Liquid2DSimulation"/> SoA から直接データを取得。
     /// シミュレーション色・速度グラデーションの 2 モードに対応；専用シェーダー <c>Custom/URP/2D/Liquid2DParticleDisplay</c>。
     /// </summary>
@@ -29,13 +29,10 @@ namespace Fs.Liquid2D
         private bool displayEnabled = true;
 
         // ── 渲染资源 Rendering resources 描画リソース ──────────────────────────
+        // 形状由片元裁剪决定、quad 在 shader 内程序化生成，故无需 mesh。
+        // Shape is decided in the fragment stage and the quad is generated in-shader, so no mesh is needed.
+        // 形状はフラグメントで決定し quad はシェーダー内生成のため mesh は不要。
         [Header("Rendering")]
-        [SerializeField, LocalizationTooltip(
-            "粒子 Quad 网格（建议：XY 平面单位正方形，UV [0,1]×[0,1]）。",
-            "Particle quad mesh (recommended: unit square on XY plane, UV [0,1]×[0,1]).",
-            "パーティクル Quad メッシュ（推奨：XY 平面の単位正方形、UV [0,1]×[0,1]）。")]
-        private Mesh mesh;
-
         [SerializeField, LocalizationTooltip(
             "使用 Custom/URP/2D/Liquid2DParticleDisplay 着色器的材质。",
             "Material using the Custom/URP/2D/Liquid2DParticleDisplay shader.",
@@ -93,13 +90,11 @@ namespace Fs.Liquid2D
         private GraphicsBuffer _velocityBuffer;
         private GraphicsBuffer _colorBuffer;
         private GraphicsBuffer _scaleBuffer;
-        private GraphicsBuffer _argsBuffer;
 
         private Vector2[] _positions;
         private Vector2[] _velocities;
         private Vector4[] _colors;
         private float[]   _scales;
-        private readonly uint[] _argsData = new uint[5];
 
         private int       _bufferCapacity = -1;
         private Texture2D _gradientTexture;
@@ -148,11 +143,10 @@ namespace Fs.Liquid2D
                 return;
             }
 
-            // CPU 模式：从 CPU store 取数，上传后用 DrawMeshInstancedIndirect 绘制。
-            // CPU mode: pull from the CPU store, upload, draw via DrawMeshInstancedIndirect.
-            // CPU モード：CPU store から取得しアップロード、DrawMeshInstancedIndirect で描画。
+            // CPU 模式：从 CPU store 取数，上传密实缓冲后用 DrawProcedural 程序化绘制（quad 由 shader 生成）。
+            // CPU mode: pull from the CPU store, upload dense buffers, draw via DrawProcedural (quad generated in-shader).
+            // CPU モード：CPU store から取得し密実バッファをアップロード、DrawProcedural で描画（quad はシェーダー生成）。
             material.DisableKeyword(GpuProceduralKeyword);
-            if (mesh == null) return;
 
             if (!Liquid2DSimulation.TryGetRenderData(
                     out Liquid2DParticleStore store,
@@ -160,6 +154,7 @@ namespace Fs.Liquid2D
                     out int activeCount,
                     out IReadOnlyList<Liquid2DParticleDescriptor> descriptors))
                 return;
+            if (activeCount <= 0) return;
 
             EnsureBufferCapacity(activeCount);
             FillArrays(store, active, activeCount, descriptors);
@@ -167,7 +162,7 @@ namespace Fs.Liquid2D
             ApplyMaterial(activeCount);
 
             var bounds = new Bounds(Vector3.zero, Vector3.one * 100000f);
-            Graphics.DrawMeshInstancedIndirect(mesh, 0, material, bounds, _argsBuffer);
+            Graphics.DrawProcedural(material, bounds, MeshTopology.Triangles, 6, activeCount);
         }
 
         // ── GPU 程序化绘制 GPU procedural draw GPU プロシージャル描画 ────────────
@@ -247,7 +242,6 @@ namespace Fs.Liquid2D
             _velocityBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Structured, cap, 8);
             _colorBuffer    = new GraphicsBuffer(GraphicsBuffer.Target.Structured, cap, 16);
             _scaleBuffer    = new GraphicsBuffer(GraphicsBuffer.Target.Structured, cap, 4);
-            _argsBuffer     = new GraphicsBuffer(GraphicsBuffer.Target.IndirectArguments, 1, 5 * sizeof(uint));
             _bufferCapacity = cap;
         }
 
@@ -279,7 +273,7 @@ namespace Fs.Liquid2D
                 _positions[i]  = new Vector2(pos.x, pos.y);
                 _velocities[i] = new Vector2(vel.x, vel.y);
                 _colors[i]     = new Vector4(col.x, col.y, col.z, col.w);
-                _scales[i]     = rad * renderScale * scale; // 可视半径 = 物理半径 × renderScale × 全局系数。 // visual radius. // 可視半径。
+                _scales[i]     = rad * renderScale * scale; // 可视直径 = 物理半径 × renderScale × 全局系数（QCorner 跨度 1）。 // visual diameter (QCorner span 1). // 可視直径。
             }
         }
 
@@ -291,14 +285,6 @@ namespace Fs.Liquid2D
             _velocityBuffer.SetData(_velocities, 0, 0, activeCount);
             _colorBuffer.SetData(   _colors,     0, 0, activeCount);
             _scaleBuffer.SetData(   _scales,     0, 0, activeCount);
-
-            // DrawMeshInstancedIndirect args: [indexCount, instanceCount, indexStart, baseVertex, startInstance]
-            _argsData[0] = mesh.GetIndexCount(0);
-            _argsData[1] = (uint)activeCount;
-            _argsData[2] = mesh.GetIndexStart(0);
-            _argsData[3] = mesh.GetBaseVertex(0);
-            _argsData[4] = 0u;
-            _argsBuffer.SetData(_argsData);
         }
 
         // ── 材质参数 Material params マテリアルパラメータ ─────────────────────
@@ -375,7 +361,6 @@ namespace Fs.Liquid2D
             _velocityBuffer?.Dispose(); _velocityBuffer = null;
             _colorBuffer?.Dispose();    _colorBuffer    = null;
             _scaleBuffer?.Dispose();    _scaleBuffer    = null;
-            _argsBuffer?.Dispose();     _argsBuffer     = null;
             _bufferCapacity = -1;
         }
     }
