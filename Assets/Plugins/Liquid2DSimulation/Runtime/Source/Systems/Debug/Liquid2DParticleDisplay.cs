@@ -18,7 +18,7 @@ namespace Fs.Liquid2D
     /// URP Render Feature 不要で <see cref="Liquid2DSimulation"/> SoA から直接データを取得。
     /// シミュレーション色・速度グラデーションの 2 モードに対応；専用シェーダー <c>Custom/URP/2D/Liquid2DParticleDisplay</c>。
     /// </summary>
-    [AddComponentMenu("Liquid2D/Liquid2D Particle Display")]
+    [AddComponentMenu("Liquid2D/Gameplay/Liquid2D Particle Display")]
     public class Liquid2DParticleDisplay : MonoBehaviour
     {
         // ── 总开关 Master toggle マスタースイッチ ──────────────────────────────
@@ -137,7 +137,7 @@ namespace Fs.Liquid2D
         private void LateUpdate()
         {
             if (!displayEnabled) return;
-            if (material == null) return;
+            if (!material) return;
             if (!Application.isPlaying) return;
 
             // GPU 模式：直读常驻 GPU 缓冲，程序化绘制（每帧最新、零回读，与正式 Feature 路径一致）。
@@ -176,7 +176,7 @@ namespace Fs.Liquid2D
             EnsureBufferCapacity(activeCount);
             FillArrays(store, active, activeCount, descriptors);
             UploadBuffers(activeCount);
-            ApplyMaterial(activeCount);
+            ApplyMaterial();
 
             _pendingDraw  = true;
             _pendingCount = activeCount;
@@ -230,7 +230,7 @@ namespace Fs.Liquid2D
             SetupGpuMpb(positions, colors, radii, typeIds, active, velocities);
 
             var bounds = new Bounds(Vector3.zero, Vector3.one * 100000f);
-            int typeCount = (int)descriptors?.Count;
+            int typeCount = descriptors.Count;
 
             // 按描述符类型分别绘制：每次发 count 个实例，shader 内剔除类型不匹配者并应用该类型 renderScale。
             // 无描述符表（typeCount==0）时退化为单次绘制：targetType=0、renderScale=1。
@@ -251,7 +251,7 @@ namespace Fs.Liquid2D
             }
 
             for (int t = 0; t < typeCount; t++)
-                DrawType(t, descriptors[t] ? descriptors[t].renderScale : 1f);
+                DrawType(t, descriptors[t] ? descriptors[t].RenderScale : 1f);
         }
 
 #if UNITY_EDITOR
@@ -266,7 +266,7 @@ namespace Fs.Liquid2D
 
             if (Liquid2DSimulation.Mode == Liquid2DSimulationMode.Gpu)
             {
-                if (!_pendingGpuDraw || _cachedGpuPositions == null || _cachedGpuActive == null || _cachedGpuCount <= 0 || _cachedGpuDescriptors == null) return;
+                if (!_pendingGpuDraw || _cachedGpuPositions == null || _cachedGpuActive == null || _cachedGpuCount <= 0) return;
                 
                 SetupGpuMpb(_cachedGpuPositions, _cachedGpuColors, _cachedGpuRadii, _cachedGpuTypeIds, _cachedGpuActive, _cachedGpuVelocities);
                 
@@ -279,10 +279,11 @@ namespace Fs.Liquid2D
                 }
                 else
                 {
+                    if (_cachedGpuDescriptors == null) return;
                     for (int t = 0; t < typeCount; t++)
                     {
                         _gpuMpb.SetInteger(_idTargetType, t);
-                        _gpuMpb.SetFloat(_idRenderScale, _cachedGpuDescriptors[t] ? _cachedGpuDescriptors[t].renderScale : 1f);
+                        _gpuMpb.SetFloat(_idRenderScale, _cachedGpuDescriptors[t] ? _cachedGpuDescriptors[t].RenderScale : 1f);
                         cmd.DrawProcedural(Matrix4x4.identity, material, 0, MeshTopology.Triangles, 6, _cachedGpuCount, _gpuMpb);
                     }
                 }
@@ -342,7 +343,7 @@ namespace Fs.Liquid2D
                 float renderScale = 1f;
                 int   tid = store.typeId[slot];
                 if (descriptors != null && tid >= 0 && tid < descriptors.Count && descriptors[tid] != null)
-                    renderScale = descriptors[tid].renderScale;
+                    renderScale = descriptors[tid].RenderScale;
 
                 _positions[i]  = new Vector2(pos.x, pos.y);
                 _velocities[i] = new Vector2(vel.x, vel.y);
@@ -363,7 +364,7 @@ namespace Fs.Liquid2D
 
         // ── 材质参数 Material params マテリアルパラメータ ─────────────────────
 
-        private void ApplyMaterial(int activeCount)
+        private void ApplyMaterial()
         {
             material.SetBuffer(_idPositions,  _positionBuffer);
             material.SetBuffer(_idVelocities, _velocityBuffer);
@@ -394,7 +395,7 @@ namespace Fs.Liquid2D
             Gradient gradient, FilterMode filterMode = FilterMode.Bilinear)
         {
             width = Mathf.Max(2, width);
-            if (texture == null || texture.width != width)
+            if (!texture || texture.width != width)
             {
                 texture = new Texture2D(width, 1, TextureFormat.RGBA32, false)
                 {
@@ -422,7 +423,7 @@ namespace Fs.Liquid2D
         private void OnDestroy()
         {
             ReleaseBuffers();
-            if (_gradientTexture != null)
+            if (_gradientTexture)
             {
                 Destroy(_gradientTexture);
                 _gradientTexture = null;
@@ -439,4 +440,3 @@ namespace Fs.Liquid2D
         }
     }
 }
-

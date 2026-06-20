@@ -34,18 +34,18 @@ namespace Fs.Liquid2D
 
         public void Step(in Liquid2DSolveContext ctx, in SolverParams p, float dt)
         {
-            int count = ctx.activeCount;
+            int count = ctx.ActiveCount;
             if (count <= 0 || dt <= 0f) return;
 
-            var store = ctx.store;
+            var store = ctx.Store;
             EnsureCapacity(store.Capacity);
 
-            int substeps = math.max(1, p.substeps);
+            int substeps = math.max(1, p.Substeps);
             float subDt = dt / substeps;
-            float invCell = 1f / math.max(1e-4f, p.h);
+            float invCell = 1f / math.max(1e-4f, p.H);
             int tableSize = NextPrime(math.max(16, count * 2));
 
-            bool hasColliders = ctx.colliders.IsCreated && ctx.colliders.Count > 0;
+            bool hasColliders = ctx.Colliders.IsCreated && ctx.Colliders.Count > 0;
 
             for (int step = 0; step < substeps; step++)
             {
@@ -59,44 +59,44 @@ namespace Fs.Liquid2D
 
                 h = new ExternalForcesJob
                 {
-                    activeIndices = ctx.activeIndices, typeId = store.typeId, materials = ctx.materials,
-                    velocities = store.velocities, positions = store.positions, predicted = store.predicted,
-                    forceFields = ctx.forceFields.fields, forceFieldCount = ctx.forceFields.Count,
-                    gravity = p.gravity, dt = subDt, predictionFactor = p.predictionFactor,
+                    ActiveIndices = ctx.ActiveIndices, TypeId = store.typeId, Materials = ctx.Materials,
+                    Velocities = store.velocities, Positions = store.positions, Predicted = store.predicted,
+                    ForceFields = ctx.ForceFields.Fields, ForceFieldCount = ctx.ForceFields.Count,
+                    Gravity = p.Gravity, DT = subDt, PredictionFactor = p.PredictionFactor,
                 }.Schedule(count, 64, h);
 
                 h = new BuildHashGridJob
                 {
-                    predicted = store.predicted, activeIndices = ctx.activeIndices, activeCount = count,
-                    tableSize = tableSize, invCellSize = invCell, cellStart = cellStart, sortedSlots = sortedSlots,
+                    Predicted = store.predicted, ActiveIndices = ctx.ActiveIndices, ActiveCount = count,
+                    TableSize = tableSize, InvCellSize = invCell, CellStart = cellStart, SortedSlots = sortedSlots,
                 }.Schedule(h);
 
                 h = new DensityJob
                 {
-                    activeIndices = ctx.activeIndices, predicted = store.predicted, cellStart = cellStart,
-                    sortedSlots = sortedSlots, tableSize = tableSize, invCellSize = invCell, h = p.h, densities = _densities,
+                    ActiveIndices = ctx.ActiveIndices, Predicted = store.predicted, CellStart = cellStart,
+                    SortedSlots = sortedSlots, TableSize = tableSize, InvCellSize = invCell, H = p.H, Densities = _densities,
                 }.Schedule(count, 64, h);
 
                 h = new PressureForceJob
                 {
-                    activeIndices = ctx.activeIndices, predicted = store.predicted, densities = _densities,
-                    typeId = store.typeId, materials = ctx.materials, cellStart = cellStart, sortedSlots = sortedSlots,
-                    tableSize = tableSize, invCellSize = invCell, h = p.h, targetDensity = p.targetDensity,
-                    pressureMultiplier = p.pressureMultiplier, nearPressureMultiplier = p.nearPressureMultiplier,
-                    velocities = store.velocities, dt = subDt,
+                    ActiveIndices = ctx.ActiveIndices, Predicted = store.predicted, Densities = _densities,
+                    TypeId = store.typeId, Materials = ctx.Materials, CellStart = cellStart, SortedSlots = sortedSlots,
+                    TableSize = tableSize, InvCellSize = invCell, H = p.H, TargetDensity = p.TargetDensity,
+                    PressureMultiplier = p.PressureMultiplier, NearPressureMultiplier = p.NearPressureMultiplier,
+                    Velocities = store.velocities, DT = subDt,
                 }.Schedule(count, 64, h);
 
                 h = new SphViscosityJob
                 {
-                    activeIndices = ctx.activeIndices, predicted = store.predicted, velocities = store.velocities,
-                    typeId = store.typeId, materials = ctx.materials, cellStart = cellStart, sortedSlots = sortedSlots,
-                    tableSize = tableSize, invCellSize = invCell, h = p.h, viscosityStrength = p.viscosityStrength,
-                    dt = subDt, velNext = _velNext,
+                    ActiveIndices = ctx.ActiveIndices, Predicted = store.predicted, Velocities = store.velocities,
+                    TypeId = store.typeId, Materials = ctx.Materials, CellStart = cellStart, SortedSlots = sortedSlots,
+                    TableSize = tableSize, InvCellSize = invCell, H = p.H, ViscosityStrength = p.ViscosityStrength,
+                    DT = subDt, VelNext = _velNext,
                 }.Schedule(count, 64, h);
 
                 h = new CopyVelocityJob
                 {
-                    activeIndices = ctx.activeIndices, velNext = _velNext, velocities = store.velocities,
+                    ActiveIndices = ctx.ActiveIndices, VelNext = _velNext, Velocities = store.velocities,
                 }.Schedule(count, 64, h);
 
                 // 积分 + 碰撞（仅末子步累积耦合冲量）。 // Integrate + collide (accumulate coupling impulse only on last substep). // 積分 + 衝突。
@@ -110,12 +110,12 @@ namespace Fs.Liquid2D
 
                 h = new SphIntegrateCollideJob
                 {
-                    activeIndices = ctx.activeIndices, positions = store.positions, velocities = store.velocities,
-                    radii = store.radii, invMass = store.invMass, typeId = store.typeId, materials = ctx.materials,
-                    colliders = ctx.colliders.colliders, points = ctx.colliders.points, dt = subDt,
-                    collisionDamping = p.collisionDamping, maxSpeed = p.maxSpeed,
-                    hasColliders = (byte)(hasColliders ? 1 : 0),
-                    accumulate = (byte)(accumulate ? 1 : 0), outImpulse = outImpulse, outBody = outBody,
+                    ActiveIndices = ctx.ActiveIndices, Positions = store.positions, Velocities = store.velocities,
+                    Radii = store.radii, InvMass = store.invMass, TypeId = store.typeId, Materials = ctx.Materials,
+                    Colliders = ctx.Colliders.Colliders, Points = ctx.Colliders.Points, DT = subDt,
+                    CollisionDamping = p.CollisionDamping, MaxSpeed = p.MaxSpeed,
+                    HasColliders = (byte)(hasColliders ? 1 : 0),
+                    Accumulate = (byte)(accumulate ? 1 : 0), OutImpulse = outImpulse, OutBody = outBody,
                 }.Schedule(count, 64, h);
 
                 // 末子步：在最终位置上重建网格并做一次邻居混色。 // Last substep: rebuild grid on final positions and mix colors. // 末サブステップで混色。
@@ -123,28 +123,28 @@ namespace Fs.Liquid2D
                 {
                     h = new BuildHashGridJob
                     {
-                        predicted = store.positions, activeIndices = ctx.activeIndices, activeCount = count,
-                        tableSize = tableSize, invCellSize = invCell, cellStart = cellStart, sortedSlots = sortedSlots,
+                        Predicted = store.positions, ActiveIndices = ctx.ActiveIndices, ActiveCount = count,
+                        TableSize = tableSize, InvCellSize = invCell, CellStart = cellStart, SortedSlots = sortedSlots,
                     }.Schedule(h);
 
                     h = new MixColorJob
                     {
-                        activeIndices = ctx.activeIndices, positions = store.positions, velocities = store.velocities,
-                        colors = store.colors, typeId = store.typeId, groupId = store.groupId, radii = store.radii,
-                        mixData = ctx.mixData, cellStart = cellStart, sortedSlots = sortedSlots, tableSize = tableSize,
-                        invCellSize = invCell, time = ctx.time, lastMixTime = store.lastMixTime, colorsNext = store.colorsNext,
+                        ActiveIndices = ctx.ActiveIndices, Positions = store.positions, Velocities = store.velocities,
+                        Colors = store.colors, TypeId = store.typeId, GroupId = store.groupId, Radii = store.radii,
+                        MixData = ctx.MixData, CellStart = cellStart, SortedSlots = sortedSlots, TableSize = tableSize,
+                        InvCellSize = invCell, Time = ctx.Time, LastMixTime = store.lastMixTime, ColorsNext = store.colorsNext,
                     }.Schedule(count, 64, h);
 
                     // 销毁区域标记（在最终位置上）：求解后由 Liquid2DSimulation 回收命中粒子。
                     // Dead-zone marking (on final positions); Liquid2DSimulation recycles hit particles after solving.
                     // 破棄領域マーキング（最終位置）。求解後に Liquid2DSimulation が命中粒子を回収。
-                    if (ctx.deadZoneCount > 0 && ctx.killFlags.IsCreated)
+                    if (ctx.DeadZoneCount > 0 && ctx.KillFlags.IsCreated)
                     {
                         h = new DeadZoneKillJob
                         {
-                            activeIndices = ctx.activeIndices, positions = store.positions, groupId = store.groupId,
-                            deadZones = ctx.deadZones.zones, points = ctx.deadZones.points,
-                            deadZoneCount = ctx.deadZoneCount, killFlags = ctx.killFlags,
+                            ActiveIndices = ctx.ActiveIndices, Positions = store.positions, GroupId = store.groupId,
+                            DeadZones = ctx.DeadZones.Zones, Points = ctx.DeadZones.Points,
+                            DeadZoneCount = ctx.DeadZoneCount, KillFlags = ctx.KillFlags,
                         }.Schedule(count, 64, h);
                     }
                 }
@@ -158,7 +158,7 @@ namespace Fs.Liquid2D
                     // 把每粒子冲量规约回动态碰撞体（双向耦合 seam）。 // Reduce per-particle impulses into dynamic colliders. // 力積を動的体に規約。
                     // NativeArray 是包裹指针的结构；因 ctx 为 in（只读）需先拷到本地变量才能调用其索引器 setter（共享同一缓冲）。
                     // NativeArray wraps a pointer; since ctx is `in` (readonly), copy to a local to call its indexer setter (same underlying buffer).
-                    var impulseOut = ctx.colliderImpulse;
+                    var impulseOut = ctx.ColliderImpulse;
                     if (accumulate && impulseOut.IsCreated)
                     {
                         for (int kk = 0; kk < count; kk++)

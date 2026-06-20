@@ -23,6 +23,44 @@ namespace Fs.Liquid2D
     /// </summary>
     public sealed class SphGpuSolver : ILiquid2DSolver
     {
+        #region PropertyToID
+
+        private static readonly int _numDeadZones = Shader.PropertyToID("numDeadZones");
+        private static readonly int _dt = Shader.PropertyToID("dt");
+        private static readonly int _time = Shader.PropertyToID("time");
+        private static readonly int _sortPositions = Shader.PropertyToID("SortPositions");
+        private static readonly int _accumulateImpulse = Shader.PropertyToID("accumulateImpulse");
+        private static readonly int _numUploads = Shader.PropertyToID("numUploads");
+        private static readonly int _uploadSlots = Shader.PropertyToID("UploadSlots");
+        private static readonly int _uploadVel = Shader.PropertyToID("UploadVel");
+        private static readonly int _positions1 = Shader.PropertyToID("Positions");
+        private static readonly int _velocities1 = Shader.PropertyToID("Velocities");
+        private static readonly int _next = Shader.PropertyToID("ColorsNext");
+        private static readonly int _densities1 = Shader.PropertyToID("Densities");
+        private static readonly int _uploadPos = Shader.PropertyToID("UploadPos");
+        private static readonly int _uploadColor = Shader.PropertyToID("UploadColor");
+        private static readonly int _predicted1 = Shader.PropertyToID("Predicted");
+        private static readonly int _colors1 = Shader.PropertyToID("Colors");
+        private static readonly int _lastMixTime = Shader.PropertyToID("LastMixTime");
+        private static readonly int _numParticles = Shader.PropertyToID("numParticles");
+        private static readonly int _tableSize = Shader.PropertyToID("tableSize");
+        private static readonly int _numColliders = Shader.PropertyToID("numColliders");
+        private static readonly int _numBodies = Shader.PropertyToID("numBodies");
+        private static readonly int _numForceFields = Shader.PropertyToID("numForceFields");
+        private static readonly int _h = Shader.PropertyToID("h");
+        private static readonly int _invCellSize = Shader.PropertyToID("invCellSize");
+        private static readonly int _targetDensity = Shader.PropertyToID("targetDensity");
+        private static readonly int _pressureMultiplier = Shader.PropertyToID("pressureMultiplier");
+        private static readonly int _nearPressureMultiplier = Shader.PropertyToID("nearPressureMultiplier");
+        private static readonly int _viscosityStrength = Shader.PropertyToID("viscosityStrength");
+        private static readonly int _collisionDamping = Shader.PropertyToID("collisionDamping");
+        private static readonly int _maxSpeed = Shader.PropertyToID("maxSpeed");
+        private static readonly int _predictionFactor = Shader.PropertyToID("predictionFactor");
+        private static readonly int _gravity = Shader.PropertyToID("gravity");
+        private static readonly int _impulseScale = Shader.PropertyToID("impulseScale");
+
+        #endregion
+        
         public Liquid2DSimulationMode Mode => Liquid2DSimulationMode.Gpu;
 
         private const float ImpulseScale = 256f;
@@ -57,7 +95,7 @@ namespace Fs.Liquid2D
         private Liquid2DGpuCollider[] _colA; private Liquid2DGpuMixData[] _mixA; private float2[] _pointsA;
         private Liquid2DGpuForceField[] _ffA;
         private Liquid2DGpuDeadZone[] _dzA; private float2[] _dzPointsA; private int[] _killA;
-        private int[] _impXA, _impYA;
+        private int[] _impXa, _impYa;
         private int[] _upSlotsA; private float2[] _upPosA, _upVelA; private float4[] _upColorA;
 
         public SphGpuSolver(ComputeShader cs)
@@ -100,8 +138,8 @@ namespace Fs.Liquid2D
         public void Step(in Liquid2DSolveContext ctx, in SolverParams p, float dt)
         {
             if (!_valid) return;
-            int count = ctx.activeCount;
-            var store = ctx.store;
+            int count = ctx.ActiveCount;
+            var store = ctx.Store;
             if (store == null) return;
 
             HandleCapacity(store);
@@ -111,13 +149,13 @@ namespace Fs.Liquid2D
 
             if (count <= 0 || dt <= 0f) { _lastCount = 0; return; }
 
-            int numTypes = Mathf.Max(1, ctx.materials.IsCreated ? ctx.materials.Length : 1);
-            int numColliders = ctx.colliders.IsCreated ? ctx.colliders.Count : 0;
-            int numPoints = ctx.colliders.IsCreated ? Mathf.Max(1, ctx.colliders.points.Length) : 1;
-            int numBodies = Mathf.Max(1, ctx.dynamicBodyCount);
-            int numForceFields = ctx.forceFields.Count;
-            int numDeadZones = ctx.deadZoneCount;
-            int numDeadZonePoints = numDeadZones > 0 && ctx.deadZones.points.IsCreated ? Mathf.Max(1, ctx.deadZones.points.Length) : 1;
+            int numTypes = Mathf.Max(1, ctx.Materials.IsCreated ? ctx.Materials.Length : 1);
+            int numColliders = ctx.Colliders.IsCreated ? ctx.Colliders.Count : 0;
+            int numPoints = ctx.Colliders.IsCreated ? Mathf.Max(1, ctx.Colliders.Points.Length) : 1;
+            int numBodies = Mathf.Max(1, ctx.DynamicBodyCount);
+            int numForceFields = ctx.ForceFields.Count;
+            int numDeadZones = ctx.DeadZoneCount;
+            int numDeadZonePoints = numDeadZones > 0 && ctx.DeadZones.Points.IsCreated ? Mathf.Max(1, ctx.DeadZones.Points.Length) : 1;
             int tableSize = NextPrime(math.max(16, count * 2));
 
             EnsureCountBuffers(count);
@@ -130,12 +168,12 @@ namespace Fs.Liquid2D
             UploadDeadZones(ctx, numDeadZones, numDeadZonePoints);
             BindAll();
             SetConstants(p, count, tableSize, numColliders, numBodies, numForceFields);
-            _cs.SetInt("numDeadZones", numDeadZones);
+            _cs.SetInt(_numDeadZones, numDeadZones);
 
-            int substeps = math.max(1, p.substeps);
+            int substeps = math.max(1, p.Substeps);
             float subDt = dt / substeps;
-            _cs.SetFloat("dt", subDt);
-            _cs.SetFloat("time", ctx.time);
+            _cs.SetFloat(_dt, subDt);
+            _cs.SetFloat(_time, ctx.Time);
 
             int gP = Groups(count);
             int gT = Groups(tableSize);
@@ -146,7 +184,7 @@ namespace Fs.Liquid2D
 
                 _cs.Dispatch(_kExternal, gP, 1, 1);
 
-                _cs.SetBuffer(_kCount, "SortPositions", _predicted);
+                _cs.SetBuffer(_kCount, _sortPositions, _predicted);
                 SortPass(gP, gT);
 
                 _cs.Dispatch(_kDensity, gP, 1, 1);
@@ -155,12 +193,12 @@ namespace Fs.Liquid2D
                 _cs.Dispatch(_kCopyVel, gP, 1, 1);
 
                 if (lastStep) _cs.Dispatch(_kClearImpulse, Groups(numBodies), 1, 1);
-                _cs.SetInt("accumulateImpulse", lastStep ? 1 : 0);
+                _cs.SetInt(_accumulateImpulse, lastStep ? 1 : 0);
                 _cs.Dispatch(_kIntegrate, gP, 1, 1);
 
                 if (lastStep)
                 {
-                    _cs.SetBuffer(_kCount, "SortPositions", _positions);
+                    _cs.SetBuffer(_kCount, _sortPositions, _positions);
                     SortPass(gP, gT);
                     _cs.Dispatch(_kMix, gP, 1, 1);
                     _cs.Dispatch(_kCopyColor, gP, 1, 1);
@@ -173,7 +211,7 @@ namespace Fs.Liquid2D
             }
 
             // 仅有动态碰撞体时回读冲量（双向耦合）；否则不产生 CPU 同步点。 // Read impulse only when dynamic bodies exist. // 動的体がある時のみ回読。
-            if (ctx.dynamicBodyCount > 0) ReadbackImpulse(ctx, numBodies);
+            if (ctx.DynamicBodyCount > 0) ReadbackImpulse(ctx, numBodies);
 
             // 有销毁区域时回读销毁标记（小数组，count 字节级）。 // Read back kill flags when dead zones exist (small array). // 破棄領域がある時のみ回読。
             if (numDeadZones > 0) ReadbackKillFlags(ctx, count);
@@ -228,14 +266,14 @@ namespace Fs.Liquid2D
             bool full = _needFullReupload;
             int n;
             if (full) { n = count; _needFullReupload = false; }
-            else { var pending = ctx.gpuPendingSpawns; n = pending != null ? pending.Count : 0; }
+            else { var pending = ctx.GPUPendingSpawns; n = pending?.Count ?? 0; }
             if (n <= 0) return;
 
             EnsureArray(ref _upSlotsA, n); EnsureArray(ref _upPosA, n); EnsureArray(ref _upVelA, n); EnsureArray(ref _upColorA, n);
 
             for (int m = 0; m < n; m++)
             {
-                int slot = full ? ctx.activeIndices[m] : ctx.gpuPendingSpawns[m];
+                int slot = full ? ctx.ActiveIndices[m] : ctx.GPUPendingSpawns[m];
                 if (slot < 0 || slot >= store.Capacity) { _upSlotsA[m] = 0; _upPosA[m] = default; _upVelA[m] = default; _upColorA[m] = default; continue; }
                 _upSlotsA[m] = slot;
                 _upPosA[m] = store.positions[slot];
@@ -244,8 +282,10 @@ namespace Fs.Liquid2D
             }
 
             EnsureUploadBuffers(n);
-            _upSlots.SetData(_upSlotsA, 0, 0, n); _upPos.SetData(_upPosA, 0, 0, n);
-            _upVel.SetData(_upVelA, 0, 0, n); _upColor.SetData(_upColorA, 0, 0, n);
+            _upSlots.SetData(_upSlotsA, 0, 0, n); 
+            _upPos.SetData(_upPosA, 0, 0, n);
+            _upVel.SetData(_upVelA, 0, 0, n); 
+            _upColor.SetData(_upColorA, 0, 0, n);
 
             // 静态属性（radius/invMass/typeId/groupId）整块上传（slot 索引，与 store 对齐；spawn 后不变，只在有生成时刷新）。
             // Static attributes uploaded whole (slot-indexed, aligned with store; immutable after spawn).
@@ -253,8 +293,8 @@ namespace Fs.Liquid2D
             UploadStaticAttributes(store, _capacity);
 
             BindSpawn();
-            _cs.SetInt("numUploads", n);
-            _cs.SetFloat("time", ctx.time);
+            _cs.SetInt(_numUploads, n);
+            _cs.SetFloat(_time, ctx.Time);
             _cs.Dispatch(_kSpawn, Groups(n), 1, 1);
         }
 
@@ -270,12 +310,12 @@ namespace Fs.Liquid2D
 
         private void BindSpawn()
         {
-            _cs.SetBuffer(_kSpawn, "UploadSlots", _upSlots); _cs.SetBuffer(_kSpawn, "UploadPos", _upPos);
-            _cs.SetBuffer(_kSpawn, "UploadVel", _upVel); _cs.SetBuffer(_kSpawn, "UploadColor", _upColor);
-            _cs.SetBuffer(_kSpawn, "Positions", _positions); _cs.SetBuffer(_kSpawn, "Predicted", _predicted);
-            _cs.SetBuffer(_kSpawn, "Velocities", _velocities); _cs.SetBuffer(_kSpawn, "Colors", _colors);
-            _cs.SetBuffer(_kSpawn, "ColorsNext", _colorsNext); _cs.SetBuffer(_kSpawn, "LastMixTime", _lastMix);
-            _cs.SetBuffer(_kSpawn, "Densities", _densities);
+            _cs.SetBuffer(_kSpawn, _uploadSlots, _upSlots); _cs.SetBuffer(_kSpawn, _uploadPos, _upPos);
+            _cs.SetBuffer(_kSpawn, _uploadVel, _upVel); _cs.SetBuffer(_kSpawn, _uploadColor, _upColor);
+            _cs.SetBuffer(_kSpawn, _positions1, _positions); _cs.SetBuffer(_kSpawn, _predicted1, _predicted);
+            _cs.SetBuffer(_kSpawn, _velocities1, _velocities); _cs.SetBuffer(_kSpawn, _colors1, _colors);
+            _cs.SetBuffer(_kSpawn, _next, _colorsNext); _cs.SetBuffer(_kSpawn, _lastMixTime, _lastMix);
+            _cs.SetBuffer(_kSpawn, _densities1, _densities);
         }
 
         private void EnsureCountBuffers(int count)
@@ -306,37 +346,37 @@ namespace Fs.Liquid2D
         private void UploadActiveIndices(in Liquid2DSolveContext ctx, int count)
         {
             EnsureArray(ref _activeA, count);
-            var ai = ctx.activeIndices;
+            var ai = ctx.ActiveIndices;
             for (int k = 0; k < count; k++) _activeA[k] = ai[k];
             _active.SetData(_activeA, 0, 0, count);
         }
 
         private void UploadAux(in Liquid2DSolveContext ctx, int numTypes, int numColliders, int numPoints, int numForceFields)
         {
-            if (ctx.materials.IsCreated && ctx.materials.Length > 0)
-                _materials.SetData(ctx.materials, 0, 0, ctx.materials.Length);
+            if (ctx.Materials is { IsCreated: true, Length: > 0 })
+                _materials.SetData(ctx.Materials, 0, 0, ctx.Materials.Length);
 
             EnsureArray(ref _mixA, numTypes);
-            int mixN = ctx.mixData.IsCreated ? ctx.mixData.Length : 0;
-            for (int i = 0; i < numTypes; i++) _mixA[i] = Liquid2DGpuMixData.From(i < mixN ? ctx.mixData[i] : Liquid2DMixData.Disabled);
+            int mixN = ctx.MixData.IsCreated ? ctx.MixData.Length : 0;
+            for (int i = 0; i < numTypes; i++) _mixA[i] = Liquid2DGpuMixData.From(i < mixN ? ctx.MixData[i] : Liquid2DMixData.Disabled);
             _mixDatas.SetData(_mixA, 0, 0, numTypes);
 
             if (numColliders > 0)
             {
                 EnsureArray(ref _colA, numColliders);
-                for (int i = 0; i < numColliders; i++) _colA[i] = Liquid2DGpuCollider.From(ctx.colliders.colliders[i]);
+                for (int i = 0; i < numColliders; i++) _colA[i] = Liquid2DGpuCollider.From(ctx.Colliders.Colliders[i]);
                 _colliders.SetData(_colA, 0, 0, numColliders);
             }
 
             EnsureArray(ref _pointsA, numPoints);
-            int pN = ctx.colliders.IsCreated ? ctx.colliders.points.Length : 0;
-            for (int i = 0; i < numPoints; i++) _pointsA[i] = i < pN ? ctx.colliders.points[i] : float2.zero;
+            int pN = ctx.Colliders.IsCreated ? ctx.Colliders.Points.Length : 0;
+            for (int i = 0; i < numPoints; i++) _pointsA[i] = i < pN ? ctx.Colliders.Points[i] : float2.zero;
             _points.SetData(_pointsA, 0, 0, numPoints);
 
             if (numForceFields > 0)
             {
                 EnsureArray(ref _ffA, numForceFields);
-                for (int i = 0; i < numForceFields; i++) _ffA[i] = Liquid2DGpuForceField.From(ctx.forceFields.fields[i]);
+                for (int i = 0; i < numForceFields; i++) _ffA[i] = Liquid2DGpuForceField.From(ctx.ForceFields.Fields[i]);
                 _forceFields.SetData(_ffA, 0, 0, numForceFields);
             }
         }
@@ -346,13 +386,13 @@ namespace Fs.Liquid2D
             if (numDeadZones > 0)
             {
                 EnsureArray(ref _dzA, numDeadZones);
-                for (int i = 0; i < numDeadZones; i++) _dzA[i] = Liquid2DGpuDeadZone.From(ctx.deadZones.zones[i]);
+                for (int i = 0; i < numDeadZones; i++) _dzA[i] = Liquid2DGpuDeadZone.From(ctx.DeadZones.Zones[i]);
                 _deadZones.SetData(_dzA, 0, 0, numDeadZones);
             }
 
             EnsureArray(ref _dzPointsA, numDeadZonePoints);
-            int pN = numDeadZones > 0 && ctx.deadZones.points.IsCreated ? ctx.deadZones.points.Length : 0;
-            for (int i = 0; i < numDeadZonePoints; i++) _dzPointsA[i] = i < pN ? ctx.deadZones.points[i] : float2.zero;
+            int pN = numDeadZones > 0 && ctx.DeadZones.Points.IsCreated ? ctx.DeadZones.Points.Length : 0;
+            for (int i = 0; i < numDeadZonePoints; i++) _dzPointsA[i] = i < pN ? ctx.DeadZones.Points[i] : float2.zero;
             _deadZonePoints.SetData(_dzPointsA, 0, 0, numDeadZonePoints);
         }
 
@@ -378,39 +418,39 @@ namespace Fs.Liquid2D
 
         private void SetConstants(in SolverParams p, int count, int tableSize, int numColliders, int numBodies, int numForceFields)
         {
-            _cs.SetInt("numParticles", count);
-            _cs.SetInt("tableSize", tableSize);
-            _cs.SetInt("numColliders", numColliders);
-            _cs.SetInt("numBodies", numBodies);
-            _cs.SetInt("numForceFields", numForceFields);
-            _cs.SetFloat("h", p.h);
-            _cs.SetFloat("invCellSize", 1f / math.max(1e-4f, p.h));
-            _cs.SetFloat("targetDensity", p.targetDensity);
-            _cs.SetFloat("pressureMultiplier", p.pressureMultiplier);
-            _cs.SetFloat("nearPressureMultiplier", p.nearPressureMultiplier);
-            _cs.SetFloat("viscosityStrength", p.viscosityStrength);
-            _cs.SetFloat("collisionDamping", p.collisionDamping);
-            _cs.SetFloat("maxSpeed", p.maxSpeed);
-            _cs.SetFloat("predictionFactor", p.predictionFactor);
-            _cs.SetVector("gravity", new Vector4(p.gravity.x, p.gravity.y, 0f, 0f));
-            _cs.SetFloat("impulseScale", ImpulseScale);
+            _cs.SetInt(_numParticles, count);
+            _cs.SetInt(_tableSize, tableSize);
+            _cs.SetInt(_numColliders, numColliders);
+            _cs.SetInt(_numBodies, numBodies);
+            _cs.SetInt(_numForceFields, numForceFields);
+            _cs.SetFloat(_h, p.H);
+            _cs.SetFloat(_invCellSize, 1f / math.max(1e-4f, p.H));
+            _cs.SetFloat(_targetDensity, p.TargetDensity);
+            _cs.SetFloat(_pressureMultiplier, p.PressureMultiplier);
+            _cs.SetFloat(_nearPressureMultiplier, p.NearPressureMultiplier);
+            _cs.SetFloat(_viscosityStrength, p.ViscosityStrength);
+            _cs.SetFloat(_collisionDamping, p.CollisionDamping);
+            _cs.SetFloat(_maxSpeed, p.MaxSpeed);
+            _cs.SetFloat(_predictionFactor, p.PredictionFactor);
+            _cs.SetVector(_gravity, new Vector4(p.Gravity.x, p.Gravity.y, 0f, 0f));
+            _cs.SetFloat(_impulseScale, ImpulseScale);
         }
 
         private void ReadbackImpulse(in Liquid2DSolveContext ctx, int numBodies)
         {
-            var impulseOut = ctx.colliderImpulse;
+            var impulseOut = ctx.ColliderImpulse;
             if (!impulseOut.IsCreated || _impulseX == null) return;
-            EnsureArray(ref _impXA, numBodies); EnsureArray(ref _impYA, numBodies);
-            _impulseX.GetData(_impXA, 0, 0, numBodies);
-            _impulseY.GetData(_impYA, 0, 0, numBodies);
+            EnsureArray(ref _impXa, numBodies); EnsureArray(ref _impYa, numBodies);
+            _impulseX.GetData(_impXa, 0, 0, numBodies);
+            _impulseY.GetData(_impYa, 0, 0, numBodies);
             for (int b = 0; b < numBodies && b < impulseOut.Length; b++)
-                impulseOut[b] += new float2(_impXA[b] / ImpulseScale, _impYA[b] / ImpulseScale);
+                impulseOut[b] += new float2(_impXa[b] / ImpulseScale, _impYa[b] / ImpulseScale);
         }
 
         // 回读销毁标记到 ctx.killFlags（按 k 索引，1=该活动粒子待回收）。 // Read kill flags back into ctx.killFlags (indexed by k). // 破棄フラグを回読。
         private void ReadbackKillFlags(in Liquid2DSolveContext ctx, int count)
         {
-            var flagsOut = ctx.killFlags;
+            var flagsOut = ctx.KillFlags;
             if (!flagsOut.IsCreated || _killFlags == null || count <= 0) return;
             EnsureArray(ref _killA, count);
             _killFlags.GetData(_killA, 0, 0, count);

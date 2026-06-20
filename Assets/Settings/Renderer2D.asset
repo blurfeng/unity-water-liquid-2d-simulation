@@ -16,43 +16,43 @@ MonoBehaviour:
   shaderBlur: {fileID: 4800000, guid: ba2a65ae22134d45b98c9bead0df1a34, type: 3}
   shaderEffect: {fileID: 4800000, guid: 22ec51fd89bf43c799b2934514998e2d, type: 3}
   renderFeatureSettings:
-    nameTag: Milk
-    obstructorRenderingLayerMask:
+    NameTag: Milk
+    ObstructorRenderingLayerMask:
       serializedVersion: 0
       m_Bits: 2
-    occluderRenderingLayerMask:
+    OccluderRenderingLayerMask:
       serializedVersion: 0
       m_Bits: 4
-    cutoff: 0.45
-    opacityMode: 0
-    opacityValue: 1
-    coverColor: {r: 0, g: 0, b: 0, a: 0}
-    blur:
-      iterations: 7
-      blurSpread: 0.6
-      coreKeepIntensity: 0.4
-      scaleFactor: 4
-      ignoreBgColor: 0
-      blurBgColor: {r: 0, g: 0, b: 0, a: 0}
-      blurBgColorIntensity: 0
-    distort:
-      enable: 0
-      magnitude: 0.1
-      frequency: 380
-      amplitude: 0.008
-      distortSpeed: {x: 0.1, y: 1}
-      distortTimeFactors: {x: 0.3, y: -0.4, z: 0.1, w: 0.5}
-      noiseCoordOffset: 4
-    edge:
-      enable: 0
-      edgeRange: 0.6
-      edgeIntensity: 0.1
-      edgeColor: {r: 1, g: 1, b: 1, a: 0.8}
-      blendType: 0
-    pixel:
-      enable: 1
-      pixelSize: 6
-      pixelBg: 1
+    Cutoff: 0.45
+    OpacityMode: 0
+    OpacityValue: 1
+    CoverColor: {r: 0, g: 0, b: 0, a: 0}
+    Blur:
+      Iterations: 7
+      BlurSpread: 0.6
+      CoreKeepIntensity: 0.4
+      ScaleFactor: 4
+      IgnoreBgColor: 0
+      BlurBgColor: {r: 0, g: 0, b: 0, a: 0}
+      BlurBgColorIntensity: 0
+    Distort:
+      Enable: 0
+      Magnitude: 0.1
+      Frequency: 380
+      Amplitude: 0.008
+      DistortSpeed: {x: 0.1, y: 1}
+      DistortTimeFactors: {x: 0.3, y: -0.4, z: 0.1, w: 0.5}
+      NoiseCoordOffset: 4
+    Edge:
+      Enable: 0
+      EdgeRange: 0.6
+      EdgeIntensity: 0.1
+      EdgeColor: {r: 1, g: 1, b: 1, a: 0.8}
+      BlendType: 0
+    Pixel:
+      Enable: 1
+      PixelSize: 6
+      PixelBg: 1
 --- !u!114 &-6077797710476843767
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -69,43 +69,43 @@ MonoBehaviour:
   shaderBlur: {fileID: 4800000, guid: ba2a65ae22134d45b98c9bead0df1a34, type: 3}
   shaderEffect: {fileID: 4800000, guid: 22ec51fd89bf43c799b2934514998e2d, type: 3}
   renderFeatureSettings:
-    nameTag: WaterMinisize
-    obstructorRenderingLayerMask:
+    NameTag: WaterMinisize
+    ObstructorRenderingLayerMask:
       serializedVersion: 0
       m_Bits: 2
-    occluderRenderingLayerMask:
+    OccluderRenderingLayerMask:
       serializedVersion: 0
       m_Bits: 4
-    cutoff: 0.45
-    opacityMode: 2
-    opacityValue: 0.4
-    coverColor: {r: 0, g: 0.7650552, b: 1, a: 1}
-    blur:
-      iterations: 4
-      blurSpread: 0.8
-      coreKeepIntensity: 0.4
-      scaleFactor: 4
-      ignoreBgColor: 0
-      blurBgColor: {r: 0, g: 0, b: 0, a: 0}
-      blurBgColorIntensity: 0
-    distort:
-      enable: 1
-      magnitude: 0.1
-      frequency: 380
-      amplitude: 0.008
-      distortSpeed: {x: 0.1, y: 1}
-      distortTimeFactors: {x: 0.3, y: -0.4, z: 0.1, w: 0.5}
-      noiseCoordOffset: 4
-    edge:
-      enable: 1
-      edgeRange: 1
-      edgeIntensity: 0.305
-      edgeColor: {r: 0.1462264, g: 0.5164853, b: 1, a: 0.7176471}
-      blendType: 0
-    pixel:
-      enable: 0
-      pixelSize: 6
-      pixelBg: 1
+    Cutoff: 0.45
+    OpacityMode: 2
+    OpacityValue: 0.4
+    CoverColor: {r: 0, g: 0.7650552, b: 1, a: 1}
+    Blur:
+      Iterations: 4
+      BlurSpread: 0.8
+      CoreKeepIntensity: 0.4
+      ScaleFactor: 4
+      IgnoreBgColor: 0
+      BlurBgColor: {r: 0, g: 0, b: 0, a: 0}
+      BlurBgColorIntensity: 0
+    Distort:
+      Enable: 1
+      Magnitude: 0.1
+      Frequency: 380
+      Amplitude: 0.008
+      DistortSpeed: {x: 0.1, y: 1}
+      DistortTimeFactors: {x: 0.3, y: -0.4, z: 0.1, w: 0.5}
+      NoiseCoordOffset: 4
+    Edge:
+      Enable: 1
+      EdgeRange: 1
+      EdgeIntensity: 0.305
+      EdgeColor: {r: 0.1462264, g: 0.5164853, b: 1, a: 0.7176471}
+      BlendType: 0
+    Pixel:
+      Enable: 0
+      PixelSize: 6
+      PixelBg: 1
 --- !u!114 &11400000
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -183,43 +183,43 @@ MonoBehaviour:
   shaderBlur: {fileID: 4800000, guid: ba2a65ae22134d45b98c9bead0df1a34, type: 3}
   shaderEffect: {fileID: 4800000, guid: 22ec51fd89bf43c799b2934514998e2d, type: 3}
   renderFeatureSettings:
-    nameTag: Magma
-    obstructorRenderingLayerMask:
+    NameTag: Magma
+    ObstructorRenderingLayerMask:
       serializedVersion: 0
       m_Bits: 2
-    occluderRenderingLayerMask:
+    OccluderRenderingLayerMask:
       serializedVersion: 0
       m_Bits: 0
-    cutoff: 0.14
-    opacityMode: 0
-    opacityValue: 1
-    coverColor: {r: 0, g: 0, b: 0, a: 0}
-    blur:
-      iterations: 4
-      blurSpread: 0.6
-      coreKeepIntensity: 0.4
-      scaleFactor: 4
-      ignoreBgColor: 0
-      blurBgColor: {r: 0.16078432, g: 0, b: 0, a: 1}
-      blurBgColorIntensity: 0.4
-    distort:
-      enable: 1
-      magnitude: 0.1
-      frequency: 380
-      amplitude: 0.008
-      distortSpeed: {x: 0.1, y: 1}
-      distortTimeFactors: {x: 0.3, y: -0.4, z: 0.1, w: 0.5}
-      noiseCoordOffset: 4
-    edge:
-      enable: 0
-      edgeRange: 0.6
-      edgeIntensity: 0.1
-      edgeColor: {r: 1, g: 1, b: 1, a: 0.8}
-      blendType: 0
-    pixel:
-      enable: 0
-      pixelSize: 6
-      pixelBg: 1
+    Cutoff: 0.14
+    OpacityMode: 0
+    OpacityValue: 1
+    CoverColor: {r: 0, g: 0, b: 0, a: 0}
+    Blur:
+      Iterations: 4
+      BlurSpread: 0.6
+      CoreKeepIntensity: 0.4
+      ScaleFactor: 4
+      IgnoreBgColor: 0
+      BlurBgColor: {r: 0.16078432, g: 0, b: 0, a: 1}
+      BlurBgColorIntensity: 0.4
+    Distort:
+      Enable: 1
+      Magnitude: 0.1
+      Frequency: 380
+      Amplitude: 0.008
+      DistortSpeed: {x: 0.1, y: 1}
+      DistortTimeFactors: {x: 0.3, y: -0.4, z: 0.1, w: 0.5}
+      NoiseCoordOffset: 4
+    Edge:
+      Enable: 0
+      EdgeRange: 0.6
+      EdgeIntensity: 0.1
+      EdgeColor: {r: 1, g: 1, b: 1, a: 0.8}
+      BlendType: 0
+    Pixel:
+      Enable: 0
+      PixelSize: 6
+      PixelBg: 1
 --- !u!114 &7169886000912180024
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -236,43 +236,43 @@ MonoBehaviour:
   shaderBlur: {fileID: 4800000, guid: ba2a65ae22134d45b98c9bead0df1a34, type: 3}
   shaderEffect: {fileID: 4800000, guid: 22ec51fd89bf43c799b2934514998e2d, type: 3}
   renderFeatureSettings:
-    nameTag: WaterMix
-    obstructorRenderingLayerMask:
+    NameTag: WaterMix
+    ObstructorRenderingLayerMask:
       serializedVersion: 0
       m_Bits: 2
-    occluderRenderingLayerMask:
+    OccluderRenderingLayerMask:
       serializedVersion: 0
       m_Bits: 0
-    cutoff: 0.45
-    opacityMode: 0
-    opacityValue: 1
-    coverColor: {r: 0, g: 0, b: 0, a: 0}
-    blur:
-      iterations: 4
-      blurSpread: 0.6
-      coreKeepIntensity: 0
-      scaleFactor: 4
-      ignoreBgColor: 0
-      blurBgColor: {r: 0, g: 0, b: 0, a: 0}
-      blurBgColorIntensity: 0
-    distort:
-      enable: 1
-      magnitude: 0.1
-      frequency: 380
-      amplitude: 0.008
-      distortSpeed: {x: 0.1, y: 1}
-      distortTimeFactors: {x: 0.3, y: -0.4, z: 0.1, w: 0.5}
-      noiseCoordOffset: 4
-    edge:
-      enable: 0
-      edgeRange: 0.6
-      edgeIntensity: 0.1
-      edgeColor: {r: 1, g: 1, b: 1, a: 0.8}
-      blendType: 0
-    pixel:
-      enable: 0
-      pixelSize: 6
-      pixelBg: 1
+    Cutoff: 0.45
+    OpacityMode: 0
+    OpacityValue: 1
+    CoverColor: {r: 0, g: 0, b: 0, a: 0}
+    Blur:
+      Iterations: 4
+      BlurSpread: 0.6
+      CoreKeepIntensity: 0
+      ScaleFactor: 4
+      IgnoreBgColor: 0
+      BlurBgColor: {r: 0, g: 0, b: 0, a: 0}
+      BlurBgColorIntensity: 0
+    Distort:
+      Enable: 1
+      Magnitude: 0.1
+      Frequency: 380
+      Amplitude: 0.008
+      DistortSpeed: {x: 0.1, y: 1}
+      DistortTimeFactors: {x: 0.3, y: -0.4, z: 0.1, w: 0.5}
+      NoiseCoordOffset: 4
+    Edge:
+      Enable: 0
+      EdgeRange: 0.6
+      EdgeIntensity: 0.1
+      EdgeColor: {r: 1, g: 1, b: 1, a: 0.8}
+      BlendType: 0
+    Pixel:
+      Enable: 0
+      PixelSize: 6
+      PixelBg: 1
 --- !u!114 &8380843845757841626
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -289,40 +289,40 @@ MonoBehaviour:
   shaderBlur: {fileID: 4800000, guid: ba2a65ae22134d45b98c9bead0df1a34, type: 3}
   shaderEffect: {fileID: 4800000, guid: 22ec51fd89bf43c799b2934514998e2d, type: 3}
   renderFeatureSettings:
-    nameTag: Water
-    obstructorRenderingLayerMask:
+    NameTag: Water
+    ObstructorRenderingLayerMask:
       serializedVersion: 0
       m_Bits: 2
-    occluderRenderingLayerMask:
+    OccluderRenderingLayerMask:
       serializedVersion: 0
       m_Bits: 0
-    cutoff: 0.6
-    opacityMode: 1
-    opacityValue: 0.3
-    coverColor: {r: 0, g: 0.43137264, b: 1, a: 1}
-    blur:
-      iterations: 3
-      blurSpread: 0.6
-      coreKeepIntensity: 0.379
-      scaleFactor: 4
-      ignoreBgColor: 0
-      blurBgColor: {r: 0, g: 0, b: 0, a: 0}
-      blurBgColorIntensity: 0
-    distort:
-      enable: 1
-      magnitude: 0.1
-      frequency: 380
-      amplitude: 0.008
-      distortSpeed: {x: 0.1, y: 1}
-      distortTimeFactors: {x: 0.3, y: -0.4, z: 0.1, w: 0.5}
-      noiseCoordOffset: 4
-    edge:
-      enable: 1
-      edgeRange: 0.8
-      edgeIntensity: 0.1
-      edgeColor: {r: 0.5518868, g: 0.8222361, b: 1, a: 0.627451}
-      blendType: 0
-    pixel:
-      enable: 0
-      pixelSize: 6
-      pixelBg: 0
+    Cutoff: 0.6
+    OpacityMode: 1
+    OpacityValue: 0.3
+    CoverColor: {r: 0, g: 0.43137264, b: 1, a: 1}
+    Blur:
+      Iterations: 3
+      BlurSpread: 0.6
+      CoreKeepIntensity: 0.379
+      ScaleFactor: 4
+      IgnoreBgColor: 0
+      BlurBgColor: {r: 0, g: 0, b: 0, a: 0}
+      BlurBgColorIntensity: 0
+    Distort:
+      Enable: 1
+      Magnitude: 0.1
+      Frequency: 380
+      Amplitude: 0.008
+      DistortSpeed: {x: 0.1, y: 1}
+      DistortTimeFactors: {x: 0.3, y: -0.4, z: 0.1, w: 0.5}
+      NoiseCoordOffset: 4
+    Edge:
+      Enable: 1
+      EdgeRange: 0.8
+      EdgeIntensity: 0.1
+      EdgeColor: {r: 0.5518868, g: 0.8222361, b: 1, a: 0.627451}
+      BlendType: 0
+    Pixel:
+      Enable: 0
+      PixelSize: 6
+      PixelBg: 0

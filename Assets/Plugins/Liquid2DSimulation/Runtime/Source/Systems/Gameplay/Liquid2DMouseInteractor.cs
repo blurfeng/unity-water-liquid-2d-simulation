@@ -15,6 +15,7 @@ namespace Fs.Liquid2D
     /// マウス流体インタラクター：<see cref="Liquid2DForceFieldSource"/> の使用例 / 本番ゲームプレイの入力ドライバー。
     /// 左ボタンで粒子をカーソルへ引き寄せ、右ボタンで押し出します。
     /// </summary>
+    [AddComponentMenu("Liquid2D/Gameplay/Liquid2D Mouse Interactor")]
     public class Liquid2DMouseInteractor : Liquid2DForceFieldSource
     {
         [Header("Mouse Interaction")]
@@ -56,10 +57,10 @@ namespace Fs.Liquid2D
 
             data = new Liquid2DForceFieldData
             {
-                center = new float2(world.x, world.y),
-                radius = Radius,
-                strength = s,
-                velocityDamping = VelocityDamping,
+                Center = new float2(world.x, world.y),
+                Radius = Radius,
+                Strength = s,
+                VelocityDamping = VelocityDamping,
             };
             ApplyAdvanced(ref data);
             return true;

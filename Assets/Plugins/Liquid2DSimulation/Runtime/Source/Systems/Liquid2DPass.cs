@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Fs.Liquid2D.Volumes;
 using UnityEngine;
 using Unity.Mathematics;
@@ -160,67 +159,67 @@ namespace Fs.Liquid2D
 
         private class PassData
         {
-            public UniversalCameraData cameraData;
-            public Liquid2DRenderFeatureSettings settings;
+            public UniversalCameraData CameraData;
+            public Liquid2DRenderFeatureSettings Settings;
             
-            public TextureHandle sourceTh;
+            public TextureHandle SourceTh;
             
-            public Material grabAsBgMaterial;
-            public Color grabAsBgEdgeColor;
-            public float grabAsBgEdgeColorIntensity;
+            public Material GrabAsBgMaterial;
+            public Color GrabAsBgEdgeColor;
+            public float GrabAsBgEdgeColorIntensity;
             
-            public Material cloneMaterial;
-            public TextureHandle cloneSourceTh;
+            public Material CloneMaterial;
+            public TextureHandle CloneSourceTh;
 
             // 复用的 MaterialPropertyBlock 引用（指向 Pass 实例上的复用实例）。
             // Reference to a reusable MaterialPropertyBlock (points to the reusable instance on the Pass).
             // 再利用するMaterialPropertyBlockへの参照（Pass上の再利用インスタンスを指す）。
-            public MaterialPropertyBlock mpb;
+            public MaterialPropertyBlock Mpb;
 
             // 流体粒子绘制 Pass 相关。 // Fluid particle drawing Pass related. // 流体粒子描画Pass関連。
             // 引用 Pass 实例上的复用缓存，不在此分配。 // Reference reusable caches on the Pass instance; not allocated here. // Pass上の再利用キャッシュを参照し、ここでは割り当てません。
-            public Matrix4x4[] matricesCache;
-            public Vector4[] colorArrayCache;
-            public Plane[] frustumPlanes;
-            public Mesh quadMesh;
+            public Matrix4x4[] MatricesCache;
+            public Vector4[] ColorArrayCache;
+            public Plane[] FrustumPlanes;
+            public Mesh QuadMesh;
 
             // GPU 常驻粒子绘制（DrawProcedural 直读 GPU 缓冲）。 // GPU-resident particle draw (DrawProcedural). // GPU 常駐粒子描画。
-            public bool gpuMode;
-            public Material gpuMaterial;
-            public ComputeBuffer gpuPositions;
-            public ComputeBuffer gpuColors;
-            public ComputeBuffer gpuRadii;
-            public ComputeBuffer gpuTypeIds;
-            public ComputeBuffer gpuActive;
-            public int gpuCount;
-            public IReadOnlyList<Liquid2DParticleDescriptor> gpuDescriptors;
+            public bool GPUMode;
+            public Material GPUMaterial;
+            public ComputeBuffer GPUPositions;
+            public ComputeBuffer GPUColors;
+            public ComputeBuffer GPURadii;
+            public ComputeBuffer GPUTypeIds;
+            public ComputeBuffer GPUActive;
+            public int GPUCount;
+            public IReadOnlyList<Liquid2DParticleDescriptor> GPUDescriptors;
 
             // 模糊 Pass 相关。 // Blur Pass related. // ブラーPass関連。
-            public Material materialBlur;
-            public TextureHandle blurSource;
-            public int blurIteration;
+            public Material MaterialBlur;
+            public TextureHandle BlurSource;
+            public int BlurIteration;
 
             // 核心保持叠加 Pass 相关。 // Core-keep combine Pass related. // コア保持合成Pass関連。
-            public Material combineMaterial;
-            public TextureHandle combineMainTh;
-            public TextureHandle combineCoreTh;
+            public Material CombineMaterial;
+            public TextureHandle CombineMainTh;
+            public TextureHandle CombineCoreTh;
             
             // 流体阻挡 Pass 相关。 // Fluid Obstructor Pass related. // 流体オブストラクターパス関連。
-            public RendererListHandle obstructorRendererListHandle;
-            public TextureHandle obstructorTh;
+            public RendererListHandle ObstructorRendererListHandle;
+            public TextureHandle ObstructorTh;
             
             // 流体遮挡 Pass 相关。 // Fluid occluder Pass related. // 流体オクルーダーパス関連。
-            public bool isHaveOccluder;
-            public RendererListHandle occluderRendererListHandle;
-            public TextureHandle occluderTh;
+            public bool IsHaveOccluder;
+            public RendererListHandle OccluderRendererListHandle;
+            public TextureHandle OccluderTh;
             
             // 水体效果 Pass 相关。 // Water effect Pass related. // 水体エフェクトPass関連。
-            public Material materialEffect;
-            public TextureHandle blurFinalTh;
+            public Material MaterialEffect;
+            public TextureHandle BlurFinalTh;
 
 #if UNITY_EDITOR
             // Display Overlay Pass 相关（Editor only）。 // Display Overlay Pass related (Editor only). // Display Overlay Pass 関連（Editor 専用）。
-            public Liquid2DParticleDisplay[] displays;
+            public Liquid2DParticleDisplay[] Displays;
 #endif
         }
 
@@ -285,31 +284,31 @@ namespace Fs.Liquid2D
             using (var builder = renderGraph.AddRasterRenderPass<PassData>(GetName("Particles"), out var passData))
             {
                 // 通道数据设置。 // Pass data setup.  // パスデータ設定。
-                passData.cameraData = cameraData;
-                passData.settings = _settings;
+                passData.CameraData = cameraData;
+                passData.Settings = _settings;
 
-                passData.quadMesh = _quadMesh; // 用于绘制流体粒子的四边形网格。
-                passData.matricesCache = _matricesCache;
-                passData.colorArrayCache = _colorArrayCache;
-                passData.frustumPlanes = _frustumPlanes;
-                passData.mpb = _mpbParticle;
+                passData.QuadMesh = _quadMesh; // 用于绘制流体粒子的四边形网格。
+                passData.MatricesCache = _matricesCache;
+                passData.ColorArrayCache = _colorArrayCache;
+                passData.FrustumPlanes = _frustumPlanes;
+                passData.Mpb = _mpbParticle;
 
                 // GPU 常驻模式：取 GPU 缓冲直读绘制（DrawProcedural），否则走 CPU 路径。
                 // GPU resident mode: read GPU buffers and draw via DrawProcedural; otherwise the CPU path.
                 // GPU 常駐モード：GPU バッファを直読して DrawProcedural、それ以外は CPU パス。
                 bool hasGpuBuffers = Liquid2DSimulation.TryGetRenderBuffers(out var gpuPos, out var gpuCol, out var gpuRad,
                     out var gpuType, out var gpuActive, out _, out int gpuCount, out var gpuDesc);
-                passData.gpuMode = Liquid2DSimulation.Mode == Liquid2DSimulationMode.Gpu && hasGpuBuffers;
-                if (passData.gpuMode)
+                passData.GPUMode = Liquid2DSimulation.Mode == Liquid2DSimulationMode.Gpu && hasGpuBuffers;
+                if (passData.GPUMode)
                 {
-                    passData.gpuMaterial = MaterialParticleGpu;
-                    passData.gpuPositions = gpuPos;
-                    passData.gpuColors = gpuCol;
-                    passData.gpuRadii = gpuRad;
-                    passData.gpuTypeIds = gpuType;
-                    passData.gpuActive = gpuActive;
-                    passData.gpuCount = gpuCount;
-                    passData.gpuDescriptors = gpuDesc;
+                    passData.GPUMaterial = MaterialParticleGpu;
+                    passData.GPUPositions = gpuPos;
+                    passData.GPUColors = gpuCol;
+                    passData.GPURadii = gpuRad;
+                    passData.GPUTypeIds = gpuType;
+                    passData.GPUActive = gpuActive;
+                    passData.GPUCount = gpuCount;
+                    passData.GPUDescriptors = gpuDesc;
                 }
 
                 builder.SetRenderAttachment(
@@ -338,7 +337,7 @@ namespace Fs.Liquid2D
             TextureHandle blurThFinal;
             
             // 多次迭代模糊。 // Multiple iterations of blur. // ブラーの複数回反復。
-            if (_settings.blur.iterations > 0)
+            if (_settings.Blur.Iterations > 0)
             {
                 // ----- 创建纹理句柄 // Create texture handles // テクスチャハンドルを作成 ---- //
                 // 模糊纹理描述。 // Blur texture description. // ブラーテクスチャの説明。
@@ -346,8 +345,8 @@ namespace Fs.Liquid2D
                 // 这里使用当前相机尺寸四分之一的尺寸来提升性能。// 注意。缩放尺寸也会影响模糊的效果。
                 // Here use quarter size of current camera dimensions to improve performance. // Note: Scaling size also affects blur effects.
                 // ここでは、パフォーマンスを向上させるために現在のカメラの4分の1のサイズを使用します。// 注意：スケールサイズはブラー効果にも影響します。
-                blurDesc.width = cameraData.cameraTargetDescriptor.width / (int)_settings.blur.scaleFactor;
-                blurDesc.height = cameraData.cameraTargetDescriptor.height / (int)_settings.blur.scaleFactor;
+                blurDesc.width = cameraData.cameraTargetDescriptor.width / (int)_settings.Blur.ScaleFactor;
+                blurDesc.height = cameraData.cameraTargetDescriptor.height / (int)_settings.Blur.ScaleFactor;
                 
                 blurDesc.name = GetName("Blur Left");
                 TextureHandle blurThLeft = renderGraph.CreateTexture(blurDesc);
@@ -367,11 +366,11 @@ namespace Fs.Liquid2D
                 // 计算核心保持使用哪次迭代的模糊纹理。
                 // Calculate which iteration of blur texture to use for core keeping.
                 // コア保持にどの反復のブラーテクスチャを使用するかを計算します。
-                int coreKeepIteration = Mathf.Clamp((int)(_settings.blur.iterations *  (1 - _settings.blur.coreKeepIntensity)), 1, _settings.blur.iterations - 1);
-                bool coreKeep = coreKeepIteration < _settings.blur.iterations;
+                int coreKeepIteration = Mathf.Clamp((int)(_settings.Blur.Iterations *  (1 - _settings.Blur.CoreKeepIntensity)), 1, _settings.Blur.Iterations - 1);
+                bool coreKeep = coreKeepIteration < _settings.Blur.Iterations;
                 
                 TextureHandle blurThMain = blurThLeft; // 模糊迭代的最终纹理句柄。 // Final texture handle for blur iterations. // ブラー反復の最終テクスチャハンドル。
-                for (var i = 0; i < _settings.blur.iterations; ++i)
+                for (var i = 0; i < _settings.Blur.Iterations; ++i)
                 {
                     // 交替使用两个模糊纹理句柄进行模糊。
                     // Alternately use two blur texture handles for blurring.
@@ -394,7 +393,7 @@ namespace Fs.Liquid2D
                     // 记录最后一张模糊图作为最终模糊图。
                     // Record the last blur image as the final blur image.
                     // 最後のブラー画像を最終ブラー画像として記録します。
-                    if (i == _settings.blur.iterations - 1)
+                    if (i == _settings.Blur.Iterations - 1)
                     {
                         blurThMain = i % 2 == 0 ? blurThRight : blurThLeft;
                     }
@@ -423,10 +422,10 @@ namespace Fs.Liquid2D
                         builder.SetRenderAttachment(blurThCombineCore, 0, AccessFlags.Write);
                         builder.UseTexture(blurThMain, AccessFlags.Read);
                         builder.UseTexture(blurThCore, AccessFlags.Read);
-                        passData.mpb = _mpbCombineCore;
-                        passData.combineMaterial = MaterialBlurCombineTwo;
-                        passData.combineMainTh = blurThMain;
-                        passData.combineCoreTh = blurThCore;
+                        passData.Mpb = _mpbCombineCore;
+                        passData.CombineMaterial = MaterialBlurCombineTwo;
+                        passData.CombineMainTh = blurThMain;
+                        passData.CombineCoreTh = blurThCore;
 
                         // 设置绘制方法。 // Set drawing method. // 描画メソッドを設定します。
                         builder.SetRenderFunc((PassData data, RasterGraphContext context) => ExecutePassCombineCore(data, context));
@@ -468,7 +467,7 @@ namespace Fs.Liquid2D
             liquidObstructorDesc.name = GetName("liquid 2d Obstructor");
             TextureHandle liquidObstructorTh = renderGraph.CreateTexture(liquidObstructorDesc);
 
-            using (var builder = renderGraph.AddRasterRenderPass<PassData>(GetName("liquid 2d Obstructor"), out PassData passData))
+            using (var builder = renderGraph.AddRasterRenderPass(GetName("liquid 2d Obstructor"), out PassData passData))
             {
                 // 设置渲染目标纹理为流体阻挡纹理。 // Set render target texture to fluid obstructor texture. // レンダーターゲットテクスチャを流体阻挡テクスチャに設定します。
                 builder.SetRenderAttachment(liquidObstructorTh, 0, AccessFlags.Write);
@@ -478,14 +477,14 @@ namespace Fs.Liquid2D
                 // Liquid Obstructor Layer Mask レイヤーのすべてのレンダラーリストを取得します。
                 var drawSettings = RenderingUtils.CreateDrawingSettings(_shaderTagId, renderingData, cameraData, lightData, cameraData.defaultOpaqueSortFlags);
                 var param = new RendererListParams(renderingData.cullResults, drawSettings, _obstructorFilteringSettings);
-                passData.obstructorRendererListHandle = renderGraph.CreateRendererList(param);
-                builder.UseRendererList(passData.obstructorRendererListHandle);
+                passData.ObstructorRendererListHandle = renderGraph.CreateRendererList(param);
+                builder.UseRendererList(passData.ObstructorRendererListHandle);
                 
                 builder.SetRenderFunc(
                     (PassData data, RasterGraphContext context) => 
                     {
                         // context.cmd.ClearRenderTarget(RTClearFlags.Color, Color.clear, 1, 0);
-                        context.cmd.DrawRendererList(data.obstructorRendererListHandle);
+                        context.cmd.DrawRendererList(data.ObstructorRendererListHandle);
                     }
                 );
             }
@@ -505,19 +504,19 @@ namespace Fs.Liquid2D
             bool isHaveOccluder = _occluderFilteringSettings.layerMask != 0;
             if (isHaveOccluder)
             {
-                using (var builder = renderGraph.AddRasterRenderPass<PassData>(GetName("liquid 2d Occluder"), out PassData passData))
+                using (var builder = renderGraph.AddRasterRenderPass(GetName("liquid 2d Occluder"), out PassData passData))
                 {
                     builder.SetRenderAttachment(liquidOccluderTh, 0, AccessFlags.Write);
                 
                     var drawSettings = RenderingUtils.CreateDrawingSettings(_shaderTagId, renderingData, cameraData, lightData, cameraData.defaultOpaqueSortFlags);
                     var param = new RendererListParams(renderingData.cullResults, drawSettings, _occluderFilteringSettings);
-                    passData.occluderRendererListHandle = renderGraph.CreateRendererList(param);
-                    builder.UseRendererList(passData.occluderRendererListHandle);
+                    passData.OccluderRendererListHandle = renderGraph.CreateRendererList(param);
+                    builder.UseRendererList(passData.OccluderRendererListHandle);
                 
                     builder.SetRenderFunc(
                         (PassData data, RasterGraphContext context) => 
                         {
-                            context.cmd.DrawRendererList(data.occluderRendererListHandle);
+                            context.cmd.DrawRendererList(data.OccluderRendererListHandle);
                         }
                     );
                 }
@@ -531,31 +530,31 @@ namespace Fs.Liquid2D
             using (var builder = renderGraph.AddRasterRenderPass<PassData>(GetName("liquid 2d Effect"), out var passData))
             {
                 // 通道数据设置。 // Pass data setup.  // パスデータ設定。
-                passData.cameraData = cameraData;
-                passData.settings = _settings;
+                passData.CameraData = cameraData;
+                passData.Settings = _settings;
                 
-                passData.materialEffect = _materialEffect;
-                passData.mpb = _mpbEffect;
-                passData.sourceTh = grabAsBgSourceTh; // 当前相机纹理作为背景图。 // Current camera texture as background image. // 現在のカメラテクスチャを背景画像として。
-                passData.blurFinalTh = blurThFinal; // 最终模糊纹理。 // Final blur texture. // 最終ブラーテクスチャ。
-                passData.obstructorTh = liquidObstructorTh; // 流体阻挡纹理。 // Fluid obstructor texture. // 流体阻挡テクスチャ。
+                passData.MaterialEffect = _materialEffect;
+                passData.Mpb = _mpbEffect;
+                passData.SourceTh = grabAsBgSourceTh; // 当前相机纹理作为背景图。 // Current camera texture as background image. // 現在のカメラテクスチャを背景画像として。
+                passData.BlurFinalTh = blurThFinal; // 最终模糊纹理。 // Final blur texture. // 最終ブラーテクスチャ。
+                passData.ObstructorTh = liquidObstructorTh; // 流体阻挡纹理。 // Fluid obstructor texture. // 流体阻挡テクスチャ。
 
-                passData.isHaveOccluder = isHaveOccluder;
+                passData.IsHaveOccluder = isHaveOccluder;
                 if (isHaveOccluder)
                 {
-                    passData.occluderTh = liquidOccluderTh;
+                    passData.OccluderTh = liquidOccluderTh;
                 }
 
                 // 设置渲染目标纹理句柄和声明使用纹理句柄。
                 // Set render target texture handle and declare usage texture handle.
                 // レンダーターゲットテクスチャハンドルを設定し、使用テクスチャハンドルを宣言します。
                 builder.SetRenderAttachment(sourceTextureHandle, 0, AccessFlags.Write);
-                builder.UseTexture(passData.sourceTh, AccessFlags.Read);
-                builder.UseTexture(passData.blurFinalTh, AccessFlags.Read);
-                builder.UseTexture(passData.obstructorTh, AccessFlags.Read);
+                builder.UseTexture(passData.SourceTh, AccessFlags.Read);
+                builder.UseTexture(passData.BlurFinalTh, AccessFlags.Read);
+                builder.UseTexture(passData.ObstructorTh, AccessFlags.Read);
                 if (isHaveOccluder)
                 {
-                    builder.UseTexture(passData.occluderTh, AccessFlags.Read);
+                    builder.UseTexture(passData.OccluderTh, AccessFlags.Read);
                 }
                 
                 // 设置绘制方法。 // Set drawing method. // 描画メソッドを設定します。
@@ -569,18 +568,18 @@ namespace Fs.Liquid2D
             // Effect Pass 之后，将 Liquid2DParticleDisplay 粒子叠加绘制到相机颜色缓冲，使其覆盖在水体效果之上。
             // After the Effect Pass, draw Liquid2DParticleDisplay particles into the camera colour buffer so they appear above the water effect.
             // Effect Pass の後、Liquid2DParticleDisplay の粒子を相機カラーバッファに描画し、水体エフェクトの上に重ねます。
-            var activeDisplays = UnityEngine.Object.FindObjectsByType<Liquid2DParticleDisplay>(
-                UnityEngine.FindObjectsSortMode.None);
+            var activeDisplays = Object.FindObjectsByType<Liquid2DParticleDisplay>(
+                FindObjectsSortMode.None);
             if (activeDisplays.Length > 0)
             {
                 using (var builder = renderGraph.AddRasterRenderPass<PassData>(
                     GetName("Particle Display Overlay"), out var passData))
                 {
-                    passData.displays = activeDisplays;
+                    passData.Displays = activeDisplays;
                     builder.SetRenderAttachment(sourceTextureHandle, 0, AccessFlags.Write);
                     builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
                     {
-                        foreach (var d in data.displays)
+                        foreach (var d in data.Displays)
                             d.ExecuteDraw(context.cmd);
                     });
                 }
@@ -602,24 +601,24 @@ namespace Fs.Liquid2D
             var cmd = context.cmd;
 
             // GPU 常驻路径：程序化绘制直读 GPU 缓冲，绕过 CPU 逐粒子矩阵与回读。 // GPU-resident path: procedural draw from GPU buffers. // GPU 常駐パス。
-            if (data.gpuMode)
+            if (data.GPUMode)
             {
                 ExecutePassParticleGpu(data, cmd);
                 return;
             }
 
-            Camera cam = data.cameraData.camera;
+            Camera cam = data.CameraData.camera;
             // 使用非分配重载填充复用的视锥平面缓存。 // Fill the reusable frustum planes cache using the non-allocating overload. // 非割り当てオーバーロードで再利用する視錐台平面キャッシュを充填します。
-            GeometryUtility.CalculateFrustumPlanes(cam, data.frustumPlanes);
+            GeometryUtility.CalculateFrustumPlanes(cam, data.FrustumPlanes);
 
-            var mpb = data.mpb;
-            var matrices = data.matricesCache;
-            var colors = data.colorArrayCache;
+            var mpb = data.Mpb;
+            var matrices = data.MatricesCache;
+            var colors = data.ColorArrayCache;
 
             // 从模拟器（SoA）取数据绘制，绕过 Transform。按描述符（typeId）分组使用 GPU Instancing 批量绘制。
             // Read data from the simulation (SoA) and draw, bypassing Transform. Group by descriptor (typeId) and batch via GPU Instancing.
             // シミュレータ（SoA）からデータを取得して描画し、Transform を迂回します。記述子（typeId）でグループ化し GPU インスタンシングで描画。
-            string nameTag = data.settings.nameTag;
+            string nameTag = data.Settings.NameTag;
             if (!Liquid2DSimulation.TryGetRenderData(out var store, out var active, out var activeCount, out var descriptors))
                 return;
 
@@ -633,15 +632,15 @@ namespace Fs.Liquid2D
                 var d = descriptors[t];
                 // 跳过无效组（缺少贴图或材质则无法绘制）。 // Skip invalid groups (cannot draw without sprite or material). // 無効なグループをスキップ。
                 if (d == null || !d.IsValid()) continue;
-                var settings = d.renderSettings;
+                var settings = d.RenderSettings;
 
                 // 当描述符 NameTag 不为空时，仅由相同 NameTag 的 Feature 渲染。
                 // When the descriptor NameTag is not empty, only the Feature with the same NameTag renders it.
                 // 記述子の NameTag が空でない場合、同じ NameTag の Feature のみが描画します。
-                if (!string.IsNullOrEmpty(settings.nameTag) && !settings.nameTag.Equals(nameTag)) continue;
+                if (!string.IsNullOrEmpty(settings.NameTag) && !settings.NameTag.Equals(nameTag)) continue;
 
                 mpb.Clear();
-                mpb.SetTexture(ShaderIds.MainTexId, settings.sprite.texture);
+                mpb.SetTexture(ShaderIds.MainTexId, settings.Sprite.texture);
 
                 int count = 0; // 当前批次已填充的粒子数量。 // Number of particles in the current batch. // 現在のバッチの粒子数。
                 for (int k = 0; k < activeCount; k++)
@@ -657,12 +656,12 @@ namespace Fs.Liquid2D
                     // physics (collision/neighbor/packing) only, while renderScale drives the visual size.
                     // 可視直径 = 物理直径 × 記述子の描画倍率。メタボール融合には物理半径より大きい可視 blob が必要なため、
                     // 描画サイズは物理半径から分離：radius は物理（衝突/近傍/堆積）のみ、renderScale が可視サイズを担う。
-                    float diameter = radiiArr[slot] * 2f * d.renderScale;
+                    float diameter = radiiArr[slot] * 2f * d.RenderScale;
                     var center = new Vector3(p.x, p.y, 0f);
 
                     // 视锥剔除。 // Frustum cull. // 視錐台カリング。
                     var bounds = new Bounds(center, new Vector3(diameter, diameter, diameter));
-                    if (!GeometryUtility.TestPlanesAABB(data.frustumPlanes, bounds)) continue;
+                    if (!GeometryUtility.TestPlanesAABB(data.FrustumPlanes, bounds)) continue;
 
                     matrices[count] = Matrix4x4.TRS(center, Quaternion.identity, new Vector3(diameter, diameter, 1f));
                     float4 c = colorArr[slot];
@@ -672,7 +671,7 @@ namespace Fs.Liquid2D
                     if (count == MaxInstancesPerBatch)
                     {
                         mpb.SetVectorArray(ShaderIds.ColorId, colors);
-                        cmd.DrawMeshInstanced(data.quadMesh, 0, settings.material, 0, matrices, count, mpb);
+                        cmd.DrawMeshInstanced(data.QuadMesh, 0, settings.Material, 0, matrices, count, mpb);
                         count = 0;
                     }
                 }
@@ -681,7 +680,7 @@ namespace Fs.Liquid2D
                 if (count > 0)
                 {
                     mpb.SetVectorArray(ShaderIds.ColorId, colors);
-                    cmd.DrawMeshInstanced(data.quadMesh, 0, settings.material, 0, matrices, count, mpb);
+                    cmd.DrawMeshInstanced(data.QuadMesh, 0, settings.Material, 0, matrices, count, mpb);
                 }
             }
         }
@@ -696,49 +695,49 @@ namespace Fs.Liquid2D
         /// </summary>
         private static void ExecutePassParticleGpu(PassData data, RasterCommandBuffer cmd)
         {
-            var descriptors = data.gpuDescriptors;
-            if (descriptors == null || data.gpuCount <= 0 || data.gpuMaterial == null) return;
+            var descriptors = data.GPUDescriptors;
+            if (descriptors == null || data.GPUCount <= 0 || data.GPUMaterial == null) return;
 
-            string nameTag = data.settings.nameTag;
-            var mpb = data.mpb;
+            string nameTag = data.Settings.NameTag;
+            var mpb = data.Mpb;
 
             for (int t = 0; t < descriptors.Count; t++)
             {
                 var d = descriptors[t];
                 if (d == null || !d.IsValid()) continue;
-                var settings = d.renderSettings;
+                var settings = d.RenderSettings;
 
                 // NameTag 不为空时仅由同名 Feature 渲染（与 CPU 路径一致）。 // Same nameTag gating as the CPU path. // CPU パスと同じ nameTag ゲート。
-                if (!string.IsNullOrEmpty(settings.nameTag) && !settings.nameTag.Equals(nameTag)) continue;
+                if (!string.IsNullOrEmpty(settings.NameTag) && !settings.NameTag.Equals(nameTag)) continue;
 
                 mpb.Clear();
-                mpb.SetBuffer(ShaderIds.PositionsBuf, data.gpuPositions);
-                mpb.SetBuffer(ShaderIds.ColorsBuf, data.gpuColors);
-                mpb.SetBuffer(ShaderIds.RadiiBuf, data.gpuRadii);
-                mpb.SetBuffer(ShaderIds.TypeIdsBuf, data.gpuTypeIds);
-                mpb.SetBuffer(ShaderIds.ActiveIdxBuf, data.gpuActive);
-                mpb.SetTexture(ShaderIds.MainTexId, settings.sprite.texture);
+                mpb.SetBuffer(ShaderIds.PositionsBuf, data.GPUPositions);
+                mpb.SetBuffer(ShaderIds.ColorsBuf, data.GPUColors);
+                mpb.SetBuffer(ShaderIds.RadiiBuf, data.GPURadii);
+                mpb.SetBuffer(ShaderIds.TypeIdsBuf, data.GPUTypeIds);
+                mpb.SetBuffer(ShaderIds.ActiveIdxBuf, data.GPUActive);
+                mpb.SetTexture(ShaderIds.MainTexId, settings.Sprite.texture);
                 mpb.SetInteger(ShaderIds.TargetType, t);
-                mpb.SetFloat(ShaderIds.RenderScale, d.renderScale);
+                mpb.SetFloat(ShaderIds.RenderScale, d.RenderScale);
 
                 // 6 顶点/实例（两三角拼四边形），实例数 = 活动粒子数；Shader 内按 typeId 剔除非本类。
                 // 6 verts/instance (quad), instances = active particle count; shader culls non-matching typeIds.
                 // 6 頂点/インスタンス、インスタンス数 = アクティブ粒子数。
-                cmd.DrawProcedural(Matrix4x4.identity, data.gpuMaterial, 0, MeshTopology.Triangles, 6, data.gpuCount, mpb);
+                cmd.DrawProcedural(Matrix4x4.identity, data.GPUMaterial, 0, MeshTopology.Triangles, 6, data.GPUCount, mpb);
             }
         }
 
         private void PassBlur(RenderGraph renderGraph, TextureHandle source, TextureHandle destination, int iteration, string passName)
         {
-            using (var builder = renderGraph.AddRasterRenderPass<PassData>(passName, out PassData passData))
+            using (var builder = renderGraph.AddRasterRenderPass(passName, out PassData passData))
             {
                 // 通道数据设置。 // Pass data setup.  // パスデータ設定。
-                passData.settings = _settings;
+                passData.Settings = _settings;
 
-                passData.materialBlur = _materialBlur;
-                passData.blurSource = source;
-                passData.blurIteration = iteration;
-                passData.mpb = _mpbBlur;
+                passData.MaterialBlur = _materialBlur;
+                passData.BlurSource = source;
+                passData.BlurIteration = iteration;
+                passData.Mpb = _mpbBlur;
 
                 // 设置渲染目标纹理句柄和声明使用纹理句柄。
                 // Set render target texture handle and declare usage texture handle.
@@ -764,23 +763,23 @@ namespace Fs.Liquid2D
             
             // 模糊偏移强度递增，并乘以缩放比例。 // Blur offset intensity increases, multiplied by scaling factor. // ブラーオフセット強度が増加し、スケーリングファクター。
             float offset = 
-                (0.5f + data.blurIteration * data.settings.blur.blurSpread) * 3f / (int)data.settings.blur.scaleFactor;
+                (0.5f + data.BlurIteration * data.Settings.Blur.BlurSpread) * 3f / (int)data.Settings.Blur.ScaleFactor;
 
             // 设置模糊材质属性块，传入当前模糊材质和偏移强度。
             // Set blur material property block, pass in current blur material and offset intensity.
             // ブラーマテリアルプロパティブロックを設定し、現在のブラーマテリアルとオフセット強度を渡します。
-            MaterialPropertyBlock mpb = data.mpb;
+            MaterialPropertyBlock mpb = data.Mpb;
             mpb.Clear();
-            mpb.SetTexture(ShaderIds.MainTexId,data.blurSource); // 传入当前模糊纹理。 // Pass in current blur texture. // 現在のブラーテクスチャを渡します。
+            mpb.SetTexture(ShaderIds.MainTexId,data.BlurSource); // 传入当前模糊纹理。 // Pass in current blur texture. // 現在のブラーテクスチャを渡します。
             mpb.SetFloat(ShaderIds.BlurOffsetId, offset); // 设置模糊偏移强度。 // Set blur offset intensity. // ブラーオフセット強度を設定します。
             // 是否忽略背景色。 // Whether to ignore background color. // 背景色を無視するかどうか。
-            SetKeyword(data.materialBlur, "_IGNORE_BG_COLOR", data.settings.blur.ignoreBgColor);
+            SetKeyword(data.MaterialBlur, "_IGNORE_BG_COLOR", data.Settings.Blur.IgnoreBgColor);
 
             // 绘制一个全屏三角形，使用模糊材质，并传入属性块。
             // Draw a full-screen triangle using blur material and pass in property block.
             // ブラー材質を使用して全画面三角形を描画し、プロ
             cmd.DrawProcedural(
-                Matrix4x4.identity, data.materialBlur, 0,
+                Matrix4x4.identity, data.MaterialBlur, 0,
                 MeshTopology.Triangles, 3, 1, mpb);
         }
 
@@ -795,12 +794,12 @@ namespace Fs.Liquid2D
         {
             var cmd = context.cmd;
 
-            MaterialPropertyBlock mpb = data.mpb;
+            MaterialPropertyBlock mpb = data.Mpb;
             mpb.Clear();
-            mpb.SetTexture(ShaderIds.MainTexId, data.combineMainTh);
-            mpb.SetTexture(ShaderIds.SecondTex, data.combineCoreTh);
+            mpb.SetTexture(ShaderIds.MainTexId, data.CombineMainTh);
+            mpb.SetTexture(ShaderIds.SecondTex, data.CombineCoreTh);
             cmd.DrawProcedural(
-                Matrix4x4.identity, data.combineMaterial, 0,
+                Matrix4x4.identity, data.CombineMaterial, 0,
                 MeshTopology.Triangles, 3, 1, mpb);
         }
 
@@ -818,34 +817,34 @@ namespace Fs.Liquid2D
             // 设置外描边材质属性块，传入绘制RT。
             // Set outline material property block, pass in draw RT.
             // アウライン材質プロパティブロックを設定し、描画RTを渡します。
-            MaterialPropertyBlock mpb = data.mpb;
+            MaterialPropertyBlock mpb = data.Mpb;
             mpb.Clear();
-            mpb.SetTexture(ShaderIds.MainTexId, data.blurFinalTh); // 流体纹理。 //Fluid texture. //流体テクスチャ。
-            mpb.SetTexture(ShaderIds.ObstructorTex, data.obstructorTh); // 流体阻挡纹理。 //Fluid obstructor texture. //流体阻害テクスチャ。
-            mpb.SetFloat(ShaderIds.Cutoff, data.settings.cutoff); // 裁剪阈值。 //Cutoff threshold. //カットオフ閾値。
-            mpb.SetTexture(ShaderIds.BackgroundTex, data.sourceTh); // 背景纹理。用于扰动采样。 //Background texture. Used for distortion sampling. //背景テクスチャ。歪みサンプリングに使用。
+            mpb.SetTexture(ShaderIds.MainTexId, data.BlurFinalTh); // 流体纹理。 //Fluid texture. //流体テクスチャ。
+            mpb.SetTexture(ShaderIds.ObstructorTex, data.ObstructorTh); // 流体阻挡纹理。 //Fluid obstructor texture. //流体阻害テクスチャ。
+            mpb.SetFloat(ShaderIds.Cutoff, data.Settings.Cutoff); // 裁剪阈值。 //Cutoff threshold. //カットオフ閾値。
+            mpb.SetTexture(ShaderIds.BackgroundTex, data.SourceTh); // 背景纹理。用于扰动采样。 //Background texture. Used for distortion sampling. //背景テクスチャ。歪みサンプリングに使用。
 
             // 流体遮挡纹理。 // Fluid occluder texture. // 流体オクルーダーテクスチャ。
-            SetKeyword(data.materialEffect, "_OCCLUDER_ENABLE", data.isHaveOccluder);
-            if (data.isHaveOccluder)
+            SetKeyword(data.MaterialEffect, "_OCCLUDER_ENABLE", data.IsHaveOccluder);
+            if (data.IsHaveOccluder)
             {
-                mpb.SetTexture(ShaderIds.OccluderTex, data.occluderTh);
+                mpb.SetTexture(ShaderIds.OccluderTex, data.OccluderTh);
             }
 
             // 透明度调整参数。 // Opacity adjustment parameters. // 透明度調整パラメータ。
-            SetKeyword(data.materialEffect, "_OPACITY_MULTIPLY", data.settings.opacityMode == EOpacityMode.Multiply);
-            SetKeyword(data.materialEffect, "_OPACITY_REPLACE", data.settings.opacityMode == EOpacityMode.Replace);
-            mpb.SetFloat(ShaderIds.OpacityValue, data.settings.opacityValue); // 透明度值。 // Opacity value. //透明度値。
+            SetKeyword(data.MaterialEffect, "_OPACITY_MULTIPLY", data.Settings.OpacityMode == EOpacityMode.Multiply);
+            SetKeyword(data.MaterialEffect, "_OPACITY_REPLACE", data.Settings.OpacityMode == EOpacityMode.Replace);
+            mpb.SetFloat(ShaderIds.OpacityValue, data.Settings.OpacityValue); // 透明度值。 // Opacity value. //透明度値。
             
             // 覆盖颜色。透明度值是强度。 // Cover color. Opacity value is intensity. // カバー色。透明度値は強度です。
-            mpb.SetColor(ShaderIds.CoverColorId, data.settings.coverColor);
+            mpb.SetColor(ShaderIds.CoverColorId, data.Settings.CoverColor);
 
-            SetKeyword(data.materialEffect, "_EDGE_ENABLE", data.settings.edge.enable);
-            if (data.settings.edge.enable)
+            SetKeyword(data.MaterialEffect, "_EDGE_ENABLE", data.Settings.Edge.Enable);
+            if (data.Settings.Edge.Enable)
             {
-                float cutoff = data.settings.cutoff;
-                float edgeRange = data.settings.edge.edgeRange;
-                float edgeIntensity = data.settings.edge.edgeIntensity;
+                float cutoff = data.Settings.Cutoff;
+                float edgeRange = data.Settings.Edge.EdgeRange;
+                float edgeIntensity = data.Settings.Edge.EdgeIntensity;
                 
                 // 计算边缘参数。 // Calculate edge parameters. // エッジパラメータを計算します。
                 float edgeStart = cutoff;
@@ -856,48 +855,48 @@ namespace Fs.Liquid2D
                 mpb.SetFloat(ShaderIds.EdgeEnd, edgeEnd); // 边缘结束位置。 // Edge end position. // エッジ終了位置。
                 // 边缘混合开始位置。用于 smoothstep 计算。 // Edge mix start position. Used for smoothstep calculation. // エッジミックス開始位置。smoothstep計算に使用。
                 mpb.SetFloat(ShaderIds.EdgeMixStart, edgeMixStart);
-                mpb.SetColor(ShaderIds.EdgeColor, data.settings.edge.edgeColor); // 边缘颜色。 // Edge color. // エッジカラー。
+                mpb.SetColor(ShaderIds.EdgeColor, data.Settings.Edge.EdgeColor); // 边缘颜色。 // Edge color. // エッジカラー。
 
-                bool lerpBlend = data.settings.edge.blendType == Liquid2DRenderFeatureSettings.Edge.EdgeBlendType.Lerp;
-                SetKeyword(data.materialEffect, "_EDGE_BLEND_SA_OMSA", !lerpBlend);
-                SetKeyword(data.materialEffect, "_EDGE_BLEND_LERP", lerpBlend);
+                bool lerpBlend = data.Settings.Edge.BlendType == Liquid2DRenderFeatureSettings.EdgeSettings.EdgeBlendType.Lerp;
+                SetKeyword(data.MaterialEffect, "_EDGE_BLEND_SA_OMSA", !lerpBlend);
+                SetKeyword(data.MaterialEffect, "_EDGE_BLEND_LERP", lerpBlend);
             }
 
             // 像素风格化。 // Pixel stylization. // ピクセルスタイリゼーション。
-            SetKeyword(data.materialEffect, "_PIXEL_ENABLE", data.settings.pixel.enable);
-            if (data.settings.pixel.enable)
+            SetKeyword(data.MaterialEffect, "_PIXEL_ENABLE", data.Settings.Pixel.Enable);
+            if (data.Settings.Pixel.Enable)
             {
                 // 计算像素化尺寸。 // Calculate pixelation size. // ピクセル化サイズを計算します。
                 float aspect = (float)Screen.width / Screen.height; // 屏幕宽高比。 // Screen aspect ratio. // 画面のアスペクト比。
-                int pixelWidthCount = Screen.width / data.settings.pixel.pixelSize; // 水平像素块数量。 // Number of horizontal pixel blocks. // 水平ピクセルブロックの数。
+                int pixelWidthCount = Screen.width / data.Settings.Pixel.PixelSize; // 水平像素块数量。 // Number of horizontal pixel blocks. // 水平ピクセルブロックの数。
                 Vector2 pixelSize = new Vector2(pixelWidthCount, pixelWidthCount / aspect); // 计算垂直像素块数量。 // Calculate number of vertical pixel blocks. // 垂直ピクセルブロックの数を計算します。
                 mpb.SetVector(ShaderIds.PixelSize, pixelSize); // 传入像素化尺寸。 // Pass in pixelation size. // ピクセル化サイズを渡します。
 
                 // 是否使背景像素化。在水体透明时背景色也会像素化。
                 // Whether to pixelate the background. When the water is transparent, the background color will also be pixelated.
                 // 背景がピクセル化されるかどうか。水が透明な場合、背景色もピクセル化されます。
-                SetKeyword(data.materialEffect, "_PIXEL_BG", data.settings.pixel.pixelBg);
+                SetKeyword(data.MaterialEffect, "_PIXEL_BG", data.Settings.Pixel.PixelBg);
             }
 
             // 水体扰动纹理和强度。 // Water distortion texture and intensity. // 水の歪みテクスチャと強度。
-            bool distortEnable = data.settings.distort.enable
+            bool distortEnable = data.Settings.Distort.Enable
                                  // 完全不透明时不进行扰动。 // No distortion when completely opaque. // 完全に不透明な場合は歪みを行いません。
-                                 && !(data.settings.opacityMode == EOpacityMode.Replace && data.settings.opacityValue >= 1f);
-            SetKeyword(data.materialEffect, "_DISTORT_ENABLE", distortEnable);
+                                 && !(data.Settings.OpacityMode == EOpacityMode.Replace && data.Settings.OpacityValue >= 1f);
+            SetKeyword(data.MaterialEffect, "_DISTORT_ENABLE", distortEnable);
             if (distortEnable)
             {
-                mpb.SetFloat(ShaderIds.Magnitude, data.settings.distort.magnitude);
-                mpb.SetFloat(ShaderIds.Frequency, data.settings.distort.frequency);
-                mpb.SetFloat(ShaderIds.Amplitude, data.settings.distort.amplitude);
-                mpb.SetVector(ShaderIds.DistortSpeed, data.settings.distort.distortSpeed);
-                mpb.SetVector(ShaderIds.DistortTimeFactors, data.settings.distort.distortTimeFactors);
-                mpb.SetFloat(ShaderIds.NoiseCoordOffset, data.settings.distort.noiseCoordOffset);
+                mpb.SetFloat(ShaderIds.Magnitude, data.Settings.Distort.Magnitude);
+                mpb.SetFloat(ShaderIds.Frequency, data.Settings.Distort.Frequency);
+                mpb.SetFloat(ShaderIds.Amplitude, data.Settings.Distort.Amplitude);
+                mpb.SetVector(ShaderIds.DistortSpeed, data.Settings.Distort.DistortSpeed);
+                mpb.SetVector(ShaderIds.DistortTimeFactors, data.Settings.Distort.DistortTimeFactors);
+                mpb.SetFloat(ShaderIds.NoiseCoordOffset, data.Settings.Distort.NoiseCoordOffset);
             }
             
             // 绘制一个全屏三角形，使用外描边材质，并传入属性块。
             // Draw a full-screen triangle using the outline material and pass in the property block.
             // 全画面三角形をアウトラインマテリアルで描画し、プロパティブロックを渡します。
-            cmd.DrawProcedural(Matrix4x4.identity, data.materialEffect, 0, MeshTopology.Triangles, 3, 1,
+            cmd.DrawProcedural(Matrix4x4.identity, data.MaterialEffect, 0, MeshTopology.Triangles, 3, 1,
                 mpb);
         }
         
@@ -932,11 +931,11 @@ namespace Fs.Liquid2D
         {
             using (var builder = renderGraph.AddRasterRenderPass<PassData>(passNameSet, out var passData))
             {
-                passData.grabAsBgMaterial = MaterialGrabAsBg;
-                passData.mpb = _mpbGrabAsBg;
-                passData.sourceTh = source;
-                passData.grabAsBgEdgeColor = _settings.blur.blurBgColor;
-                passData.grabAsBgEdgeColorIntensity = _settings.blur.blurBgColorIntensity;
+                passData.GrabAsBgMaterial = MaterialGrabAsBg;
+                passData.Mpb = _mpbGrabAsBg;
+                passData.SourceTh = source;
+                passData.GrabAsBgEdgeColor = _settings.Blur.BlurBgColor;
+                passData.GrabAsBgEdgeColorIntensity = _settings.Blur.BlurBgColorIntensity;
             
                 // 设置渲染目标纹理句柄和声明使用纹理句柄。
                 builder.SetRenderAttachment(renderAttachment1, 0, AccessFlags.Write);
@@ -947,17 +946,17 @@ namespace Fs.Liquid2D
                 builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
                 {
                     var cmd = context.cmd;
-                    var material = data.grabAsBgMaterial;
+                    var material = data.GrabAsBgMaterial;
                     
                     // material.SetColor(ShaderIds.ColorId, data.grabAsBgEdgeColor);
                     // material.SetFloat(ShaderIds.ColorIntensityId, data.grabAsBgEdgeColorIntensity);
                     // Blitter.BlitTexture(cmd, sourceTh, Vector2.one, material, 0);
                     
-                    MaterialPropertyBlock mpb = data.mpb;
+                    MaterialPropertyBlock mpb = data.Mpb;
                     mpb.Clear();
-                    mpb.SetTexture(ShaderIds.MainTexId, data.sourceTh);
-                    mpb.SetColor(ShaderIds.ColorId, data.grabAsBgEdgeColor);
-                    mpb.SetFloat(ShaderIds.ColorIntensityId, data.grabAsBgEdgeColorIntensity);
+                    mpb.SetTexture(ShaderIds.MainTexId, data.SourceTh);
+                    mpb.SetColor(ShaderIds.ColorId, data.GrabAsBgEdgeColor);
+                    mpb.SetFloat(ShaderIds.ColorIntensityId, data.GrabAsBgEdgeColorIntensity);
                     // 绘制一个全屏三角形，使用外描边材质，并传入属性块。
                     cmd.DrawProcedural(Matrix4x4.identity, material, 0, MeshTopology.Triangles, 3, 1,
                         mpb);
@@ -982,7 +981,7 @@ namespace Fs.Liquid2D
             ( 
                 RenderQueueRange.all,
                 ~0,
-                _settings.obstructorRenderingLayerMask
+                _settings.ObstructorRenderingLayerMask
             );
         }
         
@@ -992,7 +991,7 @@ namespace Fs.Liquid2D
             (
                 RenderQueueRange.all,
                 ~0,
-                _settings.occluderRenderingLayerMask
+                _settings.OccluderRenderingLayerMask
             );
         }
 
@@ -1032,67 +1031,67 @@ namespace Fs.Liquid2D
             // Volumeが有効で、現在のコンポーネントが有効で、データが有効かを判断。
             bool isActive =
                 volumeComponent
-                && volumeComponent.isActive.value
-                && volumeComponent.liquid2DVolumeDataList.overrideState
-                && volumeComponent.GetData(_settings.nameTag, out volumeData)
-                && volumeData != null && volumeData.isActive;
+                && volumeComponent.IsActive.value
+                && volumeComponent.Liquid2DVolumeDataList.overrideState
+                && volumeComponent.GetData(_settings.NameTag, out volumeData)
+                && volumeData is { IsActive: true };
 
             // ---- 重载设置。 // Override settings. // 設定をオーバーライド。 ---- //
             // 2D流体层遮罩。只会渲染设定的流体层的粒子。
             // 2D Liquid layer mask. Only particles of the set fluid layer will be rendered.
             // 2D流体レイヤーマスク。設定された流体レイヤーの粒子のみがレンダリングされます。
-            _settings.nameTag = isActive ? volumeData.nameTag : _settingsDefault.nameTag;
+            _settings.NameTag = isActive ? volumeData.NameTag : _settingsDefault.NameTag;
             
             // 阻挡层遮罩。 // Obstructor layer mask. // 阻害レイヤーマスク。
-            _settings.obstructorRenderingLayerMask = isActive ? volumeData.obstructorRenderingLayerMask : _settingsDefault.obstructorRenderingLayerMask;
-            if (_obstructorFilteringSettings.layerMask != _settings.obstructorRenderingLayerMask)
+            _settings.ObstructorRenderingLayerMask = isActive ? volumeData.ObstructorRenderingLayerMask : _settingsDefault.ObstructorRenderingLayerMask;
+            if (_obstructorFilteringSettings.layerMask != _settings.ObstructorRenderingLayerMask)
             {
                 SetObstructorFilteringSettings();
             }
             // 遮挡层遮罩。 // Occlusion layer mask. // オクルージョンレイヤーマスク。
-            _settings.occluderRenderingLayerMask = isActive ? volumeData.occluderRenderingLayerMask : _settingsDefault.occluderRenderingLayerMask;
-            if (_occluderFilteringSettings.layerMask != _settings.occluderRenderingLayerMask)
+            _settings.OccluderRenderingLayerMask = isActive ? volumeData.OccluderRenderingLayerMask : _settingsDefault.OccluderRenderingLayerMask;
+            if (_occluderFilteringSettings.layerMask != _settings.OccluderRenderingLayerMask)
             {
                 SetOccluderFilteringSettings();
             }
             
-            _settings.cutoff = isActive ? volumeData.cutoff : _settingsDefault.cutoff;
+            _settings.Cutoff = isActive ? volumeData.Cutoff : _settingsDefault.Cutoff;
             
-            _settings.opacityMode = isActive ? volumeData.opacityMode : _settingsDefault.opacityMode;
-            _settings.opacityValue = isActive ? volumeData.opacityValue : _settingsDefault.opacityValue;
-            _settings.coverColor = isActive ? volumeData.coverColor : _settingsDefault.coverColor;
+            _settings.OpacityMode = isActive ? volumeData.OpacityMode : _settingsDefault.OpacityMode;
+            _settings.OpacityValue = isActive ? volumeData.OpacityValue : _settingsDefault.OpacityValue;
+            _settings.CoverColor = isActive ? volumeData.CoverColor : _settingsDefault.CoverColor;
             
             // ---- 边缘设置 // Edge settings // エッジ設定 ---- //
-            _settings.edge.enable = isActive ? volumeData.edge.enable : _settingsDefault.edge.enable;
-            _settings.edge.edgeRange = isActive ? volumeData.edge.edgeRange : _settingsDefault.edge.edgeRange;
-            _settings.edge.edgeIntensity = isActive ? volumeData.edge.edgeIntensity : _settingsDefault.edge.edgeIntensity;
-            _settings.edge.edgeColor = isActive ? volumeData.edge.edgeColor : _settingsDefault.edge.edgeColor;
-            _settings.edge.blendType = isActive ? volumeData.edge.blendType : _settingsDefault.edge.blendType;
+            _settings.Edge.Enable = isActive ? volumeData.Edge.Enable : _settingsDefault.Edge.Enable;
+            _settings.Edge.EdgeRange = isActive ? volumeData.Edge.EdgeRange : _settingsDefault.Edge.EdgeRange;
+            _settings.Edge.EdgeIntensity = isActive ? volumeData.Edge.EdgeIntensity : _settingsDefault.Edge.EdgeIntensity;
+            _settings.Edge.EdgeColor = isActive ? volumeData.Edge.EdgeColor : _settingsDefault.Edge.EdgeColor;
+            _settings.Edge.BlendType = isActive ? volumeData.Edge.BlendType : _settingsDefault.Edge.BlendType;
 
             // ---- 模糊设置 // Blur settings // ブラー設定 ---- //
-            _settings.blur.iterations = isActive ? volumeData.blur.iterations : _settingsDefault.blur.iterations;
-            _settings.blur.blurSpread = isActive ? volumeData.blur.blurSpread : _settingsDefault.blur.blurSpread;
-            _settings.blur.coreKeepIntensity = isActive ? volumeData.blur.coreKeepIntensity : _settingsDefault.blur.coreKeepIntensity;
-            _settings.blur.scaleFactor = isActive ? volumeData.blur.scaleFactor : _settingsDefault.blur.scaleFactor;
-            _settings.blur.ignoreBgColor = isActive ? volumeData.blur.ignoreBgColor : _settingsDefault.blur.ignoreBgColor;
+            _settings.Blur.Iterations = isActive ? volumeData.Blur.Iterations : _settingsDefault.Blur.Iterations;
+            _settings.Blur.BlurSpread = isActive ? volumeData.Blur.BlurSpread : _settingsDefault.Blur.BlurSpread;
+            _settings.Blur.CoreKeepIntensity = isActive ? volumeData.Blur.CoreKeepIntensity : _settingsDefault.Blur.CoreKeepIntensity;
+            _settings.Blur.ScaleFactor = isActive ? volumeData.Blur.ScaleFactor : _settingsDefault.Blur.ScaleFactor;
+            _settings.Blur.IgnoreBgColor = isActive ? volumeData.Blur.IgnoreBgColor : _settingsDefault.Blur.IgnoreBgColor;
             // 模糊背景色和强度。实际上在 Blur 前作为底图进行混合。默认的底图是当前相机的场景纹理（alpha为0）。
             // Blur background color and intensity. In fact, it is blended as a base map before Blur. The default base map is the current camera scene texture (alpha is 0).
             // ブラーバックグラウンドカラーと強度。実際には、Blurの前にベースマップとしてブレンドされます。デフォルトのベースマップは現在のカメラシーンテクスチャ（アルファは0）です。
-            _settings.blur.blurBgColor = isActive ? volumeData.blur.blurBgColor : _settingsDefault.blur.blurBgColor;
-            _settings.blur.blurBgColorIntensity = isActive ? volumeData.blur.blurBgColorIntensity : _settingsDefault.blur.blurBgColorIntensity;
+            _settings.Blur.BlurBgColor = isActive ? volumeData.Blur.BlurBgColor : _settingsDefault.Blur.BlurBgColor;
+            _settings.Blur.BlurBgColorIntensity = isActive ? volumeData.Blur.BlurBgColorIntensity : _settingsDefault.Blur.BlurBgColorIntensity;
             
             // ---- 水体扰动设置 // Water distortion settings // 水の歪み設定 ---- //
-            _settings.distort.enable = isActive ? volumeData.distort.enable : _settingsDefault.distort.enable;
-            _settings.distort.frequency = isActive ? volumeData.distort.frequency : _settingsDefault.distort.frequency;
-            _settings.distort.amplitude = isActive ? volumeData.distort.amplitude : _settingsDefault.distort.amplitude;
-            _settings.distort.distortSpeed = isActive ? volumeData.distort.distortSpeed : _settingsDefault.distort.distortSpeed;
-            _settings.distort.distortTimeFactors = isActive ? volumeData.distort.distortTimeFactors : _settingsDefault.distort.distortTimeFactors;
-            _settings.distort.noiseCoordOffset = isActive ? volumeData.distort.noiseCoordOffset : _settingsDefault.distort.noiseCoordOffset;
+            _settings.Distort.Enable = isActive ? volumeData.Distort.Enable : _settingsDefault.Distort.Enable;
+            _settings.Distort.Frequency = isActive ? volumeData.Distort.Frequency : _settingsDefault.Distort.Frequency;
+            _settings.Distort.Amplitude = isActive ? volumeData.Distort.Amplitude : _settingsDefault.Distort.Amplitude;
+            _settings.Distort.DistortSpeed = isActive ? volumeData.Distort.DistortSpeed : _settingsDefault.Distort.DistortSpeed;
+            _settings.Distort.DistortTimeFactors = isActive ? volumeData.Distort.DistortTimeFactors : _settingsDefault.Distort.DistortTimeFactors;
+            _settings.Distort.NoiseCoordOffset = isActive ? volumeData.Distort.NoiseCoordOffset : _settingsDefault.Distort.NoiseCoordOffset;
             
             // ---- 像素化 // Pixelation // ピクセル化 ---- //
-            _settings.pixel.enable = isActive ? volumeData.pixel.enable : _settingsDefault.pixel.enable;
-            _settings.pixel.pixelSize = isActive ? volumeData.pixel.pixelSize : _settingsDefault.pixel.pixelSize;
-            _settings.pixel.pixelBg = isActive ? volumeData.pixel.pixelBg : _settingsDefault.pixel.pixelBg;
+            _settings.Pixel.Enable = isActive ? volumeData.Pixel.Enable : _settingsDefault.Pixel.Enable;
+            _settings.Pixel.PixelSize = isActive ? volumeData.Pixel.PixelSize : _settingsDefault.Pixel.PixelSize;
+            _settings.Pixel.PixelBg = isActive ? volumeData.Pixel.PixelBg : _settingsDefault.Pixel.PixelBg;
         }
 
         #endregion
@@ -1134,8 +1133,8 @@ namespace Fs.Liquid2D
         {
             using (var builder = renderGraph.AddRasterRenderPass<PassData>(passNameSet, out var passData))
             {
-                passData.cloneMaterial = MaterialClone;
-                passData.cloneSourceTh = source;
+                passData.CloneMaterial = MaterialClone;
+                passData.CloneSourceTh = source;
             
                 // 设置渲染目标纹理句柄和声明使用纹理句柄。
                 builder.SetRenderAttachment(renderAttachment, 0, AccessFlags.Write);
@@ -1145,8 +1144,8 @@ namespace Fs.Liquid2D
                 builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
                 {
                     var cmd = context.cmd;
-                    var material = data.cloneMaterial;
-                    var sourceTh = data.cloneSourceTh;
+                    var material = data.CloneMaterial;
+                    var sourceTh = data.CloneSourceTh;
                     
                     Blitter.BlitTexture(cmd, sourceTh, Vector2.one, material, 0);
                 });
@@ -1165,21 +1164,21 @@ namespace Fs.Liquid2D
         {
             var mesh = new Mesh
             {
-                vertices = new Vector3[]
+                vertices = new[]
                 {
                     new Vector3(-0.5f, -0.5f, 0),
                     new Vector3(0.5f, -0.5f, 0),
                     new Vector3(0.5f, 0.5f, 0),
                     new Vector3(-0.5f, 0.5f, 0)
                 },
-                uv = new Vector2[]
+                uv = new[]
                 {
                     new Vector2(0, 0),
                     new Vector2(1, 0),
                     new Vector2(1, 1),
                     new Vector2(0, 1)
                 },
-                triangles = new int[] { 0, 1, 2, 2, 3, 0 }
+                triangles = new[] { 0, 1, 2, 2, 3, 0 }
             };
             return mesh;
         }
@@ -1192,15 +1191,15 @@ namespace Fs.Liquid2D
 
         private string GetName(string name)
         {
-            if (_nameCacheTag != _settings.nameTag)
+            if (_nameCacheTag != _settings.NameTag)
             {
                 _nameCache.Clear();
-                _nameCacheTag = _settings.nameTag;
+                _nameCacheTag = _settings.NameTag;
             }
 
             if (!_nameCache.TryGetValue(name, out var full))
             {
-                full = $"[Liquid 2D] [{_settings.nameTag}] {name}";
+                full = $"[Liquid 2D] [{_settings.NameTag}] {name}";
                 _nameCache[name] = full;
             }
             return full;

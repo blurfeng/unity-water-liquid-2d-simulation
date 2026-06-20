@@ -50,11 +50,11 @@ namespace Fs.Liquid2D
         
         private void CheckSettings()
         {
-            if (shaderBlur == null)
+            if (!shaderBlur)
             {
                 shaderBlur = Shader.Find("Custom/URP/2D/Liquid2DBlur");
             }
-            if (shaderEffect == null)
+            if (!shaderEffect)
             {
                 shaderEffect = Shader.Find("Custom/URP/2D/Liquid2DEffect");
             }
@@ -144,7 +144,7 @@ namespace Fs.Liquid2D
                     if (f is Liquid2DFeature feature)
                     {
                         var settings = feature.renderFeatureSettings;
-                        if (settings != null && string.Equals(settings.nameTag, nameTag, System.StringComparison.Ordinal))
+                        if (settings != null && string.Equals(settings.NameTag, nameTag, System.StringComparison.Ordinal))
                             return true;
                     }
                 }

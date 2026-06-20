@@ -29,9 +29,9 @@ namespace Fs.Liquid2D
 
         public override void Fill(ref Liquid2DColliderData data, List<float2> pointsAccum)
         {
-            data.shape = Shape;
-            data.center = WorldCenter;
-            data.pointStart = pointsAccum.Count;
+            data.Shape = Shape;
+            data.Center = WorldCenter;
+            data.PointStart = pointsAccum.Count;
 
             int n = points?.Length ?? 0;
             if (points != null)
@@ -43,7 +43,7 @@ namespace Fs.Liquid2D
                 }
             }
 
-            data.pointCount = n;
+            data.PointCount = n;
         }
 
 #if UNITY_EDITOR

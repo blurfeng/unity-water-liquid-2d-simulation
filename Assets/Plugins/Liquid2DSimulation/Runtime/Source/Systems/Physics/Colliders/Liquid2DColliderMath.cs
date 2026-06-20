@@ -21,7 +21,7 @@ namespace Fs.Liquid2D
         public static bool Project(in Liquid2DColliderData c, in NativeArray<float2> points,
             float2 p, float particleRadius, out float2 correction, out float2 normal)
         {
-            switch (c.shape)
+            switch (c.Shape)
             {
                 case Liquid2DColliderShape.Circle: return ProjectCircle(c, p, particleRadius, out correction, out normal);
                 case Liquid2DColliderShape.Box: return ProjectBox(c, p, particleRadius, out correction, out normal);
@@ -35,9 +35,9 @@ namespace Fs.Liquid2D
 
         private static bool ProjectCircle(in Liquid2DColliderData c, float2 p, float pr, out float2 correction, out float2 normal)
         {
-            float2 d = p - c.center;
+            float2 d = p - c.Center;
             float distSq = lengthsq(d);
-            float minD = c.radius + pr;
+            float minD = c.Radius + pr;
             if (distSq >= minD * minD) { correction = float2.zero; normal = float2.zero; return false; }
             float dist = sqrt(distSq);
             normal = dist > 1e-6f ? d / dist : new float2(0f, 1f);
@@ -47,10 +47,10 @@ namespace Fs.Liquid2D
 
         private static bool ProjectBox(in Liquid2DColliderData c, float2 p, float pr, out float2 correction, out float2 normal)
         {
-            float cs = cos(c.rotation), sn = sin(c.rotation);
-            float2 d = p - c.center;
+            float cs = cos(c.Rotation), sn = sin(c.Rotation);
+            float2 d = p - c.Center;
             float2 local = new float2(d.x * cs + d.y * sn, -d.x * sn + d.y * cs); // R^T * d
-            float2 half = c.size;
+            float2 half = c.Size;
             float2 cl = clamp(local, -half, half);
             float2 diff = local - cl;
             float distSq = lengthsq(diff);
@@ -89,14 +89,14 @@ namespace Fs.Liquid2D
 
         private static bool ProjectCapsule(in Liquid2DColliderData c, float2 p, float pr, out float2 correction, out float2 normal)
         {
-            float cs = cos(c.rotation), sn = sin(c.rotation);
-            float2 d = p - c.center;
+            float cs = cos(c.Rotation), sn = sin(c.Rotation);
+            float2 d = p - c.Center;
             float2 local = new float2(d.x * cs + d.y * sn, -d.x * sn + d.y * cs);
-            float t = clamp(local.x, -c.size.x, c.size.x);
+            float t = clamp(local.x, -c.Size.x, c.Size.x);
             float2 seg = new float2(t, 0f);
             float2 dl = local - seg;
             float distSq = lengthsq(dl);
-            float minD = c.radius + pr;
+            float minD = c.Radius + pr;
             if (distSq >= minD * minD) { correction = float2.zero; normal = float2.zero; return false; }
             float dist = sqrt(distSq);
             float2 nLocal = dist > 1e-6f ? dl / dist : new float2(0f, 1f);
@@ -109,9 +109,9 @@ namespace Fs.Liquid2D
         private static bool ProjectPolygon(in Liquid2DColliderData c, in NativeArray<float2> points,
             float2 p, float pr, out float2 correction, out float2 normal)
         {
-            int n = c.pointCount;
+            int n = c.PointCount;
             if (n < 3) { correction = float2.zero; normal = float2.zero; return false; }
-            int s = c.pointStart;
+            int s = c.PointStart;
 
             float minDistSq = float.MaxValue;
             float2 bestClosest = p;
@@ -142,10 +142,10 @@ namespace Fs.Liquid2D
 
         private static bool ProjectBoundsBox(in Liquid2DColliderData c, float2 p, float pr, out float2 correction, out float2 normal)
         {
-            float cs = cos(c.rotation), sn = sin(c.rotation);
-            float2 d = p - c.center;
+            float cs = cos(c.Rotation), sn = sin(c.Rotation);
+            float2 d = p - c.Center;
             float2 local = new float2(d.x * cs + d.y * sn, -d.x * sn + d.y * cs);
-            float2 effHalf = max(c.size - pr, 0f);
+            float2 effHalf = max(c.Size - pr, 0f);
             if (abs(local.x) <= effHalf.x && abs(local.y) <= effHalf.y)
             {
                 correction = float2.zero; normal = float2.zero; return false;
@@ -162,9 +162,9 @@ namespace Fs.Liquid2D
         private static bool ProjectEdgeChain(in Liquid2DColliderData c, in NativeArray<float2> points,
             float2 p, float pr, out float2 correction, out float2 normal)
         {
-            int n = c.pointCount;
+            int n = c.PointCount;
             if (n < 2) { correction = float2.zero; normal = float2.zero; return false; }
-            int s = c.pointStart;
+            int s = c.PointStart;
 
             float minDistSq = float.MaxValue;
             float2 bestClosest = p;
@@ -180,7 +180,7 @@ namespace Fs.Liquid2D
             // c.radius 为边线自身的扩展半径（EdgeCollider2D.edgeRadius），0 表示无扩展。
             // c.radius is the edge's own expansion radius (EdgeCollider2D.edgeRadius); 0 means no expansion.
             // c.radius はエッジ自身の拡張半径（EdgeCollider2D.edgeRadius）、0 は拡張なし。
-            float minD = c.radius + pr;
+            float minD = c.Radius + pr;
             if (minDistSq >= minD * minD) { correction = float2.zero; normal = float2.zero; return false; }
             float dist = sqrt(minDistSq);
             normal = dist > 1e-6f ? (p - bestClosest) / dist : new float2(0f, 1f); // 两面：粒子所在侧。 // two-sided: the side the particle is on. // 両面：粒子のいる側。

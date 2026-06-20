@@ -11,27 +11,27 @@ namespace Fs.Liquid2D
     /// </summary>
     public struct Liquid2DGpuCollider
     {
-        public int shape;
-        public float2 center;
-        public float2 size;
-        public float rotation;
-        public float radius;
-        public int pointStart;
-        public int pointCount;
-        public int dynamic;
-        public int bodyIndex;
+        public int Shape;
+        public float2 Center;
+        public float2 Size;
+        public float Rotation;
+        public float Radius;
+        public int PointStart;
+        public int PointCount;
+        public int Dynamic;
+        public int BodyIndex;
 
         public static Liquid2DGpuCollider From(in Liquid2DColliderData c) => new Liquid2DGpuCollider
         {
-            shape = (int)c.shape,
-            center = c.center,
-            size = c.size,
-            rotation = c.rotation,
-            radius = c.radius,
-            pointStart = c.pointStart,
-            pointCount = c.pointCount,
-            dynamic = c.dynamic,
-            bodyIndex = c.bodyIndex,
+            Shape = (int)c.Shape,
+            Center = c.Center,
+            Size = c.Size,
+            Rotation = c.Rotation,
+            Radius = c.Radius,
+            PointStart = c.PointStart,
+            PointCount = c.PointCount,
+            Dynamic = c.Dynamic,
+            BodyIndex = c.BodyIndex,
         };
     }
 
@@ -43,30 +43,30 @@ namespace Fs.Liquid2D
     /// </summary>
     public struct Liquid2DGpuForceField
     {
-        public float2 center;
-        public float radius;
-        public float strength;
-        public float velocityDamping;
-        public float swirlStrength;
-        public float gravityAttenuation;
-        public float falloff;
-        public int mode;
+        public float2 Center;
+        public float Radius;
+        public float Strength;
+        public float VelocityDamping;
+        public float SwirlStrength;
+        public float GravityAttenuation;
+        public float Falloff;
+        public int Mode;
 
         public static Liquid2DGpuForceField From(in Liquid2DForceFieldData f) => new Liquid2DGpuForceField
         {
-            center = f.center,
-            radius = f.radius,
-            strength = f.strength,
-            velocityDamping = f.velocityDamping,
-            swirlStrength = f.swirlStrength,
-            gravityAttenuation = f.gravityAttenuation,
-            falloff = f.falloff,
-            mode = (int)f.mode,
+            Center = f.Center,
+            Radius = f.Radius,
+            Strength = f.Strength,
+            VelocityDamping = f.VelocityDamping,
+            SwirlStrength = f.SwirlStrength,
+            GravityAttenuation = f.GravityAttenuation,
+            Falloff = f.Falloff,
+            Mode = (int)f.Mode,
         };
     }
 
     /// <summary>
-    /// 销毁区域的 GPU 上传结构（与 Liquid2DSph.compute 的 GpuDeadZone 对齐）。形状字段同 <see cref="Liquid2DGpuCollider"/>，
+    /// 销毁区域的 GPU 上传结构。形状字段同 <see cref="Liquid2DGpuCollider"/>，
     /// 末尾改为 groupId/matchAll/invert。enum/byte → int 避免对齐问题。stride = 48 bytes。
     /// GPU-upload form of a dead zone (matches GpuDeadZone in Liquid2DSph.compute). Shape fields mirror
     /// <see cref="Liquid2DGpuCollider"/>, ending with groupId/matchAll/invert instead. enum/byte → int. stride = 48 bytes.
@@ -74,29 +74,29 @@ namespace Fs.Liquid2D
     /// </summary>
     public struct Liquid2DGpuDeadZone
     {
-        public int shape;
-        public float2 center;
-        public float2 size;
-        public float rotation;
-        public float radius;
-        public int pointStart;
-        public int pointCount;
-        public int groupId;
-        public int matchAll;
-        public int invert;
+        public int Shape;
+        public float2 Center;
+        public float2 Size;
+        public float Rotation;
+        public float Radius;
+        public int PointStart;
+        public int PointCount;
+        public int GroupId;
+        public int MatchAll;
+        public int Invert;
 
         public static Liquid2DGpuDeadZone From(in Liquid2DDeadZoneData z) => new Liquid2DGpuDeadZone
         {
-            shape = (int)z.shape.shape,
-            center = z.shape.center,
-            size = z.shape.size,
-            rotation = z.shape.rotation,
-            radius = z.shape.radius,
-            pointStart = z.shape.pointStart,
-            pointCount = z.shape.pointCount,
-            groupId = z.groupId,
-            matchAll = z.matchAll,
-            invert = z.invert,
+            Shape = (int)z.Shape.Shape,
+            Center = z.Shape.Center,
+            Size = z.Shape.Size,
+            Rotation = z.Shape.Rotation,
+            Radius = z.Shape.Radius,
+            PointStart = z.Shape.PointStart,
+            PointCount = z.Shape.PointCount,
+            GroupId = z.GroupId,
+            MatchAll = z.MatchAll,
+            Invert = z.Invert,
         };
     }
 
@@ -107,19 +107,19 @@ namespace Fs.Liquid2D
     /// </summary>
     public struct Liquid2DGpuMixData
     {
-        public int enabled;
-        public float speed;
-        public int withMovement;
-        public float maxSpeed;
-        public float interval;
+        public int Enabled;
+        public float Speed;
+        public int WithMovement;
+        public float MaxSpeed;
+        public float Interval;
 
         public static Liquid2DGpuMixData From(in Liquid2DMixData m) => new Liquid2DGpuMixData
         {
-            enabled = m.enabled,
-            speed = m.speed,
-            withMovement = m.withMovement,
-            maxSpeed = m.maxSpeed,
-            interval = m.interval,
+            Enabled = m.Enabled,
+            Speed = m.Speed,
+            WithMovement = m.WithMovement,
+            MaxSpeed = m.MaxSpeed,
+            Interval = m.Interval,
         };
     }
 }

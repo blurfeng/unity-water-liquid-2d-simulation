@@ -18,10 +18,10 @@ namespace Fs.Liquid2D
             Vector3 p = (CachedTransform ? CachedTransform : transform).position;
             data = new Liquid2DForceFieldData
             {
-                center = new float2(p.x, p.y),
-                radius = Radius,
-                strength = Strength,
-                velocityDamping = VelocityDamping,
+                Center = new float2(p.x, p.y),
+                Radius = Radius,
+                Strength = Strength,
+                VelocityDamping = VelocityDamping,
             };
             ApplyAdvanced(ref data);
             return true;

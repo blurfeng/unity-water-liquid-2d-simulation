@@ -46,16 +46,16 @@ namespace Fs.Liquid2D
         /// </summary>
         public void RefreshBoundary()
         {
-            _cachedLocalPoints = mesh != null ? ExtractLongestBoundaryLoop(mesh) : null;
-            if (mesh != null && (_cachedLocalPoints == null || _cachedLocalPoints.Length < 2))
+            _cachedLocalPoints = mesh ? ExtractLongestBoundaryLoop(mesh) : null;
+            if (mesh && (_cachedLocalPoints == null || _cachedLocalPoints.Length < 2))
                 Debug.LogWarning($"[Liquid2DMeshCollider] '{name}': failed to extract boundary loop from mesh '{mesh.name}'.", this);
         }
 
         public override void Fill(ref Liquid2DColliderData data, List<float2> pointsAccum)
         {
-            data.shape = Shape;
-            data.center = WorldCenter;
-            data.pointStart = pointsAccum.Count;
+            data.Shape = Shape;
+            data.Center = WorldCenter;
+            data.PointStart = pointsAccum.Count;
 
             int n = _cachedLocalPoints?.Length ?? 0;
             if (_cachedLocalPoints != null)
@@ -67,7 +67,7 @@ namespace Fs.Liquid2D
                 }
             }
 
-            data.pointCount = n;
+            data.PointCount = n;
         }
 
         // ---- 轮廓提取 ---- // ---- Boundary extraction ---- // ---- 輪郭抽出 ----

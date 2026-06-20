@@ -32,31 +32,31 @@ namespace Fs.Liquid2D
     public struct Liquid2DColliderData
     {
         /// <summary>形状类型。 // Shape type. // 形状タイプ。</summary>
-        public Liquid2DColliderShape shape;
+        public Liquid2DColliderShape Shape;
 
         /// <summary>世界中心。 // World center. // ワールド中心。</summary>
-        public float2 center;
+        public float2 Center;
 
         /// <summary>盒：半尺寸(x,y)；胶囊：x=半长。 // Box: half-size(x,y); Capsule: x=half-length. // ボックス：半サイズ；カプセル：x=半長。</summary>
-        public float2 size;
+        public float2 Size;
 
         /// <summary>旋转（弧度）。 // Rotation (radians). // 回転（ラジアン）。</summary>
-        public float rotation;
+        public float Rotation;
 
         /// <summary>圆/胶囊半径。 // Circle/capsule radius. // 円/カプセル半径。</summary>
-        public float radius;
+        public float Radius;
 
         /// <summary>多边形/边链顶点在共享数组的起始索引。 // Start index of polygon/edge vertices in the shared array. // 多角形/エッジ頂点の共有配列内開始インデックス。</summary>
-        public int pointStart;
+        public int PointStart;
 
         /// <summary>多边形/边链顶点数。 // Polygon/edge vertex count. // 多角形/エッジ頂点数。</summary>
-        public int pointCount;
+        public int PointCount;
 
         /// <summary>是否动态（接收流体反作用冲量，参与双向耦合）。 // Whether dynamic (receives fluid reaction impulse). // 動的か（流体の反作用力積を受ける）。</summary>
-        public byte dynamic;
+        public byte Dynamic;
 
         /// <summary>动态体在冲量累积数组中的索引（dynamic==0 时为 -1）。 // Index into the impulse-accumulation array (-1 when not dynamic). // 力積累積配列内のインデックス。</summary>
-        public int bodyIndex;
+        public int BodyIndex;
     }
 
     /// <summary>
@@ -66,10 +66,10 @@ namespace Fs.Liquid2D
     /// </summary>
     public struct Liquid2DColliderBuffer
     {
-        [ReadOnly] public NativeArray<Liquid2DColliderData> colliders;
-        [ReadOnly] public NativeArray<float2> points; // 多边形/边链共享顶点。 // shared polygon/edge vertices. // 共有頂点。
+        [ReadOnly] public NativeArray<Liquid2DColliderData> Colliders;
+        [ReadOnly] public NativeArray<float2> Points; // 多边形/边链共享顶点。 // shared polygon/edge vertices. // 共有頂点。
 
-        public bool IsCreated => colliders.IsCreated;
-        public int Count => colliders.IsCreated ? colliders.Length : 0;
+        public bool IsCreated => Colliders.IsCreated;
+        public int Count => Colliders.IsCreated ? Colliders.Length : 0;
     }
 }

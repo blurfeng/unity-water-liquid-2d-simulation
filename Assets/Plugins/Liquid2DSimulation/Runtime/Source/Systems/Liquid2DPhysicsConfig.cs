@@ -189,29 +189,20 @@ namespace Fs.Liquid2D
             Liquid2DSimulation.MaxParticlesPerTag = maxParticlesPerTag;
             Liquid2DSimulation.Params = new SolverParams
             {
-                gravity = new float2(gravity.x, gravity.y),
-                h = smoothingRadius,
-                targetDensity = targetDensity,
-                pressureMultiplier = pressureMultiplier,
-                nearPressureMultiplier = nearPressureMultiplier,
-                viscosityStrength = viscosityStrength,
-                collisionDamping = collisionDamping,
-                predictionFactor = 1f / 120f,
-                substeps = substeps,
-                maxSpeed = maxSpeed,
+                Gravity = new float2(gravity.x, gravity.y),
+                H = smoothingRadius,
+                TargetDensity = targetDensity,
+                PressureMultiplier = pressureMultiplier,
+                NearPressureMultiplier = nearPressureMultiplier,
+                ViscosityStrength = viscosityStrength,
+                CollisionDamping = collisionDamping,
+                PredictionFactor = 1f / 120f,
+                Substeps = substeps,
+                MaxSpeed = maxSpeed,
             };
 
             if (overrideFixedTimestep && fixedTimestep > 0f)
                 Time.fixedDeltaTime = fixedTimestep;
-            
-            if (Liquid2DSimulation.TryGetRenderData(out var store, out var active, out int count, out var descriptors))
-            {
-                 for (int i = 0; i < count; i++)
-                 {
-                      int slot = active[i];                 // 紧凑活动索引 → slot
-                      float2 pos = store.positions[slot];   // 同理 velocities / colors / radii / typeId
-                 }
-            }
         }
 
 #if UNITY_EDITOR

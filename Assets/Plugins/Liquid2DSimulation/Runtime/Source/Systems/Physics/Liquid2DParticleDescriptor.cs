@@ -22,37 +22,37 @@ namespace Fs.Liquid2D
              "粒子半径（世界单位）。影响碰撞/邻居半径与物理间距。",
              "Particle radius (world units). Affects collision/neighbor radius and physics spacing.",
              "粒子半径（ワールド単位）。衝突/近傍半径と物理間隔に影響します。")]
-        public float radius = 0.125f;
+        public float Radius = 0.125f;
 
         [Min(0.1f), LocalizationTooltip(
              "渲染可视倍率：绘制 quad 直径 = 半径 × 2 × 此值。metaball 融合需要远大于物理半径的可视 blob，建议 4~8。",
              "Render visual multiplier: drawn quad diameter = radius × 2 × this. Metaball fusion needs visual blobs much larger than the physics radius; 4~8 recommended.",
              "描画倍率：quad 直径 = 半径 × 2 × この値。メタボール融合には物理半径より大きな可視 blob が必要（4~8 推奨）。")]
-        public float renderScale = 5f;
+        public float RenderScale = 5f;
 
         [Min(0f), LocalizationTooltip(
              "默认生命时间（秒），0 表示无限。可被生成参数覆盖。",
              "Default lifetime (seconds), 0 = infinite. Can be overridden by spawn parameters.",
              "既定の寿命（秒）、0 は無限。生成パラメータで上書き可能。")]
-        public float defaultLifetime = 0f;
+        public float DefaultLifetime;
         
         [LocalizationTooltip(
              "流体粒子渲染设置（贴图/材质/默认颜色/nameTag）。",
              "Fluid particle render settings (sprite/material/default color/nameTag).",
              "流体粒子の描画設定（スプライト/マテリアル/既定色/nameTag）。")]
-        public Liquid2DParticleRenderSettings renderSettings = new Liquid2DParticleRenderSettings();
+        public Liquid2DParticleRenderSettings RenderSettings;
 
         [LocalizationTooltip(
              "颜色混合设置。",
              "Color mixing settings.",
              "色の混合設定。")]
-        public Liquid2DParticleMixSettings mixSettings = new Liquid2DParticleMixSettings();
+        public Liquid2DParticleMixSettings MixSettings = new Liquid2DParticleMixSettings();
 
         [LocalizationTooltip(
              "物理材质（质量/粘性/张力/摩擦等，用于模拟水/熔岩/泡沫/沙子）。",
              "Physics material (mass/viscosity/tension/friction, etc. to simulate water/lava/foam/sand).",
              "物理マテリアル（質量/粘性/張力/摩擦など。水/溶岩/泡/砂の表現用）。")]
-        public Liquid2DParticleMaterial material = new Liquid2DParticleMaterial();
+        public Liquid2DParticleMaterial Material = new Liquid2DParticleMaterial();
 
         /// <summary>
         /// 运行时由 <see cref="Liquid2DSimulation"/> 分配的类型索引（typeId）。-1 表示未注册。
@@ -66,6 +66,6 @@ namespace Fs.Liquid2D
         /// Whether the descriptor is renderable (sprite and material present).
         /// 記述子が描画可能か（スプライトとマテリアルが揃っているか）。
         /// </summary>
-        public bool IsValid() => renderSettings != null && renderSettings.IsValid();
+        public bool IsValid() => RenderSettings != null && RenderSettings.IsValid();
     }
 }

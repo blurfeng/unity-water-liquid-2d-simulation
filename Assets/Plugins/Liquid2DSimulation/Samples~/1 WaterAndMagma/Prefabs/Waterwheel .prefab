@@ -320,4 +320,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1502bd5914c245c8956ba08f940bfac2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Fs.Liquid2D.AutoRotator
-  rotateSpeed: 60
+  RotateSpeed: 60

@@ -92,10 +92,10 @@ namespace Fs.Liquid2D
         /// </summary>
         protected void ApplyAdvanced(ref Liquid2DForceFieldData data)
         {
-            data.swirlStrength = swirlStrength;
-            data.gravityAttenuation = gravityAttenuation;
-            data.falloff = falloff;
-            data.mode = forceMode;
+            data.SwirlStrength = swirlStrength;
+            data.GravityAttenuation = gravityAttenuation;
+            data.Falloff = falloff;
+            data.Mode = forceMode;
         }
 
         protected virtual void OnEnable()

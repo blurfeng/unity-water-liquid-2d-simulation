@@ -1,12 +1,8 @@
 using Unity.Burst;
 using Unity.Collections;
-using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
-using Unity.Mathematics;
+using UnityEngine;
 using static Unity.Mathematics.math;
-// 类型别名：避免 `using static math` 引入的 floatN(...) 方法在类型位置遮蔽对应类型（CS0119）。
-// Type aliases: prevent floatN(...) methods from `using static math` shadowing the corresponding types in type position (CS0119).
-// 型エイリアス：`using static math` の floatN(...) メソッドが型位置で型を隠すのを防ぐ（CS0119）。
 using float2 = Unity.Mathematics.float2;
 using float4 = Unity.Mathematics.float4;
 using int2 = Unity.Mathematics.int2;
@@ -20,13 +16,13 @@ namespace Fs.Liquid2D
     /// </summary>
     public struct Liquid2DMixData
     {
-        public byte enabled;
-        public float speed;
-        public byte withMovement;
-        public float maxSpeed;
-        public float interval;
+        public byte Enabled;
+        public float Speed;
+        public byte WithMovement;
+        public float MaxSpeed;
+        public float Interval;
 
-        public static Liquid2DMixData Disabled => new Liquid2DMixData { enabled = 0, speed = 0f, withMovement = 0, maxSpeed = 100f, interval = 0.1f };
+        public static Liquid2DMixData Disabled => new Liquid2DMixData { Enabled = 0, Speed = 0f, WithMovement = 0, MaxSpeed = 100f, Interval = 0.1f };
     }
 
     /// <summary>
@@ -96,24 +92,24 @@ namespace Fs.Liquid2D
     [BurstCompile]
     public struct ExternalForcesJob : IJobParallelFor
     {
-        [ReadOnly] public NativeArray<int> activeIndices;
-        [ReadOnly] public NativeArray<int> typeId;
-        [ReadOnly] public NativeArray<Liquid2DMaterialData> materials;
-        [NativeDisableParallelForRestriction] public NativeArray<float2> velocities;
-        [ReadOnly] public NativeArray<float2> positions;
-        [WriteOnly, NativeDisableParallelForRestriction] public NativeArray<float2> predicted;
-        [ReadOnly] public NativeArray<Liquid2DForceFieldData> forceFields;
-        public int forceFieldCount;
-        public float2 gravity;
-        public float dt;
-        public float predictionFactor;
+        [ReadOnly] public NativeArray<int> ActiveIndices;
+        [ReadOnly] public NativeArray<int> TypeId;
+        [ReadOnly] public NativeArray<Liquid2DMaterialData> Materials;
+        [NativeDisableParallelForRestriction] public NativeArray<float2> Velocities;
+        [ReadOnly] public NativeArray<float2> Positions;
+        [WriteOnly, NativeDisableParallelForRestriction] public NativeArray<float2> Predicted;
+        [ReadOnly] public NativeArray<Liquid2DForceFieldData> ForceFields;
+        public int ForceFieldCount;
+        public float2 Gravity;
+        public float DT;
+        public float PredictionFactor;
 
         public void Execute(int k)
         {
-            int i = activeIndices[k];
-            float gs = materials[typeId[i]].gravityScale;
-            float2 pos = positions[i];
-            float2 v = velocities[i];
+            int i = ActiveIndices[k];
+            float gs = Materials[TypeId[i]].GravityScale;
+            float2 pos = Positions[i];
+            float2 v = Velocities[i];
 
             // 重力按力场重力衰减加权 + 累积径向/切向力场加速度 + 累积速度制动系数（结构对齐参考 ExternalForces）。
             // Gravity weighted by field gravity-attenuation + accumulated radial/swirl field accel + accumulated velocity
@@ -123,34 +119,34 @@ namespace Fs.Liquid2D
             float2 fieldAccel = float2.zero;
             float damp = 0f;
 
-            for (int f = 0; f < forceFieldCount; f++)
+            for (int f = 0; f < ForceFieldCount; f++)
             {
-                var ff = forceFields[f];
-                float2 offset = ff.center - pos;
+                var ff = ForceFields[f];
+                float2 offset = ff.Center - pos;
                 float sqrDst = lengthsq(offset);
-                float r = ff.radius;
+                float r = ff.Radius;
                 if (sqrDst >= r * r) continue;
 
                 float dst = sqrt(sqrDst);
                 float centreT = 1f - dst / r;                  // 线性，1=中心 0=边缘。 // linear, 1=center 0=edge. // 線形。
-                float profile = ff.mode == Liquid2DForceFieldMode.Constant
+                float profile = ff.Mode == Liquid2DForceFieldMode.Constant
                     ? 1f
-                    : (ff.falloff == 1f ? centreT : pow(centreT, ff.falloff));
+                    : (Mathf.Approximately(ff.Falloff, 1f) ? centreT : pow(centreT, ff.Falloff));
 
                 float2 dir = dst > 1e-6f ? offset / dst : float2.zero;
                 float2 perp = new float2(-dir.y, dir.x);       // 逆时针切向。 // CCW tangent. // 反時計回り接線。
 
-                fieldAccel += dir * (profile * ff.strength);
-                fieldAccel += perp * (profile * ff.swirlStrength);
-                gWeight = min(gWeight, 1f - centreT * ff.gravityAttenuation);
-                damp += centreT * ff.velocityDamping;
+                fieldAccel += dir * (profile * ff.Strength);
+                fieldAccel += perp * (profile * ff.SwirlStrength);
+                gWeight = min(gWeight, 1f - centreT * ff.GravityAttenuation);
+                damp += centreT * ff.VelocityDamping;
             }
 
-            v += (gravity * gs * gWeight + fieldAccel) * dt;
-            if (damp > 0f) v -= v * saturate(damp * dt);
+            v += (Gravity * gs * gWeight + fieldAccel) * DT;
+            if (damp > 0f) v -= v * saturate(damp * DT);
 
-            velocities[i] = v;
-            predicted[i] = pos + v * predictionFactor;
+            Velocities[i] = v;
+            Predicted[i] = pos + v * PredictionFactor;
         }
     }
 
@@ -162,47 +158,47 @@ namespace Fs.Liquid2D
     [BurstCompile]
     public struct DensityJob : IJobParallelFor
     {
-        [ReadOnly] public NativeArray<int> activeIndices;
-        [ReadOnly] public NativeArray<float2> predicted;
-        [ReadOnly] public NativeArray<int> cellStart;
-        [ReadOnly] public NativeArray<int> sortedSlots;
-        public int tableSize;
-        public float invCellSize;
-        public float h;
-        [WriteOnly, NativeDisableParallelForRestriction] public NativeArray<float2> densities;
+        [ReadOnly] public NativeArray<int> ActiveIndices;
+        [ReadOnly] public NativeArray<float2> Predicted;
+        [ReadOnly] public NativeArray<int> CellStart;
+        [ReadOnly] public NativeArray<int> SortedSlots;
+        public int TableSize;
+        public float InvCellSize;
+        public float H;
+        [WriteOnly, NativeDisableParallelForRestriction] public NativeArray<float2> Densities;
 
         public void Execute(int k)
         {
-            int i = activeIndices[k];
-            float2 pi = predicted[i];
-            float h2 = h * h;
-            float c2 = KernelMath.SpikyPow2Coef(h);
-            float c3 = KernelMath.SpikyPow3Coef(h);
+            int i = ActiveIndices[k];
+            float2 pi = Predicted[i];
+            float h2 = H * H;
+            float c2 = KernelMath.SpikyPow2Coef(H);
+            float c3 = KernelMath.SpikyPow3Coef(H);
 
             float density = 0f;
             float nearDensity = 0f;
 
-            int2 ci = Liquid2DHashGrid.CellCoord(pi, invCellSize);
+            int2 ci = Liquid2DHashGrid.CellCoord(pi, InvCellSize);
             for (int dy = -1; dy <= 1; dy++)
             for (int dx = -1; dx <= 1; dx++)
             {
                 int2 qc = ci + new int2(dx, dy);
-                int b = Liquid2DHashGrid.Hash(qc, tableSize);
-                int start = cellStart[b];
-                int end = cellStart[b + 1];
+                int b = Liquid2DHashGrid.Hash(qc, TableSize);
+                int start = CellStart[b];
+                int end = CellStart[b + 1];
                 for (int s = start; s < end; s++)
                 {
-                    int j = sortedSlots[s];
-                    if (!Liquid2DHashGrid.CellCoord(predicted[j], invCellSize).Equals(qc)) continue;
-                    float r2 = lengthsq(pi - predicted[j]);
+                    int j = SortedSlots[s];
+                    if (!Liquid2DHashGrid.CellCoord(Predicted[j], InvCellSize).Equals(qc)) continue;
+                    float r2 = lengthsq(pi - Predicted[j]);
                     if (r2 >= h2) continue;
                     float r = sqrt(r2);
-                    density += KernelMath.SpikyPow2(r, h, c2);
-                    nearDensity += KernelMath.SpikyPow3(r, h, c3);
+                    density += KernelMath.SpikyPow2(r, H, c2);
+                    nearDensity += KernelMath.SpikyPow3(r, H, c3);
                 }
             }
 
-            densities[i] = new float2(density, nearDensity);
+            Densities[i] = new float2(density, nearDensity);
         }
     }
 
@@ -216,73 +212,73 @@ namespace Fs.Liquid2D
     [BurstCompile]
     public struct PressureForceJob : IJobParallelFor
     {
-        [ReadOnly] public NativeArray<int> activeIndices;
-        [ReadOnly] public NativeArray<float2> predicted;
-        [ReadOnly] public NativeArray<float2> densities;
-        [ReadOnly] public NativeArray<int> typeId;
-        [ReadOnly] public NativeArray<Liquid2DMaterialData> materials;
-        [ReadOnly] public NativeArray<int> cellStart;
-        [ReadOnly] public NativeArray<int> sortedSlots;
-        public int tableSize;
-        public float invCellSize;
-        public float h;
-        public float targetDensity;
-        public float pressureMultiplier;
-        public float nearPressureMultiplier;
-        [NativeDisableParallelForRestriction] public NativeArray<float2> velocities;
-        public float dt;
+        [ReadOnly] public NativeArray<int> ActiveIndices;
+        [ReadOnly] public NativeArray<float2> Predicted;
+        [ReadOnly] public NativeArray<float2> Densities;
+        [ReadOnly] public NativeArray<int> TypeId;
+        [ReadOnly] public NativeArray<Liquid2DMaterialData> Materials;
+        [ReadOnly] public NativeArray<int> CellStart;
+        [ReadOnly] public NativeArray<int> SortedSlots;
+        public int TableSize;
+        public float InvCellSize;
+        public float H;
+        public float TargetDensity;
+        public float PressureMultiplier;
+        public float NearPressureMultiplier;
+        [NativeDisableParallelForRestriction] public NativeArray<float2> Velocities;
+        public float DT;
 
         // 由密度求该粒子的压力（含材质静止密度缩放）。 // Pressure from density (with material rest-density scale). // 密度から圧力。
         private float Pressure(float density, int slot)
         {
-            float rho0 = targetDensity * materials[typeId[slot]].restDensityScale;
-            return (density - rho0) * pressureMultiplier;
+            float rho0 = TargetDensity * Materials[TypeId[slot]].RestDensityScale;
+            return (density - rho0) * PressureMultiplier;
         }
 
         private float NearPressure(float nearDensity, int slot)
         {
-            float coh = materials[typeId[slot]].cohesion;
-            return nearDensity * nearPressureMultiplier * (0.5f + coh);
+            float coh = Materials[TypeId[slot]].Cohesion;
+            return nearDensity * NearPressureMultiplier * (0.5f + coh);
         }
 
         public void Execute(int k)
         {
-            int i = activeIndices[k];
-            float2 pi = predicted[i];
-            float densityI = densities[i].x;
-            float nearI = densities[i].y;
+            int i = ActiveIndices[k];
+            float2 pi = Predicted[i];
+            float densityI = Densities[i].x;
+            float nearI = Densities[i].y;
             if (densityI <= 1e-8f) return;
 
             float pressureI = Pressure(densityI, i);
             float nearPressureI = NearPressure(nearI, i);
 
-            float h2 = h * h;
-            float cd2 = KernelMath.DerivSpikyPow2Coef(h);
-            float cd3 = KernelMath.DerivSpikyPow3Coef(h);
+            float h2 = H * H;
+            float cd2 = KernelMath.DerivSpikyPow2Coef(H);
+            float cd3 = KernelMath.DerivSpikyPow3Coef(H);
 
             float2 pressureForce = float2.zero;
 
-            int2 ci = Liquid2DHashGrid.CellCoord(pi, invCellSize);
+            int2 ci = Liquid2DHashGrid.CellCoord(pi, InvCellSize);
             for (int dy = -1; dy <= 1; dy++)
             for (int dx = -1; dx <= 1; dx++)
             {
                 int2 qc = ci + new int2(dx, dy);
-                int b = Liquid2DHashGrid.Hash(qc, tableSize);
-                int start = cellStart[b];
-                int end = cellStart[b + 1];
+                int b = Liquid2DHashGrid.Hash(qc, TableSize);
+                int start = CellStart[b];
+                int end = CellStart[b + 1];
                 for (int s = start; s < end; s++)
                 {
-                    int j = sortedSlots[s];
+                    int j = SortedSlots[s];
                     if (j == i) continue;
-                    if (!Liquid2DHashGrid.CellCoord(predicted[j], invCellSize).Equals(qc)) continue;
-                    float2 offset = predicted[j] - pi;
+                    if (!Liquid2DHashGrid.CellCoord(Predicted[j], InvCellSize).Equals(qc)) continue;
+                    float2 offset = Predicted[j] - pi;
                     float r2 = lengthsq(offset);
                     if (r2 >= h2) continue;
                     float r = sqrt(r2);
                     float2 dir = r > 1e-6f ? offset / r : new float2(0f, 1f);
 
-                    float densityJ = densities[j].x;
-                    float nearJ = densities[j].y;
+                    float densityJ = Densities[j].x;
+                    float nearJ = Densities[j].y;
                     if (densityJ <= 1e-8f || nearJ <= 1e-8f) continue;
 
                     float pressureJ = Pressure(densityJ, j);
@@ -291,12 +287,12 @@ namespace Fs.Liquid2D
                     float sharedP = (pressureI + pressureJ) * 0.5f;
                     float sharedNear = (nearPressureI + nearPressureJ) * 0.5f;
 
-                    pressureForce += dir * KernelMath.DerivSpikyPow2(r, h, cd2) * sharedP / densityJ;
-                    pressureForce += dir * KernelMath.DerivSpikyPow3(r, h, cd3) * sharedNear / nearJ;
+                    pressureForce += dir * KernelMath.DerivSpikyPow2(r, H, cd2) * sharedP / densityJ;
+                    pressureForce += dir * KernelMath.DerivSpikyPow3(r, H, cd3) * sharedNear / nearJ;
                 }
             }
 
-            velocities[i] += (pressureForce / densityI) * dt;
+            Velocities[i] += (pressureForce / densityI) * DT;
         }
     }
 
@@ -309,51 +305,51 @@ namespace Fs.Liquid2D
     [BurstCompile]
     public struct SphViscosityJob : IJobParallelFor
     {
-        [ReadOnly] public NativeArray<int> activeIndices;
-        [ReadOnly] public NativeArray<float2> predicted;
-        [ReadOnly] public NativeArray<float2> velocities;
-        [ReadOnly] public NativeArray<int> typeId;
-        [ReadOnly] public NativeArray<Liquid2DMaterialData> materials;
-        [ReadOnly] public NativeArray<int> cellStart;
-        [ReadOnly] public NativeArray<int> sortedSlots;
-        public int tableSize;
-        public float invCellSize;
-        public float h;
-        public float viscosityStrength;
-        public float dt;
-        [WriteOnly, NativeDisableParallelForRestriction] public NativeArray<float2> velNext;
+        [ReadOnly] public NativeArray<int> ActiveIndices;
+        [ReadOnly] public NativeArray<float2> Predicted;
+        [ReadOnly] public NativeArray<float2> Velocities;
+        [ReadOnly] public NativeArray<int> TypeId;
+        [ReadOnly] public NativeArray<Liquid2DMaterialData> Materials;
+        [ReadOnly] public NativeArray<int> CellStart;
+        [ReadOnly] public NativeArray<int> SortedSlots;
+        public int TableSize;
+        public float InvCellSize;
+        public float H;
+        public float ViscosityStrength;
+        public float DT;
+        [WriteOnly, NativeDisableParallelForRestriction] public NativeArray<float2> VelNext;
 
         public void Execute(int k)
         {
-            int i = activeIndices[k];
-            float2 pi = predicted[i];
-            float2 vi = velocities[i];
-            float h2 = h * h;
-            float c6 = KernelMath.Poly6Coef(h);
-            float strength = viscosityStrength + materials[typeId[i]].viscosity;
+            int i = ActiveIndices[k];
+            float2 pi = Predicted[i];
+            float2 vi = Velocities[i];
+            float h2 = H * H;
+            float c6 = KernelMath.Poly6Coef(H);
+            float strength = ViscosityStrength + Materials[TypeId[i]].Viscosity;
 
             float2 force = float2.zero;
-            int2 ci = Liquid2DHashGrid.CellCoord(pi, invCellSize);
+            int2 ci = Liquid2DHashGrid.CellCoord(pi, InvCellSize);
             for (int dy = -1; dy <= 1; dy++)
             for (int dx = -1; dx <= 1; dx++)
             {
                 int2 qc = ci + new int2(dx, dy);
-                int b = Liquid2DHashGrid.Hash(qc, tableSize);
-                int start = cellStart[b];
-                int end = cellStart[b + 1];
+                int b = Liquid2DHashGrid.Hash(qc, TableSize);
+                int start = CellStart[b];
+                int end = CellStart[b + 1];
                 for (int s = start; s < end; s++)
                 {
-                    int j = sortedSlots[s];
+                    int j = SortedSlots[s];
                     if (j == i) continue;
-                    if (!Liquid2DHashGrid.CellCoord(predicted[j], invCellSize).Equals(qc)) continue;
-                    float r2 = lengthsq(pi - predicted[j]);
+                    if (!Liquid2DHashGrid.CellCoord(Predicted[j], InvCellSize).Equals(qc)) continue;
+                    float r2 = lengthsq(pi - Predicted[j]);
                     if (r2 >= h2) continue;
                     float r = sqrt(r2);
-                    force += (velocities[j] - vi) * KernelMath.Poly6(r, h, c6);
+                    force += (Velocities[j] - vi) * KernelMath.Poly6(r, H, c6);
                 }
             }
 
-            velNext[i] = vi + force * strength * dt;
+            VelNext[i] = vi + force * strength * DT;
         }
     }
 
@@ -361,14 +357,14 @@ namespace Fs.Liquid2D
     [BurstCompile]
     public struct CopyVelocityJob : IJobParallelFor
     {
-        [ReadOnly] public NativeArray<int> activeIndices;
-        [ReadOnly] public NativeArray<float2> velNext;
-        [NativeDisableParallelForRestriction] public NativeArray<float2> velocities;
+        [ReadOnly] public NativeArray<int> ActiveIndices;
+        [ReadOnly] public NativeArray<float2> VelNext;
+        [NativeDisableParallelForRestriction] public NativeArray<float2> Velocities;
 
         public void Execute(int k)
         {
-            int i = activeIndices[k];
-            velocities[i] = velNext[i];
+            int i = ActiveIndices[k];
+            Velocities[i] = VelNext[i];
         }
     }
 
@@ -382,54 +378,54 @@ namespace Fs.Liquid2D
     [BurstCompile]
     public struct SphIntegrateCollideJob : IJobParallelFor
     {
-        [ReadOnly] public NativeArray<int> activeIndices;
-        [NativeDisableParallelForRestriction] public NativeArray<float2> positions;
-        [NativeDisableParallelForRestriction] public NativeArray<float2> velocities;
-        [ReadOnly] public NativeArray<float> radii;
-        [ReadOnly] public NativeArray<float> invMass;
-        [ReadOnly] public NativeArray<int> typeId;
-        [ReadOnly] public NativeArray<Liquid2DMaterialData> materials;
-        [ReadOnly] public NativeArray<Liquid2DColliderData> colliders;
-        [ReadOnly] public NativeArray<float2> points;
-        public float dt;
-        public float collisionDamping;
+        [ReadOnly] public NativeArray<int> ActiveIndices;
+        [NativeDisableParallelForRestriction] public NativeArray<float2> Positions;
+        [NativeDisableParallelForRestriction] public NativeArray<float2> Velocities;
+        [ReadOnly] public NativeArray<float> Radii;
+        [ReadOnly] public NativeArray<float> InvMass;
+        [ReadOnly] public NativeArray<int> TypeId;
+        [ReadOnly] public NativeArray<Liquid2DMaterialData> Materials;
+        [ReadOnly] public NativeArray<Liquid2DColliderData> Colliders;
+        [ReadOnly] public NativeArray<float2> Points;
+        public float DT;
+        public float CollisionDamping;
         /// <summary>最大速度限制（0 = 不限制）。 // Max speed clamp (0 = unlimited). // 最大速度制限（0 = 無制限）。</summary>
-        public float maxSpeed;
-        public byte hasColliders;
-        public byte accumulate;                            // 1 时记录冲量。 // record impulse when 1. // 1 のとき力積記録。
-        [WriteOnly] public NativeArray<float2> outImpulse;  // 长度 activeCount。 // length activeCount.
-        [WriteOnly] public NativeArray<int> outBody;        // 长度 activeCount，-1 表示无。 // length activeCount, -1 = none.
+        public float MaxSpeed;
+        public byte HasColliders;
+        public byte Accumulate;                            // 1 时记录冲量。 // record impulse when 1. // 1 のとき力積記録。
+        [WriteOnly] public NativeArray<float2> OutImpulse;  // 长度 activeCount。 // length activeCount.
+        [WriteOnly] public NativeArray<int> OutBody;        // 长度 activeCount，-1 表示无。 // length activeCount, -1 = none.
 
         public void Execute(int k)
         {
-            int i = activeIndices[k];
-            float2 v = velocities[i];
+            int i = ActiveIndices[k];
+            float2 v = Velocities[i];
 
             // 速度限幅：防止压力爆炸导致粒子速度失控乱飞。
             // Speed clamp: prevents runaway particle velocities from pressure explosions.
             // 速度制限：圧力爆発によるパーティクル速度暴走を防ぐ。
-            if (maxSpeed > 0f)
+            if (MaxSpeed > 0f)
             {
                 float spd2 = dot(v, v);
-                if (spd2 > maxSpeed * maxSpeed)
-                    v = v * (maxSpeed / sqrt(spd2));
+                if (spd2 > MaxSpeed * MaxSpeed)
+                    v = v * (MaxSpeed / sqrt(spd2));
             }
 
-            float2 p = positions[i] + v * dt;
+            float2 p = Positions[i] + v * DT;
 
             float2 totalImpulse = float2.zero;
             int hitBody = -1;
 
-            if (hasColliders == 1)
+            if (HasColliders == 1)
             {
-                float pr = radii[i];
-                var mat = materials[typeId[i]];
-                float e = saturate(mat.restitution) * collisionDamping;
+                float pr = Radii[i];
+                var mat = Materials[TypeId[i]];
+                float e = saturate(mat.Restitution) * CollisionDamping;
 
-                for (int ci = 0; ci < colliders.Length; ci++)
+                for (int ci = 0; ci < Colliders.Length; ci++)
                 {
-                    var col = colliders[ci];
-                    if (!Liquid2DColliderMath.Project(col, points, p, pr, out float2 corr, out float2 n)) continue;
+                    var col = Colliders[ci];
+                    if (!Liquid2DColliderMath.Project(col, Points, p, pr, out float2 corr, out float2 n)) continue;
 
                     p += corr;
 
@@ -438,28 +434,28 @@ namespace Fs.Liquid2D
                     if (vn < 0f) v -= (1f + e) * vn * n;
 
                     // 摩擦：阻尼切向分量。 // Friction: damp tangential component. // 摩擦：接線減衰。
-                    if (mat.friction > 0f)
+                    if (mat.Friction > 0f)
                     {
                         float2 vt = v - dot(v, n) * n;
-                        v -= vt * mat.friction;
+                        v -= vt * mat.Friction;
                     }
 
-                    if (accumulate == 1 && col.dynamic == 1 && col.bodyIndex >= 0)
+                    if (Accumulate == 1 && col.Dynamic == 1 && col.BodyIndex >= 0)
                     {
-                        float mass = invMass[i] > 1e-6f ? 1f / invMass[i] : 0f;
-                        totalImpulse += -n * (length(corr) * mass / max(dt, 1e-5f));
-                        hitBody = col.bodyIndex;
+                        float mass = InvMass[i] > 1e-6f ? 1f / InvMass[i] : 0f;
+                        totalImpulse += -n * (length(corr) * mass / max(DT, 1e-5f));
+                        hitBody = col.BodyIndex;
                     }
                 }
             }
 
-            positions[i] = p;
-            velocities[i] = v;
+            Positions[i] = p;
+            Velocities[i] = v;
 
-            if (accumulate == 1)
+            if (Accumulate == 1)
             {
-                outImpulse[k] = totalImpulse;
-                outBody[k] = hitBody;
+                OutImpulse[k] = totalImpulse;
+                OutBody[k] = hitBody;
             }
         }
     }
@@ -477,33 +473,33 @@ namespace Fs.Liquid2D
     [BurstCompile]
     public struct DeadZoneKillJob : IJobParallelFor
     {
-        [ReadOnly] public NativeArray<int> activeIndices;
-        [ReadOnly] public NativeArray<float2> positions;
-        [ReadOnly] public NativeArray<int> groupId;
-        [ReadOnly] public NativeArray<Liquid2DDeadZoneData> deadZones;
-        [ReadOnly] public NativeArray<float2> points;
-        public int deadZoneCount;
-        [WriteOnly] public NativeArray<byte> killFlags;
+        [ReadOnly] public NativeArray<int> ActiveIndices;
+        [ReadOnly] public NativeArray<float2> Positions;
+        [ReadOnly] public NativeArray<int> GroupId;
+        [ReadOnly] public NativeArray<Liquid2DDeadZoneData> DeadZones;
+        [ReadOnly] public NativeArray<float2> Points;
+        public int DeadZoneCount;
+        [WriteOnly] public NativeArray<byte> KillFlags;
 
         public void Execute(int k)
         {
-            int i = activeIndices[k];
-            float2 p = positions[i];
-            int gi = groupId[i];
+            int i = ActiveIndices[k];
+            float2 p = Positions[i];
+            int gi = GroupId[i];
 
             byte kill = 0;
-            for (int z = 0; z < deadZoneCount; z++)
+            for (int z = 0; z < DeadZoneCount; z++)
             {
-                var dz = deadZones[z];
+                var dz = DeadZones[z];
                 // 组过滤：matchAll（空 nameTag）销毁全部，否则仅销毁 groupId 匹配的粒子。
                 // Group filter: matchAll (empty nameTag) kills all; otherwise only matching groupId.
                 // グループ絞り込み：matchAll は全破棄、それ以外は groupId 一致のみ。
-                if (dz.matchAll == 0 && dz.groupId != gi) continue;
+                if (dz.MatchAll == 0 && dz.GroupId != gi) continue;
                 // particleRadius=0 → "点是否在实心形状内"。Bounds 模式（invert）反转为"在形状外"。
                 // particleRadius=0 → point-inside-solid test. Bounds mode (invert) flips it to "outside the shape".
                 // particleRadius=0 → 点が実心形状内か。Bounds モード（invert）は"形状外"に反転。
-                bool inside = Liquid2DColliderMath.Project(dz.shape, points, p, 0f, out _, out _);
-                if (dz.invert != 0) inside = !inside;
+                bool inside = Liquid2DColliderMath.Project(dz.Shape, Points, p, 0f, out _, out _);
+                if (dz.Invert != 0) inside = !inside;
                 if (inside)
                 {
                     kill = 1;
@@ -511,7 +507,7 @@ namespace Fs.Liquid2D
                 }
             }
 
-            killFlags[k] = kill;
+            KillFlags[k] = kill;
         }
     }
 
@@ -525,84 +521,84 @@ namespace Fs.Liquid2D
     [BurstCompile]
     public struct MixColorJob : IJobParallelFor
     {
-        [ReadOnly] public NativeArray<int> activeIndices;
-        [ReadOnly] public NativeArray<float2> positions;
-        [ReadOnly] public NativeArray<float2> velocities;
-        [ReadOnly] public NativeArray<float4> colors;
-        [ReadOnly] public NativeArray<int> typeId;
-        [ReadOnly] public NativeArray<int> groupId;
-        [ReadOnly] public NativeArray<float> radii;
-        [ReadOnly] public NativeArray<Liquid2DMixData> mixData;
-        [ReadOnly] public NativeArray<int> cellStart;
-        [ReadOnly] public NativeArray<int> sortedSlots;
-        public int tableSize;
-        public float invCellSize;
-        public float time;
-        [NativeDisableParallelForRestriction] public NativeArray<float> lastMixTime;
-        [WriteOnly, NativeDisableParallelForRestriction] public NativeArray<float4> colorsNext;
+        [ReadOnly] public NativeArray<int> ActiveIndices;
+        [ReadOnly] public NativeArray<float2> Positions;
+        [ReadOnly] public NativeArray<float2> Velocities;
+        [ReadOnly] public NativeArray<float4> Colors;
+        [ReadOnly] public NativeArray<int> TypeId;
+        [ReadOnly] public NativeArray<int> GroupId;
+        [ReadOnly] public NativeArray<float> Radii;
+        [ReadOnly] public NativeArray<Liquid2DMixData> MixData;
+        [ReadOnly] public NativeArray<int> CellStart;
+        [ReadOnly] public NativeArray<int> SortedSlots;
+        public int TableSize;
+        public float InvCellSize;
+        public float Time;
+        [NativeDisableParallelForRestriction] public NativeArray<float> LastMixTime;
+        [WriteOnly, NativeDisableParallelForRestriction] public NativeArray<float4> ColorsNext;
 
         public void Execute(int k)
         {
-            int i = activeIndices[k];
-            float4 ci = colors[i];
-            var mi = mixData[typeId[i]];
+            int i = ActiveIndices[k];
+            float4 ci = Colors[i];
+            var mi = MixData[TypeId[i]];
 
-            if (mi.enabled == 0 || mi.speed <= 0f)
+            if (mi.Enabled == 0 || mi.Speed <= 0f)
             {
-                colorsNext[i] = ci;
+                ColorsNext[i] = ci;
                 return;
             }
-            if (time - lastMixTime[i] < mi.interval)
+            if (Time - LastMixTime[i] < mi.Interval)
             {
-                colorsNext[i] = ci;
+                ColorsNext[i] = ci;
                 return;
             }
 
-            int gi = groupId[i];
-            float2 pi = positions[i];
-            float ri = radii[i];
+            int gi = GroupId[i];
+            float2 pi = Positions[i];
+            float ri = Radii[i];
 
             float4 accum = float4.zero;
             float wsum = 0f;
-            int2 cc = Liquid2DHashGrid.CellCoord(pi, invCellSize);
+            int2 cc = Liquid2DHashGrid.CellCoord(pi, InvCellSize);
             for (int dy = -1; dy <= 1; dy++)
             for (int dx = -1; dx <= 1; dx++)
             {
                 int2 qc = cc + new int2(dx, dy);
-                int b = Liquid2DHashGrid.Hash(qc, tableSize);
-                int start = cellStart[b];
-                int end = cellStart[b + 1];
+                int b = Liquid2DHashGrid.Hash(qc, TableSize);
+                int start = CellStart[b];
+                int end = CellStart[b + 1];
                 for (int s = start; s < end; s++)
                 {
-                    int j = sortedSlots[s];
+                    int j = SortedSlots[s];
                     if (j == i) continue;
-                    if (!Liquid2DHashGrid.CellCoord(positions[j], invCellSize).Equals(qc)) continue;
+                    if (!Liquid2DHashGrid.CellCoord(Positions[j], InvCellSize).Equals(qc)) continue;
                     // group 兼容：相等或任一为 0（空 nameTag 通配）。 // group compatible: equal or either is 0 (empty nameTag wildcard). // group 互換。
-                    int gj = groupId[j];
+                    int gj = GroupId[j];
                     if (gi != gj && gi != 0 && gj != 0) continue;
-                    if (mixData[typeId[j]].enabled == 0) continue;
-                    float contact = ri + radii[j];
-                    if (lengthsq(pi - positions[j]) >= contact * contact) continue;
-                    accum += colors[j];
+                    if (MixData[TypeId[j]].Enabled == 0) continue;
+                    float contact = ri + Radii[j];
+                    if (lengthsq(pi - Positions[j]) >= contact * contact) continue;
+                    accum += Colors[j];
                     wsum += 1f;
                 }
             }
 
             if (wsum <= 0f)
             {
-                colorsNext[i] = ci;
+                ColorsNext[i] = ci;
                 return;
             }
 
             float4 avg = (accum + ci) / (wsum + 1f);
-            float speed = mi.speed;
-            if (speed < 1f && mi.withMovement == 1)
+            float speed = mi.Speed;
+            if (speed < 1f && mi.WithMovement == 1)
             {
-                float vf = saturate(lengthsq(velocities[i]) / max(1e-4f, mi.maxSpeed * mi.maxSpeed));
+                float vf = saturate(lengthsq(Velocities[i]) / max(1e-4f, mi.MaxSpeed * mi.MaxSpeed));
                 speed = saturate(speed + vf * (1f - speed));
             }
-            colorsNext[i] = lerp(ci, avg, speed);
-            lastMixTime[i] = time;
+            ColorsNext[i] = lerp(ci, avg, speed);
+            LastMixTime[i] = Time;
         }
     }
 }

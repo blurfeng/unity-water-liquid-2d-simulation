@@ -63,21 +63,21 @@ namespace Fs.Liquid2D
 
                 _dataScratch.Add(new Liquid2DDeadZoneData
                 {
-                    shape = shape,
-                    groupId = group,
-                    matchAll = (byte)(matchAll ? 1 : 0),
-                    invert = (byte)(z.BoundsMode ? 1 : 0),
+                    Shape = shape,
+                    GroupId = group,
+                    MatchAll = (byte)(matchAll ? 1 : 0),
+                    Invert = (byte)(z.BoundsMode ? 1 : 0),
                 });
             }
 
             var buffer = new Liquid2DDeadZoneBuffer();
             int n = _dataScratch.Count;
-            buffer.zones = new NativeArray<Liquid2DDeadZoneData>(n, allocator, NativeArrayOptions.UninitializedMemory);
-            for (int i = 0; i < n; i++) buffer.zones[i] = _dataScratch[i];
+            buffer.Zones = new NativeArray<Liquid2DDeadZoneData>(n, allocator, NativeArrayOptions.UninitializedMemory);
+            for (int i = 0; i < n; i++) buffer.Zones[i] = _dataScratch[i];
 
             int pcount = math.max(1, _pointScratch.Count); // 至少 1 长度避免零长 NativeArray 边角。 // at least length 1. // 最低長さ 1。
-            buffer.points = new NativeArray<float2>(pcount, allocator, NativeArrayOptions.UninitializedMemory);
-            for (int i = 0; i < _pointScratch.Count; i++) buffer.points[i] = _pointScratch[i];
+            buffer.Points = new NativeArray<float2>(pcount, allocator, NativeArrayOptions.UninitializedMemory);
+            for (int i = 0; i < _pointScratch.Count; i++) buffer.Points[i] = _pointScratch[i];
 
             return buffer;
         }

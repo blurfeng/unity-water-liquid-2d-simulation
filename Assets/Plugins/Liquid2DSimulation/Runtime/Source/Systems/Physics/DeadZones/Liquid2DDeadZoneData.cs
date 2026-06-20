@@ -14,13 +14,13 @@ namespace Fs.Liquid2D
     public struct Liquid2DDeadZoneData
     {
         /// <summary>形状描述（复用碰撞体形状；多边形顶点存于共享 points 数组）。 // Shape (reuses collider shape; polygon vertices in shared points). // 形状記述。</summary>
-        public Liquid2DColliderData shape;
+        public Liquid2DColliderData Shape;
 
         /// <summary>过滤的目标组（nameTag 解析得到）。 // Target group to filter by (resolved from nameTag). // 絞り込み対象グループ。</summary>
-        public int groupId;
+        public int GroupId;
 
         /// <summary>1=销毁区域内全部粒子（空 nameTag）；0=仅销毁 groupId 匹配的粒子。 // 1 = kill all particles in range (empty nameTag); 0 = only matching groupId. // 1=範囲内全粒子、0=groupId 一致のみ。</summary>
-        public byte matchAll;
+        public byte MatchAll;
 
         /// <summary>
         /// Bounds 模式：1=销毁形状"外"的粒子（区域作为容器边界，逃逸者被回收）；0=默认，销毁形状"内"的粒子。
@@ -28,7 +28,7 @@ namespace Fs.Liquid2D
         /// recycled); 0 = default, destroy particles "inside" the shape.
         /// Bounds モード：1=形状の"外"の粒子を破棄（領域を容器境界として扱い、逃げた粒子を回収）、0=既定で形状"内"を破棄。
         /// </summary>
-        public byte invert;
+        public byte Invert;
     }
 
     /// <summary>
@@ -38,10 +38,10 @@ namespace Fs.Liquid2D
     /// </summary>
     public struct Liquid2DDeadZoneBuffer
     {
-        [ReadOnly] public NativeArray<Liquid2DDeadZoneData> zones;
-        [ReadOnly] public NativeArray<float2> points; // 多边形/边链共享顶点。 // shared polygon/edge vertices. // 共有頂点。
+        [ReadOnly] public NativeArray<Liquid2DDeadZoneData> Zones;
+        [ReadOnly] public NativeArray<float2> Points; // 多边形/边链共享顶点。 // shared polygon/edge vertices. // 共有頂点。
 
-        public bool IsCreated => zones.IsCreated;
-        public int Count => zones.IsCreated ? zones.Length : 0;
+        public bool IsCreated => Zones.IsCreated;
+        public int Count => Zones.IsCreated ? Zones.Length : 0;
     }
 }

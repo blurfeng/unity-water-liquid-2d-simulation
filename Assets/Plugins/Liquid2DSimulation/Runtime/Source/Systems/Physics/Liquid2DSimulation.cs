@@ -36,7 +36,7 @@ namespace Fs.Liquid2D
         }
 
         /// <summary>每个 nameTag 组的最大存活粒子数（&lt;=0 不限）。超出回收最旧。 // Max alive particles per nameTag group (&lt;=0 = unlimited). // nameTag グループごとの最大生存数。</summary>
-        public static int MaxParticlesPerTag { get; set; } = 0;
+        public static int MaxParticlesPerTag { get; set; }
 
         /// <summary>全局求解参数（由 Liquid2DPhysicsConfig 配置）。 // Global solver params (configured by Liquid2DPhysicsConfig). // グローバル解法パラメータ。</summary>
         public static SolverParams Params = SolverParams.Default;
@@ -148,8 +148,8 @@ namespace Fs.Liquid2D
             for (int i = 0; i < _descriptors.Count; i++)
             {
                 var d = _descriptors[i];
-                _materials[i] = d != null && d.material != null ? d.material.ToData() : Liquid2DMaterialData.Default;
-                _mixData[i] = BuildMix(d != null ? d.mixSettings : null);
+                _materials[i] = d != null && d.Material != null ? d.Material.ToData() : Liquid2DMaterialData.Default;
+                _mixData[i] = BuildMix(d != null ? d.MixSettings : null);
             }
             _materialsDirty = false;
         }
@@ -159,11 +159,11 @@ namespace Fs.Liquid2D
             if (m == null) return Liquid2DMixData.Disabled;
             return new Liquid2DMixData
             {
-                enabled = (byte)(m.mixColors ? 1 : 0),
-                speed = m.mixColorsSpeed,
-                withMovement = (byte)(m.mixColorsWithMovement ? 1 : 0),
-                maxSpeed = m.mixColorsWithMovementMaxSpeed,
-                interval = m.mixColorsWithContactParticlesInternal,
+                Enabled = (byte)(m.MixColors ? 1 : 0),
+                Speed = m.MixColorsSpeed,
+                WithMovement = (byte)(m.MixColorsWithMovement ? 1 : 0),
+                MaxSpeed = m.MixColorsWithMovementMaxSpeed,
+                Interval = m.MixColorsWithContactParticlesInternal,
             };
         }
 
@@ -182,13 +182,13 @@ namespace Fs.Liquid2D
             if (!d) return Liquid2DParticleHandle.Invalid;
 
             int typeId = RegisterDescriptor(d);
-            int group = GetGroup(d.renderSettings != null ? d.renderSettings.nameTag : null);
-            float radius = math.max(0.001f, d.radius * sizeScale);
-            float mass = d.material != null ? d.material.mass : 1f;
-            Color c = d.renderSettings != null ? d.renderSettings.color : Color.white;
+            int group = GetGroup(d.RenderSettings != null ? d.RenderSettings.NameTag : null);
+            float radius = math.max(0.001f, d.Radius * sizeScale);
+            float mass = d.Material != null ? d.Material.Mass : 1f;
+            Color c = d.RenderSettings != null ? d.RenderSettings.Color : Color.white;
             float now = Time.time;
 
-            float life = lifetimeOverride > 0f ? lifetimeOverride : d.defaultLifetime;
+            float life = lifetimeOverride > 0f ? lifetimeOverride : d.DefaultLifetime;
             float lifeEnd = life > 0f ? now + life : -1f;
 
             var handle = _store.Allocate(position, velocity, new float4(c.r, c.g, c.b, c.a),
@@ -265,7 +265,7 @@ namespace Fs.Liquid2D
             int count = RebuildActiveIndices();
             if (count == 0) { _gpuPendingSpawns.Clear(); return; }
 
-            if (Params.h <= 0f) Params = SolverParams.Default;
+            if (Params.H <= 0f) Params = SolverParams.Default;
 
             var colliders = Liquid2DColliderRegistry.BuildBuffer(Allocator.TempJob, _dynamicReceivers);
             var impulse = new NativeArray<float2>(math.max(1, _dynamicReceivers.Count), Allocator.TempJob, NativeArrayOptions.ClearMemory);
@@ -280,25 +280,26 @@ namespace Fs.Liquid2D
 
             var ctx = new Liquid2DSolveContext
             {
-                store = _store,
-                activeIndices = _activeIndices,
-                activeCount = count,
-                materials = _materials,
-                mixData = _mixData,
-                colliders = colliders,
-                colliderImpulse = impulse,
-                forceFields = forceFields,
-                deadZones = deadZones,
-                deadZoneCount = deadZoneCount,
-                killFlags = killFlags,
-                time = now,
-                dynamicBodyCount = _dynamicReceivers.Count,
-                gpuPendingSpawns = _gpuPendingSpawns,
+                Store = _store,
+                ActiveIndices = _activeIndices,
+                ActiveCount = count,
+                Materials = _materials,
+                MixData = _mixData,
+                Colliders = colliders,
+                ColliderImpulse = impulse,
+                ForceFields = forceFields,
+                DeadZones = deadZones,
+                DeadZoneCount = deadZoneCount,
+                KillFlags = killFlags,
+                Time = now,
+                DynamicBodyCount = _dynamicReceivers.Count,
+                GPUPendingSpawns = _gpuPendingSpawns,
             };
 
             // try/finally 确保即使 Step 抛异常也释放 TempJob 缓冲，避免泄漏。 // Ensure TempJob buffers are freed even if Step throws. // 例外時もバッファ解放。
             try
             {
+                if (_solver == null) return;
                 _solver.Step(ctx, Params, Time.fixedDeltaTime);
 
                 // 增量上传列表本帧已消费，清空。 // Pending spawn list consumed this frame; clear. // 消費したのでクリア。
@@ -320,12 +321,12 @@ namespace Fs.Liquid2D
             }
             finally
             {
-                colliders.colliders.Dispose();
-                colliders.points.Dispose();
+                colliders.Colliders.Dispose();
+                colliders.Points.Dispose();
                 impulse.Dispose();
-                if (forceFields.fields.IsCreated) forceFields.fields.Dispose();
-                if (deadZones.zones.IsCreated) deadZones.zones.Dispose();
-                if (deadZones.points.IsCreated) deadZones.points.Dispose();
+                if (forceFields.Fields.IsCreated) forceFields.Fields.Dispose();
+                if (deadZones.Zones.IsCreated) deadZones.Zones.Dispose();
+                if (deadZones.Points.IsCreated) deadZones.Points.Dispose();
                 if (killFlags.IsCreated) killFlags.Dispose();
             }
         }
@@ -421,9 +422,9 @@ namespace Fs.Liquid2D
         /// GPU solver is active and has particles. Buffers are slot-indexed; use activeIndices to indirect.
         /// GPU モード：常駐 GPU バッファを直読するため。
         /// </summary>
-        public static bool TryGetRenderBuffers(out UnityEngine.ComputeBuffer positions, out UnityEngine.ComputeBuffer colors,
-            out UnityEngine.ComputeBuffer radii, out UnityEngine.ComputeBuffer typeIds, out UnityEngine.ComputeBuffer activeIndices,
-            out UnityEngine.ComputeBuffer velocities, out int count, out IReadOnlyList<Liquid2DParticleDescriptor> descriptors)
+        public static bool TryGetRenderBuffers(out ComputeBuffer positions, out ComputeBuffer colors,
+            out ComputeBuffer radii, out ComputeBuffer typeIds, out ComputeBuffer activeIndices,
+            out ComputeBuffer velocities, out int count, out IReadOnlyList<Liquid2DParticleDescriptor> descriptors)
         {
             positions = colors = radii = typeIds = activeIndices = velocities = null; count = 0; descriptors = null;
             var inst = _instance;

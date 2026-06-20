@@ -18,7 +18,7 @@ namespace Fs.Liquid2D
     /// エディタ用デバッグ可視化：各流体粒子の物理半径と描画サイズを Scene ビューに描画し、radius と Sprite 融合サイズの比率調整を補助します。
     /// 純データアーキテクチャでは粒子に GameObject が無いため、本コンポーネントが <see cref="Liquid2DSimulation"/> の SoA を読み描画します。データは実行時（Play）のみ。
     /// </summary>
-    [AddComponentMenu("Liquid2D/Liquid2D Debug Gizmos")]
+    [AddComponentMenu("Liquid2D/Gameplay/Liquid2D Debug Gizmos")]
     public class Liquid2DDebugGizmos : MonoBehaviour
     {
         [SerializeField, LocalizationTooltip(
@@ -109,8 +109,8 @@ namespace Fs.Liquid2D
                     // 可視直径 = radius × 2 × renderScale ⇒ 可視半径 = radius × renderScale。
                     float scale = 1f;
                     int t = store.typeId[slot];
-                    if (descriptors != null && t >= 0 && t < descriptors.Count && descriptors[t] != null)
-                        scale = descriptors[t].renderScale;
+                    if (descriptors != null && t >= 0 && t < descriptors.Count && descriptors[t])
+                        scale = descriptors[t].RenderScale;
                     Handles.color = renderColor;
                     Handles.DrawWireDisc(center, forward, r * scale);
                 }

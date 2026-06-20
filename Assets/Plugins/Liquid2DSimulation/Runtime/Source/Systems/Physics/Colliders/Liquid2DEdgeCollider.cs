@@ -26,12 +26,13 @@ namespace Fs.Liquid2D
         private void Awake()
         {
             CachePointsFromEdge();
+
 #if !UNITY_EDITOR
             // 打包后移除 EdgeCollider2D，避免其参与 Unity 物理模拟。
             // Remove EdgeCollider2D in builds to prevent it from participating in Unity physics simulation.
             // ビルド後は EdgeCollider2D を削除し、Unity の物理シミュレーションへの参加を防ぎます。
             var ec = GetComponent<EdgeCollider2D>();
-            if (ec != null) Destroy(ec);
+            if (ec) Destroy(ec);
 #endif
         }
 
@@ -49,29 +50,27 @@ namespace Fs.Liquid2D
         private void CachePointsFromEdge()
         {
             var ec = GetComponent<EdgeCollider2D>();
-            if (ec == null) return;
+            if (!ec) return;
             _cachedPoints = ec.points;
             _cachedEdgeRadius = ec.edgeRadius;
         }
 
         public override void Fill(ref Liquid2DColliderData data, List<float2> pointsAccum)
         {
-            data.shape = Liquid2DColliderShape.EdgeChain;
-            data.center = WorldCenter;
-            data.pointStart = pointsAccum.Count;
+            data.Shape = Liquid2DColliderShape.EdgeChain;
+            data.Center = WorldCenter;
+            data.PointStart = pointsAccum.Count;
 
-            Vector2[] pts;
-            float edgeRadius;
 #if UNITY_EDITOR
             // 编辑器中直接读，以响应顶点拖拽和 edgeRadius 修改。 // Read directly in editor to reflect vertex/radius edits live.
             var ec = GetComponent<EdgeCollider2D>();
-            pts = ec != null ? ec.points : _cachedPoints;
-            edgeRadius = ec != null ? ec.edgeRadius : _cachedEdgeRadius;
+            var pts = ec ? ec.points : _cachedPoints;
+            var edgeRadius = ec ? ec.edgeRadius : _cachedEdgeRadius;
 #else
             pts = _cachedPoints;
             edgeRadius = _cachedEdgeRadius;
 #endif
-            data.radius = edgeRadius;
+            data.Radius = edgeRadius;
 
             int n = pts?.Length ?? 0;
             if (pts != null)
@@ -83,14 +82,14 @@ namespace Fs.Liquid2D
                 }
             }
 
-            data.pointCount = n;
+            data.PointCount = n;
         }
 
 #if UNITY_EDITOR
         private void OnDrawGizmosSelected()
         {
             var ec = GetComponent<EdgeCollider2D>();
-            Vector2[] pts = ec != null ? ec.points : _cachedPoints;
+            Vector2[] pts = ec ? ec.points : _cachedPoints;
             if (pts == null || pts.Length < 2) return;
             Gizmos.color = new Color(1f, 0.7f, 0.2f, 0.6f);
             for (int i = 0; i < pts.Length - 1; i++)

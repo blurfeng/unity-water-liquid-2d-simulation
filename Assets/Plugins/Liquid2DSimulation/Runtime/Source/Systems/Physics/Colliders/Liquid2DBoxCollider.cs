@@ -19,10 +19,10 @@ namespace Fs.Liquid2D
         public override void Fill(ref Liquid2DColliderData data, List<float2> pointsAccum)
         {
             Vector3 ls = CachedTransform.lossyScale;
-            data.shape = Liquid2DColliderShape.Box;
-            data.center = WorldCenter;
-            data.rotation = ZRotationRadians;
-            data.size = new float2(0.5f * size.x * Mathf.Abs(ls.x), 0.5f * size.y * Mathf.Abs(ls.y));
+            data.Shape = Liquid2DColliderShape.Box;
+            data.Center = WorldCenter;
+            data.Rotation = ZRotationRadians;
+            data.Size = new float2(0.5f * size.x * Mathf.Abs(ls.x), 0.5f * size.y * Mathf.Abs(ls.y));
         }
 
 #if UNITY_EDITOR

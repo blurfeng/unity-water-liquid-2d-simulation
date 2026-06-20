@@ -22,12 +22,12 @@ namespace Fs.Liquid2D
     /// </summary>
     public struct Liquid2DHashGrid
     {
-        public NativeArray<int> cellStart;   // 长度 tableSize+1。 // length tableSize+1. // 長さ tableSize+1。
-        public NativeArray<int> sortedSlots; // 长度 activeCount，按桶排序的 slot id。 // length activeCount, slot ids sorted by bucket. // 長さ activeCount。
-        public int tableSize;
-        public float invCellSize;
+        public NativeArray<int> CellStart;   // 长度 tableSize+1。 // length tableSize+1. // 長さ tableSize+1。
+        public NativeArray<int> SortedSlots; // 长度 activeCount，按桶排序的 slot id。 // length activeCount, slot ids sorted by bucket. // 長さ activeCount。
+        public int TableSize;
+        public float InvCellSize;
 
-        public bool IsCreated => cellStart.IsCreated;
+        public bool IsCreated => CellStart.IsCreated;
 
         public static int2 CellCoord(float2 p, float invCell) => (int2)floor(p * invCell);
 
@@ -53,46 +53,46 @@ namespace Fs.Liquid2D
     [BurstCompile]
     public struct BuildHashGridJob : IJob
     {
-        [ReadOnly] public NativeArray<float2> predicted;
-        [ReadOnly] public NativeArray<int> activeIndices;
-        public int activeCount;
-        public int tableSize;
-        public float invCellSize;
+        [ReadOnly] public NativeArray<float2> Predicted;
+        [ReadOnly] public NativeArray<int> ActiveIndices;
+        public int ActiveCount;
+        public int TableSize;
+        public float InvCellSize;
 
-        [WriteOnly] public NativeArray<int> cellStart;   // tableSize+1
-        [WriteOnly] public NativeArray<int> sortedSlots; // activeCount
+        [WriteOnly] public NativeArray<int> CellStart;   // tableSize+1
+        [WriteOnly] public NativeArray<int> SortedSlots; // activeCount
 
         public void Execute()
         {
-            var counts = new NativeArray<int>(tableSize, Allocator.Temp, NativeArrayOptions.ClearMemory);
-            var bucketOfK = new NativeArray<int>(activeCount, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
+            var counts = new NativeArray<int>(TableSize, Allocator.Temp, NativeArrayOptions.ClearMemory);
+            var bucketOfK = new NativeArray<int>(ActiveCount, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
 
-            for (int k = 0; k < activeCount; k++)
+            for (int k = 0; k < ActiveCount; k++)
             {
-                int slot = activeIndices[k];
-                int2 cc = Liquid2DHashGrid.CellCoord(predicted[slot], invCellSize);
-                int b = Liquid2DHashGrid.Hash(cc, tableSize);
+                int slot = ActiveIndices[k];
+                int2 cc = Liquid2DHashGrid.CellCoord(Predicted[slot], InvCellSize);
+                int b = Liquid2DHashGrid.Hash(cc, TableSize);
                 bucketOfK[k] = b;
                 counts[b] = counts[b] + 1;
             }
 
             // 前缀和 → 每个桶的起始写位置。 // Prefix sum → start write position per bucket. // 前置和 → 各バケットの開始書込位置。
             int acc = 0;
-            var cursor = new NativeArray<int>(tableSize, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
-            for (int b = 0; b < tableSize; b++)
+            var cursor = new NativeArray<int>(TableSize, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
+            for (int b = 0; b < TableSize; b++)
             {
-                cellStart[b] = acc;
+                CellStart[b] = acc;
                 cursor[b] = acc;
                 acc += counts[b];
             }
-            cellStart[tableSize] = acc;
+            CellStart[TableSize] = acc;
 
-            for (int k = 0; k < activeCount; k++)
+            for (int k = 0; k < ActiveCount; k++)
             {
                 int b = bucketOfK[k];
                 int pos = cursor[b];
                 cursor[b] = pos + 1;
-                sortedSlots[pos] = activeIndices[k];
+                SortedSlots[pos] = ActiveIndices[k];
             }
 
             counts.Dispose();

@@ -76,20 +76,20 @@ namespace Fs.Liquid2D
                 for (int j = startIdx; j < _dataScratch.Count; j++)
                 {
                     var d = _dataScratch[j];
-                    d.dynamic = dynFlag;
-                    d.bodyIndex = bodyIdx;
+                    d.Dynamic = dynFlag;
+                    d.BodyIndex = bodyIdx;
                     _dataScratch[j] = d;
                 }
             }
 
             var buffer = new Liquid2DColliderBuffer();
             int n = _dataScratch.Count;
-            buffer.colliders = new NativeArray<Liquid2DColliderData>(n, allocator, NativeArrayOptions.UninitializedMemory);
-            for (int i = 0; i < n; i++) buffer.colliders[i] = _dataScratch[i];
+            buffer.Colliders = new NativeArray<Liquid2DColliderData>(n, allocator, NativeArrayOptions.UninitializedMemory);
+            for (int i = 0; i < n; i++) buffer.Colliders[i] = _dataScratch[i];
 
             int pcount = math.max(1, _pointScratch.Count); // 至少 1 长度避免零长 NativeArray 边角。 // at least length 1. // 最低長さ 1。
-            buffer.points = new NativeArray<float2>(pcount, allocator, NativeArrayOptions.UninitializedMemory);
-            for (int i = 0; i < _pointScratch.Count; i++) buffer.points[i] = _pointScratch[i];
+            buffer.Points = new NativeArray<float2>(pcount, allocator, NativeArrayOptions.UninitializedMemory);
+            for (int i = 0; i < _pointScratch.Count; i++) buffer.Points[i] = _pointScratch[i];
 
             return buffer;
         }

@@ -26,9 +26,9 @@ namespace Fs.Liquid2D
 
         private struct CachedShape
         {
-            public Liquid2DColliderShape liquid2DShape;
-            public float radius;
-            public Vector2[] localPoints; // Circle:1点(中心); Capsule:2点(端点); Polygon/EdgeChain:N点。
+            public Liquid2DColliderShape Liquid2DShape;
+            public float Radius;
+            public Vector2[] LocalPoints; // Circle:1点(中心); Capsule:2点(端点); Polygon/EdgeChain:N点。
         }
 
         // Shape 属性由 FillAll 覆写，此处返回 Circle 作为占位，不影响实际行为。
@@ -58,7 +58,7 @@ namespace Fs.Liquid2D
         public void RefreshShapes()
         {
             var cc = GetComponent<CustomCollider2D>();
-            if (cc == null) { _cachedShapes = null; return; }
+            if (!cc) { _cachedShapes = null; return; }
 
             var group = new PhysicsShapeGroup2D();
             cc.GetCustomShapes(group);
@@ -71,33 +71,33 @@ namespace Fs.Liquid2D
             {
                 PhysicsShape2D ps = group.GetShape(i);
                 CachedShape cs;
-                cs.radius = ps.radius;
-                cs.localPoints = null;
+                cs.Radius = ps.radius;
+                cs.LocalPoints = null;
 
                 switch (ps.shapeType)
                 {
                     case PhysicsShapeType2D.Circle:
-                        cs.liquid2DShape = Liquid2DColliderShape.Circle;
-                        cs.localPoints = new Vector2[] { group.GetShapeVertex(i, 0) };
+                        cs.Liquid2DShape = Liquid2DColliderShape.Circle;
+                        cs.LocalPoints = new[] { group.GetShapeVertex(i, 0) };
                         break;
 
                     case PhysicsShapeType2D.Capsule:
-                        cs.liquid2DShape = Liquid2DColliderShape.Capsule;
-                        cs.localPoints = new Vector2[] { group.GetShapeVertex(i, 0), group.GetShapeVertex(i, 1) };
+                        cs.Liquid2DShape = Liquid2DColliderShape.Capsule;
+                        cs.LocalPoints = new[] { group.GetShapeVertex(i, 0), group.GetShapeVertex(i, 1) };
                         break;
 
                     case PhysicsShapeType2D.Polygon:
-                        cs.liquid2DShape = Liquid2DColliderShape.Polygon;
-                        cs.localPoints = new Vector2[ps.vertexCount];
+                        cs.Liquid2DShape = Liquid2DColliderShape.Polygon;
+                        cs.LocalPoints = new Vector2[ps.vertexCount];
                         for (int j = 0; j < ps.vertexCount; j++)
-                            cs.localPoints[j] = group.GetShapeVertex(i, j);
+                            cs.LocalPoints[j] = group.GetShapeVertex(i, j);
                         break;
 
                     case PhysicsShapeType2D.Edges:
-                        cs.liquid2DShape = Liquid2DColliderShape.EdgeChain;
-                        cs.localPoints = new Vector2[ps.vertexCount];
+                        cs.Liquid2DShape = Liquid2DColliderShape.EdgeChain;
+                        cs.LocalPoints = new Vector2[ps.vertexCount];
                         for (int j = 0; j < ps.vertexCount; j++)
-                            cs.localPoints[j] = group.GetShapeVertex(i, j);
+                            cs.LocalPoints[j] = group.GetShapeVertex(i, j);
                         break;
 
                     default:
@@ -124,15 +124,15 @@ namespace Fs.Liquid2D
             for (int s = 0; s < _cachedShapes.Length; s++)
             {
                 ref readonly CachedShape cs = ref _cachedShapes[s];
-                var data = new Liquid2DColliderData { shape = cs.liquid2DShape };
+                var data = new Liquid2DColliderData { Shape = cs.Liquid2DShape };
 
-                switch (cs.liquid2DShape)
+                switch (cs.Liquid2DShape)
                 {
                     case Liquid2DColliderShape.Circle:
                     {
-                        Vector3 wc = CachedTransform.TransformPoint(cs.localPoints[0]);
-                        data.center = new float2(wc.x, wc.y);
-                        data.radius = cs.radius * scale;
+                        Vector3 wc = CachedTransform.TransformPoint(cs.LocalPoints[0]);
+                        data.Center = new float2(wc.x, wc.y);
+                        data.Radius = cs.Radius * scale;
                         break;
                     }
 
@@ -141,33 +141,33 @@ namespace Fs.Liquid2D
                         // 将两端点变换至世界坐标后推导胶囊中心、半长及旋转角。
                         // Derive capsule center, half-length, and rotation from the two world-space endpoints.
                         // 2端点をワールド変換し、カプセルの中心・半長・回転を算出。
-                        Vector3 w0 = CachedTransform.TransformPoint(cs.localPoints[0]);
-                        Vector3 w1 = CachedTransform.TransformPoint(cs.localPoints[1]);
+                        Vector3 w0 = CachedTransform.TransformPoint(cs.LocalPoints[0]);
+                        Vector3 w1 = CachedTransform.TransformPoint(cs.LocalPoints[1]);
                         float2 fw0 = new float2(w0.x, w0.y);
                         float2 fw1 = new float2(w1.x, w1.y);
                         float2 dir = fw1 - fw0;
-                        data.center = (fw0 + fw1) * 0.5f;
-                        data.size = new float2(math.length(dir) * 0.5f, 0f);
-                        data.rotation = math.atan2(dir.y, dir.x);
-                        data.radius = cs.radius * scale;
+                        data.Center = (fw0 + fw1) * 0.5f;
+                        data.Size = new float2(math.length(dir) * 0.5f, 0f);
+                        data.Rotation = math.atan2(dir.y, dir.x);
+                        data.Radius = cs.Radius * scale;
                         break;
                     }
 
                     case Liquid2DColliderShape.Polygon:
                     case Liquid2DColliderShape.EdgeChain:
                     {
-                        data.center = WorldCenter; // Polygon/EdgeChain 未用 center，仅占位。 // center unused for polygon/edge.
-                        data.pointStart = pointsAccum.Count;
-                        int n = cs.localPoints?.Length ?? 0;
-                        if (cs.localPoints != null)
+                        data.Center = WorldCenter; // Polygon/EdgeChain 未用 center，仅占位。 // center unused for polygon/edge.
+                        data.PointStart = pointsAccum.Count;
+                        int n = cs.LocalPoints?.Length ?? 0;
+                        if (cs.LocalPoints != null)
                         {
                             for (int i = 0; i < n; i++)
                             {
-                                Vector3 w = CachedTransform.TransformPoint(cs.localPoints[i]);
+                                Vector3 w = CachedTransform.TransformPoint(cs.LocalPoints[i]);
                                 pointsAccum.Add(new float2(w.x, w.y));
                             }
                         }
-                        data.pointCount = n;
+                        data.PointCount = n;
                         break;
                     }
                 }
@@ -180,7 +180,7 @@ namespace Fs.Liquid2D
         private void OnDrawGizmosSelected()
         {
             var cc = GetComponent<CustomCollider2D>();
-            if (cc == null) return;
+            if (!cc) return;
 
             var group = new PhysicsShapeGroup2D();
             cc.GetCustomShapes(group);

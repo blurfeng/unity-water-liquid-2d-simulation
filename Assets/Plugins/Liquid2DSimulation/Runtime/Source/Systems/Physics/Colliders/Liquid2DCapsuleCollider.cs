@@ -22,11 +22,11 @@ namespace Fs.Liquid2D
         public override void Fill(ref Liquid2DColliderData data, List<float2> pointsAccum)
         {
             float scale = Mathf.Abs(CachedTransform.lossyScale.x);
-            data.shape = Liquid2DColliderShape.Capsule;
-            data.center = WorldCenter;
-            data.rotation = ZRotationRadians;
-            data.size = new float2(0.5f * length * scale, 0f);
-            data.radius = radius * scale;
+            data.Shape = Liquid2DColliderShape.Capsule;
+            data.Center = WorldCenter;
+            data.Rotation = ZRotationRadians;
+            data.Size = new float2(0.5f * length * scale, 0f);
+            data.Radius = radius * scale;
         }
 
 #if UNITY_EDITOR

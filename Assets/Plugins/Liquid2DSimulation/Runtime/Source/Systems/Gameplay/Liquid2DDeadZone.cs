@@ -22,7 +22,7 @@ namespace Fs.Liquid2D
     /// into a containment boundary (analogous to <see cref="Liquid2DBounds"/> vs a collider) — handy for recycling escapees.
     /// Bounds モード（<see cref="BoundsMode"/>）は判定を反転し、形状の【外】の粒子を破棄します。
     /// </summary>
-    [AddComponentMenu("Liquid2D/Gameplay/Liquid 2D Dead Zone")]
+    [AddComponentMenu("Liquid2D/Gameplay/Liquid2D Dead Zone")]
     public class Liquid2DDeadZone : MonoBehaviour
     {
         /// <summary>
@@ -119,23 +119,23 @@ namespace Fs.Liquid2D
             switch (shape)
             {
                 case DeadZoneShape.Circle:
-                    data.shape = Liquid2DColliderShape.Circle;
-                    data.center = WorldCenter;
-                    data.radius = radius * scale;
+                    data.Shape = Liquid2DColliderShape.Circle;
+                    data.Center = WorldCenter;
+                    data.Radius = radius * scale;
                     break;
 
                 case DeadZoneShape.Capsule:
-                    data.shape = Liquid2DColliderShape.Capsule;
-                    data.center = WorldCenter;
-                    data.rotation = ZRotationRadians;
-                    data.size = new float2(0.5f * length * scale, 0f);
-                    data.radius = radius * scale;
+                    data.Shape = Liquid2DColliderShape.Capsule;
+                    data.Center = WorldCenter;
+                    data.Rotation = ZRotationRadians;
+                    data.Size = new float2(0.5f * length * scale, 0f);
+                    data.Radius = radius * scale;
                     break;
 
                 case DeadZoneShape.Polygon:
-                    data.shape = Liquid2DColliderShape.Polygon;
-                    data.center = WorldCenter;
-                    data.pointStart = pointsAccum.Count;
+                    data.Shape = Liquid2DColliderShape.Polygon;
+                    data.Center = WorldCenter;
+                    data.PointStart = pointsAccum.Count;
                     int n = points?.Length ?? 0;
                     if (points != null)
                     {
@@ -145,14 +145,14 @@ namespace Fs.Liquid2D
                             pointsAccum.Add(new float2(w.x, w.y));
                         }
                     }
-                    data.pointCount = n;
+                    data.PointCount = n;
                     break;
 
                 default: // Box
-                    data.shape = Liquid2DColliderShape.Box;
-                    data.center = WorldCenter;
-                    data.rotation = ZRotationRadians;
-                    data.size = new float2(0.5f * size.x * Mathf.Abs(ls.x), 0.5f * size.y * Mathf.Abs(ls.y));
+                    data.Shape = Liquid2DColliderShape.Box;
+                    data.Center = WorldCenter;
+                    data.Rotation = ZRotationRadians;
+                    data.Size = new float2(0.5f * size.x * Mathf.Abs(ls.x), 0.5f * size.y * Mathf.Abs(ls.y));
                     break;
             }
         }

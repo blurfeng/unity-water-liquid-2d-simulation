@@ -59,50 +59,50 @@ MonoBehaviour:
   m_Name: Liquid2DVolume
   m_EditorClassIdentifier: Assembly-CSharp::Fs.Liquid2D.Volumes.Liquid2DVolume
   active: 1
-  isActive:
+  IsActive:
     m_OverrideState: 1
     m_Value: 1
-  liquid2DVolumeDataList:
+  Liquid2DVolumeDataList:
     m_OverrideState: 1
     m_Value:
-    - nameTag: Liquid2D
-      obstructorRenderingLayerMask:
+    - NameTag: Liquid2D
+      ObstructorRenderingLayerMask:
         serializedVersion: 0
         m_Bits: 0
-      occluderRenderingLayerMask:
+      OccluderRenderingLayerMask:
         serializedVersion: 0
         m_Bits: 0
-      cutoff: 0.45
-      opacityMode: 0
-      opacityValue: 1
-      coverColor: {r: 0, g: 0, b: 0, a: 0}
-      blur:
-        iterations: 7
-        blurSpread: 0.8
-        coreKeepIntensity: 0.4
-        scaleFactor: 4
-        ignoreBgColor: 0
-        blurBgColor: {r: 0, g: 0, b: 0, a: 0}
-        blurBgColorIntensity: 0
-      distort:
-        enable: 1
-        magnitude: 0.1
-        frequency: 380
-        amplitude: 0.008
-        distortSpeed: {x: 0.1, y: 1}
-        distortTimeFactors: {x: 0.3, y: -0.4, z: 0.1, w: 0.5}
-        noiseCoordOffset: 4
-      edge:
-        enable: 0
-        edgeRange: 0.6
-        edgeIntensity: 0.1
-        edgeColor: {r: 1, g: 1, b: 1, a: 0.8}
-        blendType: 0
-      pixel:
-        enable: 0
-        pixelSize: 6
-        pixelBg: 1
-      isActive: 1
+      Cutoff: 0.45
+      OpacityMode: 0
+      OpacityValue: 1
+      CoverColor: {r: 0, g: 0, b: 0, a: 0}
+      Blur:
+        Iterations: 7
+        BlurSpread: 0.8
+        CoreKeepIntensity: 0.4
+        ScaleFactor: 4
+        IgnoreBgColor: 0
+        BlurBgColor: {r: 0, g: 0, b: 0, a: 0}
+        BlurBgColorIntensity: 0
+      Distort:
+        Enable: 1
+        Magnitude: 0.1
+        Frequency: 380
+        Amplitude: 0.008
+        DistortSpeed: {x: 0.1, y: 1}
+        DistortTimeFactors: {x: 0.3, y: -0.4, z: 0.1, w: 0.5}
+        NoiseCoordOffset: 4
+      Edge:
+        Enable: 0
+        EdgeRange: 0.6
+        EdgeIntensity: 0.1
+        EdgeColor: {r: 1, g: 1, b: 1, a: 0.8}
+        BlendType: 0
+      Pixel:
+        Enable: 0
+        PixelSize: 6
+        PixelBg: 1
+      IsActive: 1
 --- !u!114 &-7598665844862709615
 MonoBehaviour:
   m_ObjectHideFlags: 3

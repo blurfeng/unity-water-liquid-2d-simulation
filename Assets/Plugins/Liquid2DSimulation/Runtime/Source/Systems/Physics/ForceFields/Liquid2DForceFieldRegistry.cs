@@ -50,14 +50,14 @@ namespace Fs.Liquid2D
             {
                 var s = _active[i];
                 if (!s || !s.isActiveAndEnabled) continue;
-                if (s.TryGetField(out var data) && data.radius > 0f && data.strength != 0f)
+                if (s.TryGetField(out var data) && data.Radius > 0f && data.Strength != 0f)
                     _dataScratch.Add(data);
             }
 
             var buffer = new Liquid2DForceFieldBuffer();
             int n = _dataScratch.Count;
-            buffer.fields = new NativeArray<Liquid2DForceFieldData>(n, allocator, NativeArrayOptions.UninitializedMemory);
-            for (int i = 0; i < n; i++) buffer.fields[i] = _dataScratch[i];
+            buffer.Fields = new NativeArray<Liquid2DForceFieldData>(n, allocator, NativeArrayOptions.UninitializedMemory);
+            for (int i = 0; i < n; i++) buffer.Fields[i] = _dataScratch[i];
             return buffer;
         }
     }

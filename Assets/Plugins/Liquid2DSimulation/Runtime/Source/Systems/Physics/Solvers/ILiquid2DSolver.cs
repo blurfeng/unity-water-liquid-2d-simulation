@@ -12,34 +12,34 @@ namespace Fs.Liquid2D
     public struct Liquid2DSolveContext
     {
         /// <summary>粒子 SoA 存储。 // Particle SoA store. // 粒子 SoA ストア。</summary>
-        public Liquid2DParticleStore store;
+        public Liquid2DParticleStore Store;
 
         /// <summary>紧凑的存活 slot 索引表（跳过空洞 slot）。 // Compact alive-slot index list (skips holes). // コンパクトな生存スロット索引表。</summary>
-        public NativeArray<int> activeIndices;
+        public NativeArray<int> ActiveIndices;
 
         /// <summary>存活粒子数（activeIndices 的有效长度）。 // Number of alive particles (valid length of activeIndices). // 生存粒子数。</summary>
-        public int activeCount;
+        public int ActiveCount;
 
         /// <summary>按 typeId 索引的材质数据。 // Material data indexed by typeId. // typeId で索引するマテリアルデータ。</summary>
-        [ReadOnly] public NativeArray<Liquid2DMaterialData> materials;
+        [ReadOnly] public NativeArray<Liquid2DMaterialData> Materials;
 
         /// <summary>按 typeId 索引的混色参数。 // Mix parameters indexed by typeId. // typeId で索引する混色パラメータ。</summary>
-        [ReadOnly] public NativeArray<Liquid2DMixData> mixData;
+        [ReadOnly] public NativeArray<Liquid2DMixData> MixData;
 
         /// <summary>碰撞体集合。 // Collider set. // コライダー集合。</summary>
-        public Liquid2DColliderBuffer colliders;
+        public Liquid2DColliderBuffer Colliders;
 
         /// <summary>力场集合（吸引/排斥，外力阶段施加）。 // Force-field set (attract/repel, applied in external-forces stage). // 力場集合。</summary>
-        public Liquid2DForceFieldBuffer forceFields;
+        public Liquid2DForceFieldBuffer ForceFields;
 
         /// <summary>动态碰撞体的本帧累积冲量（双向耦合用，长度=动态体数）。 // Per-frame accumulated impulse for dynamic colliders (two-way coupling). // 動的コライダーのフレーム累積力積。</summary>
-        public NativeArray<float2> colliderImpulse;
+        public NativeArray<float2> ColliderImpulse;
 
         /// <summary>销毁区域集合（区域内粒子本帧被回收）。 // Dead-zone set (particles inside are recycled this frame). // 破棄領域集合。</summary>
-        public Liquid2DDeadZoneBuffer deadZones;
+        public Liquid2DDeadZoneBuffer DeadZones;
 
         /// <summary>销毁区域数量（>0 时才执行/回读销毁标记）。 // Dead-zone count (kill marking runs/reads back only when >0). // 破棄領域数。</summary>
-        public int deadZoneCount;
+        public int DeadZoneCount;
 
         /// <summary>
         /// 销毁标记输出（按 active 索引 k，长度=activeCount）。求解器置 1 表示第 k 个活动粒子落入某销毁区域；
@@ -48,20 +48,20 @@ namespace Fs.Liquid2D
         /// particle falls inside a dead zone; <see cref="Liquid2DSimulation"/> recycles the slot after Step.
         /// 破棄フラグ出力（active 索引 k、長さ=activeCount）。
         /// </summary>
-        public NativeArray<byte> killFlags;
+        public NativeArray<byte> KillFlags;
 
         /// <summary>当前时间（Time.time），用于混色节流等。 // Current time, for mix throttling etc. // 現在時刻（混色スロットリング等）。</summary>
-        public float time;
+        public float Time;
 
         /// <summary>动态碰撞体数量（>0 时 GPU 才回读冲量）。 // Dynamic collider count (GPU reads impulse back only when >0). // 動的コライダー数。</summary>
-        public int dynamicBodyCount;
+        public int DynamicBodyCount;
 
         /// <summary>
         /// GPU 模式：自上次 Step 以来新生成的粒子 slot 列表（供 GPU 增量上传到常驻缓冲）。CPU 模式忽略。
         /// GPU mode: slots spawned since the last Step (for incremental upload into resident GPU buffers). Ignored on CPU.
         /// GPU モード：前回 Step 以降に生成された slot リスト（常駐バッファへの増分アップロード用）。
         /// </summary>
-        public System.Collections.Generic.List<int> gpuPendingSpawns;
+        public System.Collections.Generic.List<int> GPUPendingSpawns;
     }
 
     /// <summary>

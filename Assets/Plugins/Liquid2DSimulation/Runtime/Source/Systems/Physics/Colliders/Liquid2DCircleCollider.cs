@@ -19,9 +19,9 @@ namespace Fs.Liquid2D
         public override void Fill(ref Liquid2DColliderData data, List<float2> pointsAccum)
         {
             float scale = Mathf.Abs(CachedTransform.lossyScale.x);
-            data.shape = Liquid2DColliderShape.Circle;
-            data.center = WorldCenter;
-            data.radius = radius * scale;
+            data.Shape = Liquid2DColliderShape.Circle;
+            data.Center = WorldCenter;
+            data.Radius = radius * scale;
         }
 
 #if UNITY_EDITOR

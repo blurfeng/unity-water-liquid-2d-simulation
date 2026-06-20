@@ -132,3 +132,33 @@ Scene wiring: add `Liquid2DFeature` to the URP 2D Renderer Data, and configure *
   them. When such a field must be read or written from outside the class, expose a dedicated accessor
   property instead of widening the field's visibility.
 - **Public field naming: PascalCase.** Public fields (e.g., in `[Serializable]` data classes) use PascalCase (`Position`, `Size`, `DebugColor`). Private fields use `_camelCase` with a leading underscore.
+
+### C# identifier naming
+
+Follow the official .NET naming guidelines
+(https://learn.microsoft.com/zh-cn/dotnet/csharp/fundamentals/coding-style/identifier-names):
+
+- **PascalCase** — types (class/struct/enum/interface), methods, properties, events, namespaces,
+  enum members, `public`/`protected`/`internal` fields, and constants (`const` / `static readonly`).
+- **Interfaces** — `I` prefix + PascalCase (e.g. `ILiquid2DSolver`, `ILiquid2DForceReceiver`).
+- **Private / internal instance fields** — `_camelCase` with a leading underscore. (Existing static
+  private fields in this codebase, e.g. the `Shader.PropertyToID` cache, also use `_camelCase`.)
+- **Method parameters & local variables** — `camelCase`.
+- **Generic type parameters** — `T` prefix + PascalCase (`T`, `TValue`, `TKey`).
+- ⚠️ **Serialization caveat:** changing a serialized field's name (including its first-letter case)
+  **breaks already-saved YAML** — Unity binds by field name, so old data fails to load and reverts to
+  defaults. When renaming such a field, migrate existing assets (scenes/prefabs/`.asset`/Volume
+  profiles) or add `[FormerlySerializedAs("oldName")]`.
+- ⚠️ **Shader/compute identifier exception:** the string literals passed to `Shader.PropertyToID(...)`
+  must match the names declared in the shader/compute file **exactly** (e.g. buffers are PascalCase
+  `Positions`/`SortPositions`, scalar uniforms are camelCase `dt`/`h`/`numDeadZones` in
+  `Liquid2DSph.compute`). These are shader names, not C# members — C# naming conventions do not apply
+  to them.
+
+### Unity Object null checks
+
+For types deriving from `UnityEngine.Object` (MonoBehaviour, ScriptableObject, Material, GameObject,
+Sprite, …), prefer the implicit-bool form `if (obj)` / `if (!obj)` over `obj != null` / `obj == null`.
+Unity overloads the bool operator and `==`; the bool form is the cheaper, idiomatic path and also
+correctly treats a destroyed-but-not-yet-GC'd object as "null". (Plain C# objects still use
+`is null` / `!= null` as usual.)

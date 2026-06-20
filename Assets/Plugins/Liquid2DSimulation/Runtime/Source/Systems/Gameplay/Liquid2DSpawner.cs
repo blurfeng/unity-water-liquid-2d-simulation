@@ -12,6 +12,7 @@ namespace Fs.Liquid2D
     /// Particle spawner. Continuously spawns fluid particles into the simulation, with various parameter controls and randomization.
     /// 粒子スポーナー。さまざまなパラメーター制御とランダム化を備えたシミュレーションへの流体粒子の継続的なスポーン。
     /// </summary>
+    [AddComponentMenu("Liquid2D/Gameplay/Liquid2D Spawner")]
     public class Liquid2DSpawner : MonoBehaviour
     {
         [SerializeField, LocalizationTooltip(
@@ -467,10 +468,10 @@ namespace Fs.Liquid2D
             // 随机选择一个流体粒子描述符。 // Randomly select a fluid particle descriptor. // ランダムに流体粒子記述子を選択。
             if (liquidParticles.Count == 0) return;
             Liquid2DParticleConfig config = liquidParticles.RandomWeight();
-            if (config == null || config.Descriptor == null) return;
+            if (config == null || !config.Descriptor) return;
 
             var sim = Liquid2DSimulation.Instance;
-            if (sim == null) return;
+            if (!sim) return;
 
             // 获取当前喷射方向。 // Get current ejection direction. // 現在の噴射方向を取得。
             Vector2 dir = GetCurrentEjectDirection();
@@ -496,7 +497,7 @@ namespace Fs.Liquid2D
             if (ejectForceRandomRange.y > ejectForceRandomRange.x && ejectForceRandomRange.x >= 0f)
                 forceEject *= UnityEngine.Random.Range(ejectForceRandomRange.x, ejectForceRandomRange.y);
 
-            float mass = config.Descriptor.material != null ? Mathf.Max(0.0001f, config.Descriptor.material.mass) : 1f;
+            float mass = config.Descriptor.Material != null ? Mathf.Max(0.0001f, config.Descriptor.Material.Mass) : 1f;
             float2 velocity = new float2(dir.x, dir.y) * (forceEject / mass);
 
             var handle = sim.Spawn(config.Descriptor, spawnPos, velocity, sizeScale, config.Lifetime);
@@ -521,9 +522,9 @@ namespace Fs.Liquid2D
             if (liquidParticles.Count > 0)
             {
                 var d = liquidParticles[0].Descriptor;
-                if (d && d.renderSettings != null)
+                if (d && d.RenderSettings != null)
                 {
-                    _gizmosBodyColor = d.renderSettings.color;
+                    _gizmosBodyColor = d.RenderSettings.Color;
                 }
             }
             

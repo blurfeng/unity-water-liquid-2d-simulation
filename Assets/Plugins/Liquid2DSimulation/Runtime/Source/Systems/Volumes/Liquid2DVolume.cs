@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using UnityEngine;
 using UnityEngine.Rendering;
 using Fs.Liquid2D.Localization;
 
@@ -13,7 +12,7 @@ namespace Fs.Liquid2D.Volumes
         [LocalizationTooltip("是否启用2D流体 Renderer Feature 配置重载。",
              "Whether to enable 2D fluid Renderer Feature configuration override.",
              "2D流体レンダラーフィーチャー設定の上書きを有効にするかどうか。")]
-        public BoolParameter isActive = new BoolParameter(true, true);
+        public BoolParameter IsActive = new BoolParameter(true, true);
         
         /// <summary>
         /// 2D流体 Volume 数据列表。
@@ -28,7 +27,7 @@ namespace Fs.Liquid2D.Volumes
         /// Volumeは同じタイプのコンポーネントの追加をサポートしていないため、ここではリストを使用して複数の設定をサポートします。
         /// 各Liquid2DVolumeDataはRenderer Featureの設定に対応します。nameTagを使用して異なる設定を区別します。
         /// </summary>
-        public Liquid2DVolumeDataListParameter liquid2DVolumeDataList = new Liquid2DVolumeDataListParameter(
+        public Liquid2DVolumeDataListParameter Liquid2DVolumeDataList = new Liquid2DVolumeDataListParameter(
             new List<Liquid2DVolumeData>
             {
                 new Liquid2DVolumeData("Liquid2D"),
@@ -46,12 +45,12 @@ namespace Fs.Liquid2D.Volumes
         {
             data = null;
             
-            var list = liquid2DVolumeDataList.value;
-            if ( list != null && list.Count > 0)
+            var list = Liquid2DVolumeDataList.value;
+            if ( list is { Count: > 0 })
             {
                 foreach (var item in list)
                 {
-                    if (item.nameTag == nameTag)
+                    if (item.NameTag == nameTag)
                     {
                         data = item;
                         return true;
@@ -72,12 +71,12 @@ namespace Fs.Liquid2D.Volumes
     {
         public Liquid2DVolumeData(string nameTag)
         {
-            this.nameTag = nameTag;
+            this.NameTag = nameTag;
         }
         
         [LocalizationTooltip("是否启用该配置。",
              "Whether to enable this configuration.",
              "この設定を有効にするかどうか。")]
-        public bool isActive;
+        public bool IsActive;
     }
 }
