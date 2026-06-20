@@ -49,7 +49,7 @@ MonoBehaviour:
   gpuReadbackToStore: 0
   gravity: {x: 0, y: -9.8}
   smoothingRadius: 0.35
-  targetDensity: 55
+  targetDensity: 1
   pressureMultiplier: 125
   nearPressureMultiplier: 5
   viscosityStrength: 0.03
