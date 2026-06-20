@@ -220,9 +220,26 @@ bool ProjEdge(GpuCollider c, float2 p, float pr, out float2 corr, out float2 n)
         float2 cp = ClosestOnSeg(a, b, p); float dsq = dot(p - cp, p - cp);
         if (dsq < minDistSq) { minDistSq = dsq; best = cp; }
     }
-    if (minDistSq >= pr * pr) { corr = 0; n = 0; return false; }
+    // c.radius = 边线扩展半径（EdgeCollider2D.edgeRadius），0 表示无扩展。 // edge expansion radius; 0 = none.
+    float minD = c.radius + pr;
+    if (minDistSq >= minD * minD) { corr = 0; n = 0; return false; }
     float dist = sqrt(minDistSq);
-    n = dist > 1e-6f ? (p - best) / dist : float2(0, 1); corr = n * (pr - dist);
+    n = dist > 1e-6f ? (p - best) / dist : float2(0, 1); corr = n * (minD - dist);
+    return true;
+}
+bool ProjBoundsBox(GpuCollider c, float2 p, float pr, out float2 corr, out float2 n)
+{
+    float cs = cos(c.rotation), sn = sin(c.rotation);
+    float2 d = p - c.center;
+    float2 local = float2(d.x * cs + d.y * sn, -d.x * sn + d.y * cs);
+    float2 effHalf = max(c.size - pr, 0);
+    if (abs(local.x) <= effHalf.x && abs(local.y) <= effHalf.y) { corr = 0; n = 0; return false; }
+    float2 target = clamp(local, -effHalf, effHalf);
+    float2 corrL = target - local;
+    float dist = sqrt(dot(corrL, corrL));
+    float2 nL = dist > 1e-6f ? corrL / dist : float2(0, 1);
+    corr = float2(corrL.x * cs - corrL.y * sn, corrL.x * sn + corrL.y * cs);
+    n = float2(nL.x * cs - nL.y * sn, nL.x * sn + nL.y * cs);
     return true;
 }
 bool ProjectCollider(GpuCollider c, float2 p, float pr, out float2 corr, out float2 n)
@@ -232,6 +249,7 @@ bool ProjectCollider(GpuCollider c, float2 p, float pr, out float2 corr, out flo
     if (c.shape == 2) return ProjCapsule(c, p, pr, corr, n);
     if (c.shape == 3) return ProjPolygon(c, p, pr, corr, n);
     if (c.shape == 4) return ProjEdge(c, p, pr, corr, n);
+    if (c.shape == 5) return ProjBoundsBox(c, p, pr, corr, n);
     corr = 0; n = 0; return false;
 }
 

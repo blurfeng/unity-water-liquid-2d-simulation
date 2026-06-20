@@ -52,22 +52,34 @@ namespace Fs.Liquid2D
                 var c = _active[i];
                 if (!c || !c.isActiveAndEnabled) continue;
 
-                var data = new Liquid2DColliderData();
-                c.Fill(ref data, _pointScratch);
+                // FillAll 支持多形状碰撞体（如 Liquid2DCustomCollider）；单形状碰撞体走默认实现调用 Fill()。
+                // FillAll supports multi-shape colliders (e.g. Liquid2DCustomCollider); single-shape colliders use
+                // the default implementation which calls Fill().
+                // FillAll は多形状コライダーをサポート。単形状は Fill() を呼ぶデフォルト実装を使用。
+                int startIdx = _dataScratch.Count;
+                c.FillAll(_dataScratch, _pointScratch);
+                int addedCount = _dataScratch.Count - startIdx;
+                if (addedCount == 0) continue;
 
+                // 同一碰撞体的所有子形状共享 dynamic/bodyIndex（同属一个物理体）。
+                // All sub-shapes of the same collider share dynamic/bodyIndex (they belong to one physical body).
+                // 同じコライダーのサブ形状は dynamic/bodyIndex を共有します。
+                byte dynFlag = 0;
+                int bodyIdx = -1;
                 if (c.IsDynamic)
                 {
-                    data.dynamic = 1;
-                    data.bodyIndex = dynamicReceivers.Count;
+                    dynFlag = 1;
+                    bodyIdx = dynamicReceivers.Count;
                     dynamicReceivers.Add(c.ForceReceiver); // 可能为 null（seam，冲量丢弃）。 // may be null. // null 可。
                 }
-                else
-                {
-                    data.dynamic = 0;
-                    data.bodyIndex = -1;
-                }
 
-                _dataScratch.Add(data);
+                for (int j = startIdx; j < _dataScratch.Count; j++)
+                {
+                    var d = _dataScratch[j];
+                    d.dynamic = dynFlag;
+                    d.bodyIndex = bodyIdx;
+                    _dataScratch[j] = d;
+                }
             }
 
             var buffer = new Liquid2DColliderBuffer();

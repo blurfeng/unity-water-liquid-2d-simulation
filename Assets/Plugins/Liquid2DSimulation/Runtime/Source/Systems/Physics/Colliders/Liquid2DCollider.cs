@@ -49,6 +49,22 @@ namespace Fs.Liquid2D
         public abstract void Fill(ref Liquid2DColliderData data, List<float2> pointsAccum);
 
         /// <summary>
+        /// 将本碰撞体的所有子形状写入输出列表。默认实现调用 <see cref="Fill"/> 写入单个条目；包含多形状的碰撞体
+        /// （如 <c>Liquid2DCustomCollider</c>）应重写此方法以写入多个 <see cref="Liquid2DColliderData"/> 条目。
+        /// Write all sub-shapes of this collider into the output list. The default calls <see cref="Fill"/> once for a
+        /// single entry; multi-shape colliders (e.g. <c>Liquid2DCustomCollider</c>) should override to append multiple
+        /// <see cref="Liquid2DColliderData"/> entries.
+        /// コライダーの全サブ形状を出力リストに書き込みます。デフォルトは <see cref="Fill"/> を 1 回呼ぶ。
+        /// 多形状コライダー（例 <c>Liquid2DCustomCollider</c>）はこのメソッドをオーバーライドしてください。
+        /// </summary>
+        public virtual void FillAll(List<Liquid2DColliderData> dataOut, List<float2> pointsAccum)
+        {
+            var data = new Liquid2DColliderData();
+            Fill(ref data, pointsAccum);
+            dataOut.Add(data);
+        }
+
+        /// <summary>
         /// 动态碰撞体的力接收者（默认取同物体上的 <see cref="ILiquid2DForceReceiver"/>，可能为 null）。
         /// Force receiver for a dynamic collider (defaults to an <see cref="ILiquid2DForceReceiver"/> on the same object; may be null).
         /// 動的コライダーの力レシーバー（既定は同オブジェクトの実装、null 可）。

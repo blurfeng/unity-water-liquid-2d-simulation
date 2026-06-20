@@ -28,6 +28,7 @@ namespace Fs.Liquid2D
                 case Liquid2DColliderShape.Capsule: return ProjectCapsule(c, p, particleRadius, out correction, out normal);
                 case Liquid2DColliderShape.Polygon: return ProjectPolygon(c, points, p, particleRadius, out correction, out normal);
                 case Liquid2DColliderShape.EdgeChain: return ProjectEdgeChain(c, points, p, particleRadius, out correction, out normal);
+                case Liquid2DColliderShape.BoundsBox: return ProjectBoundsBox(c, p, particleRadius, out correction, out normal);
                 default: correction = float2.zero; normal = float2.zero; return false;
             }
         }
@@ -139,6 +140,25 @@ namespace Fs.Liquid2D
             return true;
         }
 
+        private static bool ProjectBoundsBox(in Liquid2DColliderData c, float2 p, float pr, out float2 correction, out float2 normal)
+        {
+            float cs = cos(c.rotation), sn = sin(c.rotation);
+            float2 d = p - c.center;
+            float2 local = new float2(d.x * cs + d.y * sn, -d.x * sn + d.y * cs);
+            float2 effHalf = max(c.size - pr, 0f);
+            if (abs(local.x) <= effHalf.x && abs(local.y) <= effHalf.y)
+            {
+                correction = float2.zero; normal = float2.zero; return false;
+            }
+            float2 target = clamp(local, -effHalf, effHalf);
+            float2 corrLocal = target - local;
+            float dist = sqrt(lengthsq(corrLocal));
+            float2 nLocal = dist > 1e-6f ? corrLocal / dist : new float2(0f, 1f);
+            correction = new float2(corrLocal.x * cs - corrLocal.y * sn, corrLocal.x * sn + corrLocal.y * cs);
+            normal = new float2(nLocal.x * cs - nLocal.y * sn, nLocal.x * sn + nLocal.y * cs);
+            return true;
+        }
+
         private static bool ProjectEdgeChain(in Liquid2DColliderData c, in NativeArray<float2> points,
             float2 p, float pr, out float2 correction, out float2 normal)
         {
@@ -157,10 +177,14 @@ namespace Fs.Liquid2D
                 if (dsq < minDistSq) { minDistSq = dsq; bestClosest = cp; }
             }
 
-            if (minDistSq >= pr * pr) { correction = float2.zero; normal = float2.zero; return false; }
+            // c.radius 为边线自身的扩展半径（EdgeCollider2D.edgeRadius），0 表示无扩展。
+            // c.radius is the edge's own expansion radius (EdgeCollider2D.edgeRadius); 0 means no expansion.
+            // c.radius はエッジ自身の拡張半径（EdgeCollider2D.edgeRadius）、0 は拡張なし。
+            float minD = c.radius + pr;
+            if (minDistSq >= minD * minD) { correction = float2.zero; normal = float2.zero; return false; }
             float dist = sqrt(minDistSq);
             normal = dist > 1e-6f ? (p - bestClosest) / dist : new float2(0f, 1f); // 两面：粒子所在侧。 // two-sided: the side the particle is on. // 両面：粒子のいる側。
-            correction = normal * (pr - dist);
+            correction = normal * (minD - dist);
             return true;
         }
 

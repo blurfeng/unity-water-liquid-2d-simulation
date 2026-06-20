@@ -20,6 +20,8 @@ namespace Fs.Liquid2D
         Polygon = 3,
         /// <summary>边线段链（开放折线，薄壁双面阻挡）。 // Edge chain (open polyline, two-sided thin barrier). // エッジチェーン（開いた折れ線、両面の薄壁）。</summary>
         EdgeChain = 4,
+        /// <summary>内边界盒（粒子不能逃出，推粒子到内侧）。 // Bounds box (particles cannot escape; pushes particles inward). // 境界ボックス（粒子が脱出不可、内側へ押し戻す）。</summary>
+        BoundsBox = 5,
     }
 
     /// <summary>
