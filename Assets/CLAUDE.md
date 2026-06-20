@@ -105,6 +105,7 @@ Scene wiring: add `Liquid2DFeature` to the URP 2D Renderer Data, and configure *
 - **Trilingual docs**: public API XML comments are written in Chinese / English / Japanese, and inspector
   tooltips use the custom `LocalizationTooltipAttribute(zh, en, ja)` (picks language by system locale).
   Match this style when editing existing code.
+- **`[Header]` attributes**: use English only — no trilingual text in `[Header(...)]`.
 - **`nameTag` links particles ↔ feature ↔ volume** (and also groups particles in the sim store). An empty
   `nameTag` is rendered by every feature; a set tag restricts it to the matching feature/volume.
 - **Physics is play-mode only.** `Liquid2DSimulation.Instance` returns `null` in edit mode / on quit, and
@@ -130,3 +131,4 @@ Scene wiring: add `Liquid2DFeature` to the URP 2D Renderer Data, and configure *
   context: `MonoBehaviour`, `ScriptableObject`, and plain `[Serializable]` data classes/structs nested in
   them. When such a field must be read or written from outside the class, expose a dedicated accessor
   property instead of widening the field's visibility.
+- **Public field naming: PascalCase.** Public fields (e.g., in `[Serializable]` data classes) use PascalCase (`Position`, `Size`, `DebugColor`). Private fields use `_camelCase` with a leading underscore.

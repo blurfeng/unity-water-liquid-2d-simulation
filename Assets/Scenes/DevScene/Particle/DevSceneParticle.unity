@@ -166,7 +166,7 @@ MonoBehaviour:
   spawningEnabled: 1
   startOnAwake: 1
   firstStartDelay: 0.5
-  startDelay: 0.5
+  startDelay: 3
   duration: 0
   maxSpawnCount: 6000
   spawnedCount: 0
@@ -1017,6 +1017,69 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1656945273
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1656945275}
+  - component: {fileID: 1656945274}
+  m_Layer: 0
+  m_Name: LiquidRegionSpawner
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1656945274
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1656945273}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0fb9fce92f26c18478b9f033825d5085, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.LiquidRegionSpawner
+  spawnOnStart: 1
+  particles:
+  - Descriptor: {fileID: 11400000, guid: f35c2bc9e2e98fd4387aaeabc88c127f, type: 2}
+    Weight: 1
+    Lifetime: 0
+  spawnDensity: 30
+  initialVelocity: {x: 0, y: 0}
+  jitterStr: 0.05
+  refillEnabled: 0
+  refillFlowRate: 20
+  refillThreshold: 1
+  spawnRegions:
+  - IsInit: 1
+    Position: {x: 0, y: 0}
+    Size: {x: 12, y: 6}
+    OverrideParticles: 0
+    Particles: []
+  showGizmos: 1
+  estimatedParticleCount: 2178
+--- !u!4 &1656945275
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1656945273}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &2084783507
 GameObject:
   m_ObjectHideFlags: 0
@@ -1114,6 +1177,7 @@ SceneRoots:
   m_Roots:
   - {fileID: 500201}
   - {fileID: 500101}
+  - {fileID: 1656945275}
   - {fileID: 437264683}
   - {fileID: 471646947}
   - {fileID: 1646027099}

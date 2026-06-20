@@ -19,7 +19,7 @@ MonoBehaviour:
     sprite: {fileID: 21300000, guid: 474aa5d06b976c5449aa374d5c77d9aa, type: 3}
     material: {fileID: 2100000, guid: 7453d47e894769e43b1338caed5ddfeb, type: 2}
     color: {r: 0, g: 0.26666668, b: 1, a: 1}
-    nameTag: Particle
+    nameTag: Water
   mixSettings:
     mixColors: 0
     mixColorsRadiusRate: 2
