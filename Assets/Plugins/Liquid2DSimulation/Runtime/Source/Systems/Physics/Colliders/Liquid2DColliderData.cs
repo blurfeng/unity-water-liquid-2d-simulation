@@ -57,6 +57,12 @@ namespace Fs.Liquid2D
 
         /// <summary>动态体在冲量累积数组中的索引（dynamic==0 时为 -1）。 // Index into the impulse-accumulation array (-1 when not dynamic). // 力積累積配列内のインデックス。</summary>
         public int BodyIndex;
+
+        /// <summary>作用的目标粒子组（nameTag 解析得到）。 // Target particle group (resolved from nameTag). // 作用対象グループ。</summary>
+        public int GroupId;
+
+        /// <summary>1=作用于全部粒子（空 nameTag）；0=仅作用于 groupId 匹配的粒子。 // 1 = affects all particles (empty nameTag); 0 = only matching groupId. // 1=全粒子、0=groupId 一致のみ。</summary>
+        public byte MatchAll;
     }
 
     /// <summary>

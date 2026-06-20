@@ -6,8 +6,8 @@ namespace Fs.Liquid2D
     /// 碰撞体的 GPU 上传结构（与 Liquid2DSph.compute 的 GpuCollider 对齐）。把 <see cref="Liquid2DColliderData"/> 的
     /// enum/byte 字段转为 int，避免 GPU StructuredBuffer 的字节对齐问题。stride = 44 bytes。
     /// GPU-upload form of a collider (matches GpuCollider in Liquid2DSph.compute). Converts enum/byte fields of
-    /// <see cref="Liquid2DColliderData"/> to int to avoid GPU StructuredBuffer byte-alignment issues. stride = 44 bytes.
-    /// コライダーの GPU アップロード構造（Liquid2DSph.compute の GpuCollider と整合）。stride = 44 bytes。
+    /// <see cref="Liquid2DColliderData"/> to int to avoid GPU StructuredBuffer byte-alignment issues. stride = 52 bytes.
+    /// コライダーの GPU アップロード構造（Liquid2DSph.compute の GpuCollider と整合）。stride = 52 bytes。
     /// </summary>
     public struct Liquid2DGpuCollider
     {
@@ -20,6 +20,8 @@ namespace Fs.Liquid2D
         public int PointCount;
         public int Dynamic;
         public int BodyIndex;
+        public int GroupId;
+        public int MatchAll;
 
         public static Liquid2DGpuCollider From(in Liquid2DColliderData c) => new Liquid2DGpuCollider
         {
@@ -32,14 +34,16 @@ namespace Fs.Liquid2D
             PointCount = c.PointCount,
             Dynamic = c.Dynamic,
             BodyIndex = c.BodyIndex,
+            GroupId = c.GroupId,
+            MatchAll = c.MatchAll,
         };
     }
 
     /// <summary>
     /// 力场的 GPU 上传结构（与 Liquid2DSph.compute 的 ForceField 对齐）。enum → int。
     /// stride = 36 bytes（center8 + radius4 + strength4 + damping4 + swirl4 + gravityAttenuation4 + falloff4 + mode4）。
-    /// GPU-upload form of a force field (matches ForceField in Liquid2DSph.compute). enum → int. stride = 36 bytes.
-    /// 力場の GPU アップロード構造（Liquid2DSph.compute の ForceField と整合）。enum → int。stride = 36 bytes。
+    /// GPU-upload form of a force field (matches ForceField in Liquid2DSph.compute). enum → int. stride = 44 bytes.
+    /// 力場の GPU アップロード構造（Liquid2DSph.compute の ForceField と整合）。enum → int。stride = 44 bytes。
     /// </summary>
     public struct Liquid2DGpuForceField
     {
@@ -51,6 +55,8 @@ namespace Fs.Liquid2D
         public float GravityAttenuation;
         public float Falloff;
         public int Mode;
+        public int GroupId;
+        public int MatchAll;
 
         public static Liquid2DGpuForceField From(in Liquid2DForceFieldData f) => new Liquid2DGpuForceField
         {
@@ -62,6 +68,8 @@ namespace Fs.Liquid2D
             GravityAttenuation = f.GravityAttenuation,
             Falloff = f.Falloff,
             Mode = (int)f.Mode,
+            GroupId = f.GroupId,
+            MatchAll = f.MatchAll,
         };
     }
 

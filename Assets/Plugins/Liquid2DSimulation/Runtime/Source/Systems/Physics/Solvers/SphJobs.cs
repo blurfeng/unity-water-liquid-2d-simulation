@@ -94,6 +94,7 @@ namespace Fs.Liquid2D
     {
         [ReadOnly] public NativeArray<int> ActiveIndices;
         [ReadOnly] public NativeArray<int> TypeId;
+        [ReadOnly] public NativeArray<int> GroupId;
         [ReadOnly] public NativeArray<Liquid2DMaterialData> Materials;
         [NativeDisableParallelForRestriction] public NativeArray<float2> Velocities;
         [ReadOnly] public NativeArray<float2> Positions;
@@ -108,6 +109,7 @@ namespace Fs.Liquid2D
         {
             int i = ActiveIndices[k];
             float gs = Materials[TypeId[i]].GravityScale;
+            int gi = GroupId[i];
             float2 pos = Positions[i];
             float2 v = Velocities[i];
 
@@ -122,6 +124,8 @@ namespace Fs.Liquid2D
             for (int f = 0; f < ForceFieldCount; f++)
             {
                 var ff = ForceFields[f];
+                // 组过滤：matchAll（空 nameTag）作用全部，否则仅作用 groupId 匹配的粒子。 // Group filter. // グループ絞り込み。
+                if (ff.MatchAll == 0 && ff.GroupId != gi) continue;
                 float2 offset = ff.Center - pos;
                 float sqrDst = lengthsq(offset);
                 float r = ff.Radius;
@@ -384,6 +388,7 @@ namespace Fs.Liquid2D
         [ReadOnly] public NativeArray<float> Radii;
         [ReadOnly] public NativeArray<float> InvMass;
         [ReadOnly] public NativeArray<int> TypeId;
+        [ReadOnly] public NativeArray<int> GroupId;
         [ReadOnly] public NativeArray<Liquid2DMaterialData> Materials;
         [ReadOnly] public NativeArray<Liquid2DColliderData> Colliders;
         [ReadOnly] public NativeArray<float2> Points;
@@ -395,6 +400,7 @@ namespace Fs.Liquid2D
         public byte Accumulate;                            // 1 时记录冲量。 // record impulse when 1. // 1 のとき力積記録。
         [WriteOnly] public NativeArray<float2> OutImpulse;  // 长度 activeCount。 // length activeCount.
         [WriteOnly] public NativeArray<int> OutBody;        // 长度 activeCount，-1 表示无。 // length activeCount, -1 = none.
+        [WriteOnly] public NativeArray<float2> OutContact;  // 长度 activeCount，命中动态体时的接触位置（浮力质心用）。 // contact pos on dynamic hit (buoyancy centroid). // 接触位置。
 
         public void Execute(int k)
         {
@@ -414,10 +420,12 @@ namespace Fs.Liquid2D
             float2 p = Positions[i] + v * DT;
 
             float2 totalImpulse = float2.zero;
+            float2 contactPos = float2.zero;
             int hitBody = -1;
 
             if (HasColliders == 1)
             {
+                int gi = GroupId[i];
                 float pr = Radii[i];
                 var mat = Materials[TypeId[i]];
                 float e = saturate(mat.Restitution) * CollisionDamping;
@@ -425,9 +433,14 @@ namespace Fs.Liquid2D
                 for (int ci = 0; ci < Colliders.Length; ci++)
                 {
                     var col = Colliders[ci];
+                    // 组过滤：matchAll（空 nameTag）作用全部，否则仅作用 groupId 匹配的粒子。 // Group filter. // グループ絞り込み。
+                    if (col.MatchAll == 0 && col.GroupId != gi) continue;
                     if (!Liquid2DColliderMath.Project(col, Points, p, pr, out float2 corr, out float2 n)) continue;
 
                     p += corr;
+
+                    // 碰撞前速度（用于按牛顿第三定律求传给动态体的反作用冲量）。 // Pre-collision velocity (for the Newtonian reaction impulse to a dynamic body). // 衝突前速度。
+                    float2 vPre = v;
 
                     // 速度反射：去掉指向表面内的法向分量，并按回弹系数反弹。 // Reflect velocity: remove inward normal component, bounce by e. // 速度反射。
                     float vn = dot(v, n);
@@ -442,8 +455,13 @@ namespace Fs.Liquid2D
 
                     if (Accumulate == 1 && col.Dynamic == 1 && col.BodyIndex >= 0)
                     {
+                        // 反作用冲量 = -质量 × 粒子速度变化（碰撞传给物体的动量，天然有界，避免基于穿透量的爆炸）。
+                        // Reaction impulse = -mass × particle velocity change (momentum transferred to the body; naturally
+                        // bounded, avoiding the penetration-based explosion).
+                        // 反作用力積 = -質量 × 粒子速度変化（物体へ伝わる運動量、自然に有界）。
                         float mass = InvMass[i] > 1e-6f ? 1f / InvMass[i] : 0f;
-                        totalImpulse += -n * (length(corr) * mass / max(DT, 1e-5f));
+                        totalImpulse += -mass * (v - vPre);
+                        contactPos = p; // 接触位置（浮力质心用，归属最后命中的动态体）。 // contact pos (buoyancy centroid, last hit body). // 接触位置。
                         hitBody = col.BodyIndex;
                     }
                 }
@@ -456,6 +474,7 @@ namespace Fs.Liquid2D
             {
                 OutImpulse[k] = totalImpulse;
                 OutBody[k] = hitBody;
+                OutContact[k] = contactPos;
             }
         }
     }

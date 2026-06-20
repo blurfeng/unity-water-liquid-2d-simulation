@@ -35,6 +35,16 @@ namespace Fs.Liquid2D
         /// <summary>动态碰撞体的本帧累积冲量（双向耦合用，长度=动态体数）。 // Per-frame accumulated impulse for dynamic colliders (two-way coupling). // 動的コライダーのフレーム累積力積。</summary>
         public NativeArray<float2> ColliderImpulse;
 
+        /// <summary>
+        /// 动态碰撞体的本帧接触累积（浮力用，长度=动态体数）：xy=接触粒子位置之和，z=接触粒子数，w=保留。
+        /// 接收者按 z 估算浮力/阻尼强度，按 xy/z 求接触质心以施加力矩。
+        /// Per-frame contact accumulation for dynamic colliders (buoyancy; length = dynamic body count): xy = sum of contact
+        /// particle positions, z = contact count, w = reserved. Receivers scale buoyancy/drag by z and use xy/z as the
+        /// contact centroid for torque.
+        /// 動的コライダーのフレーム接触累積（浮力用）：xy=接触粒子位置の和、z=接触数、w=予約。
+        /// </summary>
+        public NativeArray<float4> ColliderContact;
+
         /// <summary>销毁区域集合（区域内粒子本帧被回收）。 // Dead-zone set (particles inside are recycled this frame). // 破棄領域集合。</summary>
         public Liquid2DDeadZoneBuffer DeadZones;
 

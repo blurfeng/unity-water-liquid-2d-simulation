@@ -81,6 +81,8 @@ namespace Fs.Liquid2D
         private ComputeBuffer _counts, _cellStart, _cursor;
         // 辅助。 // aux.
         private ComputeBuffer _materials, _mixDatas, _colliders, _points, _impulseX, _impulseY, _forceFields;
+        // 浮力累积（按 body 索引）：接触数 + 接触位置之和 + 接触流体密度之和（定点化）。 // Buoyancy accumulation per body. // 浮力累積。
+        private ComputeBuffer _contactN, _centroidX, _centroidY, _densitySum;
         private ComputeBuffer _deadZones, _deadZonePoints;
         // 生成上传（仅动态状态；静态属性由 store 整块 SetData）。 // spawn upload (dynamic only). // 生成アップロード。
         private ComputeBuffer _upSlots, _upPos, _upVel, _upColor;
@@ -95,7 +97,7 @@ namespace Fs.Liquid2D
         private Liquid2DGpuCollider[] _colA; private Liquid2DGpuMixData[] _mixA; private float2[] _pointsA;
         private Liquid2DGpuForceField[] _ffA;
         private Liquid2DGpuDeadZone[] _dzA; private float2[] _dzPointsA; private int[] _killA;
-        private int[] _impXa, _impYa;
+        private int[] _impXa, _impYa, _contactNa, _centXa, _centYa, _densSumA;
         private int[] _upSlotsA; private float2[] _upPosA, _upVelA; private float4[] _upColorA;
 
         public SphGpuSolver(ComputeShader cs)
@@ -333,10 +335,12 @@ namespace Fs.Liquid2D
         }
         private void EnsureAuxBuffers(int numTypes, int numColliders, int numPoints, int numBodies, int numForceFields)
         {
-            Ensure(ref _materials, numTypes, 28); Ensure(ref _mixDatas, numTypes, 20);
-            Ensure(ref _colliders, Mathf.Max(1, numColliders), 44); Ensure(ref _points, Mathf.Max(1, numPoints), 8);
+            Ensure(ref _materials, numTypes, 32); Ensure(ref _mixDatas, numTypes, 20);
+            Ensure(ref _colliders, Mathf.Max(1, numColliders), 52); Ensure(ref _points, Mathf.Max(1, numPoints), 8);
             Ensure(ref _impulseX, numBodies, 4); Ensure(ref _impulseY, numBodies, 4);
-            Ensure(ref _forceFields, Mathf.Max(1, numForceFields), 36);
+            Ensure(ref _contactN, numBodies, 4); Ensure(ref _centroidX, numBodies, 4); Ensure(ref _centroidY, numBodies, 4);
+            Ensure(ref _densitySum, numBodies, 4);
+            Ensure(ref _forceFields, Mathf.Max(1, numForceFields), 44);
         }
         private void EnsureUploadBuffers(int n)
         {
@@ -404,6 +408,8 @@ namespace Fs.Liquid2D
             Bind("InvMass", _invMass); Bind("TypeId", _typeId); Bind("GroupId", _groupId);
             Bind("ActiveIndices", _active); Bind("Materials", _materials); Bind("MixDatas", _mixDatas);
             Bind("Colliders", _colliders); Bind("ColliderPoints", _points); Bind("ImpulseX", _impulseX); Bind("ImpulseY", _impulseY);
+            Bind("ContactCount", _contactN); Bind("CentroidX", _centroidX); Bind("CentroidY", _centroidY);
+            Bind("DensitySum", _densitySum);
             Bind("ForceFields", _forceFields);
             Bind("DeadZones", _deadZones); Bind("DeadZonePoints", _deadZonePoints); Bind("KillFlags", _killFlags);
             Bind("BucketOf", _bucketOf); Bind("Counts", _counts); Bind("CellStart", _cellStart);
@@ -445,6 +451,17 @@ namespace Fs.Liquid2D
             _impulseY.GetData(_impYa, 0, 0, numBodies);
             for (int b = 0; b < numBodies && b < impulseOut.Length; b++)
                 impulseOut[b] += new float2(_impXa[b] / ImpulseScale, _impYa[b] / ImpulseScale);
+
+            // 浮力接触累积回读：xy=接触位置之和（去定点化），z=接触数，w=接触流体密度之和（去定点化）。 // Buoyancy readback: xy=sum pos, z=count, w=sum fluid density. // 浮力接触回読。
+            var contactOut = ctx.ColliderContact;
+            if (!contactOut.IsCreated || _contactN == null) return;
+            EnsureArray(ref _contactNa, numBodies); EnsureArray(ref _centXa, numBodies); EnsureArray(ref _centYa, numBodies); EnsureArray(ref _densSumA, numBodies);
+            _contactN.GetData(_contactNa, 0, 0, numBodies);
+            _centroidX.GetData(_centXa, 0, 0, numBodies);
+            _centroidY.GetData(_centYa, 0, 0, numBodies);
+            _densitySum.GetData(_densSumA, 0, 0, numBodies);
+            for (int b = 0; b < numBodies && b < contactOut.Length; b++)
+                contactOut[b] += new float4(_centXa[b] / ImpulseScale, _centYa[b] / ImpulseScale, _contactNa[b], _densSumA[b] / ImpulseScale);
         }
 
         // 回读销毁标记到 ctx.killFlags（按 k 索引，1=该活动粒子待回收）。 // Read kill flags back into ctx.killFlags (indexed by k). // 破棄フラグを回読。
@@ -509,6 +526,7 @@ namespace Fs.Liquid2D
             R(_radii); R(_invMass); R(_typeId); R(_groupId);
             R(_active); R(_bucketOf); R(_sortedSlots); R(_killFlags); R(_counts); R(_cellStart); R(_cursor);
             R(_materials); R(_mixDatas); R(_colliders); R(_points); R(_impulseX); R(_impulseY); R(_forceFields);
+            R(_contactN); R(_centroidX); R(_centroidY); R(_densitySum);
             R(_deadZones); R(_deadZonePoints);
             R(_upSlots); R(_upPos); R(_upVel); R(_upColor);
             _positions = null; _active = null;

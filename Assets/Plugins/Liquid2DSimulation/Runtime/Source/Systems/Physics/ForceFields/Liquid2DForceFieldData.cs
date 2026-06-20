@@ -50,6 +50,12 @@ namespace Fs.Liquid2D
 
         /// <summary>径向力距离衰减模式。 // Radial-force distance mode. // 径方向力の距離モード。</summary>
         public Liquid2DForceFieldMode Mode;
+
+        /// <summary>作用的目标粒子组（nameTag 解析得到）。 // Target particle group (resolved from nameTag). // 作用対象グループ。</summary>
+        public int GroupId;
+
+        /// <summary>1=作用于全部粒子（空 nameTag）；0=仅作用于 groupId 匹配的粒子。 // 1 = affects all particles (empty nameTag); 0 = only matching groupId. // 1=全粒子、0=groupId 一致のみ。</summary>
+        public byte MatchAll;
     }
 
     /// <summary>

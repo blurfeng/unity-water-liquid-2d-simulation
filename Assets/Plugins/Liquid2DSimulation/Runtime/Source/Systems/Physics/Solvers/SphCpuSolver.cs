@@ -59,7 +59,7 @@ namespace Fs.Liquid2D
 
                 h = new ExternalForcesJob
                 {
-                    ActiveIndices = ctx.ActiveIndices, TypeId = store.typeId, Materials = ctx.Materials,
+                    ActiveIndices = ctx.ActiveIndices, TypeId = store.typeId, GroupId = store.groupId, Materials = ctx.Materials,
                     Velocities = store.velocities, Positions = store.positions, Predicted = store.predicted,
                     ForceFields = ctx.ForceFields.Fields, ForceFieldCount = ctx.ForceFields.Count,
                     Gravity = p.Gravity, DT = subDt, PredictionFactor = p.PredictionFactor,
@@ -101,21 +101,20 @@ namespace Fs.Liquid2D
 
                 // 积分 + 碰撞（仅末子步累积耦合冲量）。 // Integrate + collide (accumulate coupling impulse only on last substep). // 積分 + 衝突。
                 bool accumulate = lastStep && hasColliders;
-                NativeArray<float2> outImpulse = accumulate
-                    ? new NativeArray<float2>(count, Allocator.TempJob, NativeArrayOptions.ClearMemory)
-                    : new NativeArray<float2>(1, Allocator.TempJob, NativeArrayOptions.ClearMemory);
-                NativeArray<int> outBody = accumulate
-                    ? new NativeArray<int>(count, Allocator.TempJob, NativeArrayOptions.UninitializedMemory)
-                    : new NativeArray<int>(1, Allocator.TempJob, NativeArrayOptions.ClearMemory);
+                int outLen = accumulate ? count : 1;
+                NativeArray<float2> outImpulse = new NativeArray<float2>(outLen, Allocator.TempJob, NativeArrayOptions.ClearMemory);
+                NativeArray<int> outBody = new NativeArray<int>(outLen, Allocator.TempJob, NativeArrayOptions.ClearMemory);
+                NativeArray<float2> outContact = new NativeArray<float2>(outLen, Allocator.TempJob, NativeArrayOptions.ClearMemory);
 
                 h = new SphIntegrateCollideJob
                 {
                     ActiveIndices = ctx.ActiveIndices, Positions = store.positions, Velocities = store.velocities,
-                    Radii = store.radii, InvMass = store.invMass, TypeId = store.typeId, Materials = ctx.Materials,
+                    Radii = store.radii, InvMass = store.invMass, TypeId = store.typeId, GroupId = store.groupId,
+                    Materials = ctx.Materials,
                     Colliders = ctx.Colliders.Colliders, Points = ctx.Colliders.Points, DT = subDt,
                     CollisionDamping = p.CollisionDamping, MaxSpeed = p.MaxSpeed,
                     HasColliders = (byte)(hasColliders ? 1 : 0),
-                    Accumulate = (byte)(accumulate ? 1 : 0), OutImpulse = outImpulse, OutBody = outBody,
+                    Accumulate = (byte)(accumulate ? 1 : 0), OutImpulse = outImpulse, OutBody = outBody, OutContact = outContact,
                 }.Schedule(count, 64, h);
 
                 // 末子步：在最终位置上重建网格并做一次邻居混色。 // Last substep: rebuild grid on final positions and mix colors. // 末サブステップで混色。
@@ -159,13 +158,25 @@ namespace Fs.Liquid2D
                     // NativeArray 是包裹指针的结构；因 ctx 为 in（只读）需先拷到本地变量才能调用其索引器 setter（共享同一缓冲）。
                     // NativeArray wraps a pointer; since ctx is `in` (readonly), copy to a local to call its indexer setter (same underlying buffer).
                     var impulseOut = ctx.ColliderImpulse;
+                    var contactOut = ctx.ColliderContact;
                     if (accumulate && impulseOut.IsCreated)
                     {
+                        bool hasContact = contactOut.IsCreated;
+                        var materials = ctx.Materials;
+                        var typeIds = store.typeId;
                         for (int kk = 0; kk < count; kk++)
                         {
                             int body = outBody[kk];
-                            if (body >= 0 && body < impulseOut.Length)
-                                impulseOut[body] += outImpulse[kk];
+                            if (body < 0 || body >= impulseOut.Length) continue;
+                            impulseOut[body] += outImpulse[kk];
+                            // 接触累积（浮力用）：xy=接触位置之和，z=接触计数，w=接触粒子流体密度之和（平均密度=w/z）。
+                            // Contact accumulation (buoyancy): xy=sum pos, z=count, w=sum of fluid density (avg = w/z).
+                            // 接触累積：xy=位置和、z=接触数、w=流体密度和。
+                            if (hasContact && body < contactOut.Length)
+                            {
+                                float density = materials[typeIds[ctx.ActiveIndices[kk]]].Density;
+                                contactOut[body] += new float4(outContact[kk].x, outContact[kk].y, 1f, density);
+                            }
                         }
                     }
                 }
@@ -174,6 +185,7 @@ namespace Fs.Liquid2D
                 sortedSlots.Dispose();
                 outImpulse.Dispose();
                 outBody.Dispose();
+                outContact.Dispose();
             }
         }
 

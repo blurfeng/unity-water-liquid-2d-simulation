@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Unity.Collections;
 using static Unity.Mathematics.math;
 using float2 = Unity.Mathematics.float2;
@@ -12,6 +13,39 @@ namespace Fs.Liquid2D
     /// </summary>
     public static class Liquid2DColliderMath
     {
+        /// <summary>
+        /// 计算碰撞体形状的世界面积（2D，用作浮力体积）。数据为世界量（Size 为半尺寸、Radius 为半径，多边形顶点为世界坐标）。
+        /// 边链（开放折线）无面积返回 0。仅托管侧调用（非 Burst Job），故用 List 承载多边形顶点。
+        /// World-space area of a collider shape (2D, used as buoyancy volume). Data is world-space (Size = half-size, Radius =
+        /// radius, polygon vertices in world coords). Edge chains (open polylines) have no area → 0. Managed-side only.
+        /// コライダー形状の世界面積（2D、浮力体積用）。エッジチェーンは 0。
+        /// </summary>
+        public static float ComputeArea(in Liquid2DColliderData c, List<float2> points)
+        {
+            switch (c.Shape)
+            {
+                case Liquid2DColliderShape.Circle: return PI * c.Radius * c.Radius;
+                case Liquid2DColliderShape.Box:
+                case Liquid2DColliderShape.BoundsBox: return 4f * c.Size.x * c.Size.y;
+                case Liquid2DColliderShape.Capsule: return 4f * c.Size.x * c.Radius + PI * c.Radius * c.Radius;
+                case Liquid2DColliderShape.Polygon: return PolygonArea(points, c.PointStart, c.PointCount);
+                default: return 0f; // EdgeChain：无面积。 // no area. // 面積なし。
+            }
+        }
+
+        private static float PolygonArea(List<float2> pts, int start, int count)
+        {
+            if (pts == null || count < 3) return 0f;
+            float a = 0f;
+            for (int i = 0; i < count; i++)
+            {
+                float2 p0 = pts[start + i];
+                float2 p1 = pts[start + ((i + 1) % count)];
+                a += p0.x * p1.y - p1.x * p0.y;
+            }
+            return 0.5f * abs(a); // 鞋带公式（绝对值，朝向无关）。 // shoelace (absolute, orientation-independent). // 靴ひも公式。
+        }
+
         /// <summary>
         /// 计算把位置 p（半径 particleRadius）推出碰撞体所需的修正向量与表面外法线。
         /// Compute the correction vector and outward surface normal needed to push position p (radius particleRadius) out of the collider.

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Unity.Collections;
 
@@ -42,7 +43,7 @@ namespace Fs.Liquid2D
         /// owns the returned buffer (Allocator.TempJob recommended).
         /// 有効かつ本フレーム作用する全力場を NativeArray バッファに平坦化します。TryGetField が false のソースはスキップ。
         /// </summary>
-        public static Liquid2DForceFieldBuffer BuildBuffer(Allocator allocator)
+        public static Liquid2DForceFieldBuffer BuildBuffer(Allocator allocator, Func<string, int> groupResolver)
         {
             _dataScratch.Clear();
 
@@ -50,8 +51,16 @@ namespace Fs.Liquid2D
             {
                 var s = _active[i];
                 if (!s || !s.isActiveAndEnabled) continue;
-                if (s.TryGetField(out var data) && data.Radius > 0f && data.Strength != 0f)
-                    _dataScratch.Add(data);
+                if (!s.TryGetField(out var data) || data.Radius <= 0f || data.Strength == 0f) continue;
+
+                // nameTag → groupId 组过滤：空 nameTag 作用于全部（matchAll），否则仅作用于匹配组。
+                // nameTag → groupId filter: empty nameTag affects all (matchAll); otherwise only the matching group.
+                // nameTag → groupId 絞り込み：空は全作用、それ以外は一致グループのみ。
+                string tag = s.NameTag;
+                bool matchAll = string.IsNullOrEmpty(tag);
+                data.GroupId = matchAll || groupResolver == null ? 0 : groupResolver(tag);
+                data.MatchAll = (byte)(matchAll ? 1 : 0);
+                _dataScratch.Add(data);
             }
 
             var buffer = new Liquid2DForceFieldBuffer();

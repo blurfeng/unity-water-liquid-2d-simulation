@@ -60,8 +60,10 @@ There are **no per-particle GameObjects**. Particles are rows in Structure-of-Ar
   `typeId`; rendering batches by descriptor.
 - **Colliders** (`Physics/Colliders/`) — these *stay* MonoBehaviours (few, scene-authored):
   `Liquid2DCollider` subclasses (Box/Circle/Capsule/Polygon) register into `Liquid2DColliderRegistry`,
-  flattened to a Burst buffer each frame. `isDynamic` colliders receive fluid reaction impulse (two-way
-  coupling) via `ILiquid2DForceReceiver`.
+  flattened to a Burst buffer each frame. A collider is **dynamic** when an `ILiquid2DForceReceiver` exists on
+  the same object or a parent — `Liquid2DRigidbodyBridge` is the shipping implementation, bridging the per-body
+  reaction impulse + contact accumulation to a `Rigidbody2D` for two-way coupling (wash-away + buoyancy/float).
+  Each collider/force-field also carries an optional `nameTag` that restricts it to the matching particle group.
 - **`Liquid2DPhysicsConfig.cs`** (in `Systems/`) — optional scene component that pushes solver params,
   compute mode, cap, and fixed timestep into the static `Liquid2DSimulation` fields on `Awake`.
 

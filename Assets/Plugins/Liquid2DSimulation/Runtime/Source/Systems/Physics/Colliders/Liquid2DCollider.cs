@@ -16,22 +16,45 @@ namespace Fs.Liquid2D
     public abstract class Liquid2DCollider : MonoBehaviour
     {
         [SerializeField, LocalizationTooltip(
-             "是否动态：动态碰撞体接收流体反作用冲量（双向耦合），可用于被水流推动的物体。",
-             "Whether dynamic: dynamic colliders receive fluid reaction impulse (two-way coupling), for objects pushed by flow.",
-             "動的かどうか：動的コライダーは流体の反作用力積を受け取り（双方向）、水流に押される物体に使えます。")]
-        private bool isDynamic;
+             "作用的粒子组标签。留空=作用于全部粒子；填写后仅阻挡 nameTag 匹配的粒子（其它粒子穿过）。",
+             "Particle group tag to act on. Empty = affects all particles; set = only blocks particles whose nameTag matches (others pass through).",
+             "作用する粒子グループのタグ。空=全粒子に作用、設定時は nameTag 一致の粒子のみ阻止（他は通過）。")]
+        private string nameTag = string.Empty;
 
         protected Transform CachedTransform;
 
-        /// <summary>是否动态（参与双向耦合）。 // Whether dynamic (two-way coupling). // 動的か。</summary>
-        public bool IsDynamic => isDynamic;
+        // 缓存的力接收者（同物体或父级，OnEnable 解析）。 // Cached force receiver (same object or parent; resolved on enable). // 力レシーバーのキャッシュ。
+        private ILiquid2DForceReceiver _forceReceiver;
+
+        /// <summary>作用的粒子组标签（空=作用于全部）。 // Particle group tag to act on (empty = all). // 作用する粒子グループのタグ（空=全部）。</summary>
+        public string NameTag => nameTag;
+
+        /// <summary>
+        /// 是否动态（参与双向耦合）：当同物体或父级挂有 <see cref="ILiquid2DForceReceiver"/>（如
+        /// <see cref="Liquid2DRigidbodyBridge"/>）时为 true。
+        /// Whether dynamic (two-way coupling): true when an <see cref="ILiquid2DForceReceiver"/> (e.g.
+        /// <see cref="Liquid2DRigidbodyBridge"/>) exists on the same object or a parent.
+        /// 動的か（双方向）：同オブジェクトまたは親に <see cref="ILiquid2DForceReceiver"/> がある場合 true。
+        /// </summary>
+        public bool IsDynamic => _forceReceiver != null;
 
         /// <summary>形状类型。 // Shape type. // 形状タイプ。</summary>
         public abstract Liquid2DColliderShape Shape { get; }
 
+        /// <summary>
+        /// 确保 <see cref="CachedTransform"/> 已初始化（编辑器/未 OnEnable 时安全调用，供 <see cref="Fill"/> / 面积计算使用）。
+        /// Ensure <see cref="CachedTransform"/> is initialized (safe in editor / before OnEnable, for <see cref="Fill"/> / area).
+        /// <see cref="CachedTransform"/> の初期化を保証（エディタ/ OnEnable 前でも安全）。
+        /// </summary>
+        public void EnsureInitialized()
+        {
+            if (!CachedTransform) CachedTransform = transform;
+        }
+
         protected virtual void OnEnable()
         {
             CachedTransform = transform;
+            _forceReceiver = GetComponentInParent<ILiquid2DForceReceiver>();
             Liquid2DColliderRegistry.Register(this);
         }
 
@@ -65,11 +88,12 @@ namespace Fs.Liquid2D
         }
 
         /// <summary>
-        /// 动态碰撞体的力接收者（默认取同物体上的 <see cref="ILiquid2DForceReceiver"/>，可能为 null）。
-        /// Force receiver for a dynamic collider (defaults to an <see cref="ILiquid2DForceReceiver"/> on the same object; may be null).
-        /// 動的コライダーの力レシーバー（既定は同オブジェクトの実装、null 可）。
+        /// 碰撞体的力接收者（同物体或父级上的 <see cref="ILiquid2DForceReceiver"/>，OnEnable 缓存；为 null 时碰撞体为静态）。
+        /// Force receiver of this collider (an <see cref="ILiquid2DForceReceiver"/> on the same object or a parent, cached on
+        /// enable; the collider is static when null).
+        /// コライダーの力レシーバー（同オブジェクトまたは親の実装、OnEnable でキャッシュ。null なら静的）。
         /// </summary>
-        public virtual ILiquid2DForceReceiver ForceReceiver => isDynamic ? GetComponent<ILiquid2DForceReceiver>() : null;
+        public virtual ILiquid2DForceReceiver ForceReceiver => _forceReceiver;
 
         protected float ZRotationRadians => CachedTransform.eulerAngles.z * Mathf.Deg2Rad;
         protected float2 WorldCenter => new float2(CachedTransform.position.x, CachedTransform.position.y);

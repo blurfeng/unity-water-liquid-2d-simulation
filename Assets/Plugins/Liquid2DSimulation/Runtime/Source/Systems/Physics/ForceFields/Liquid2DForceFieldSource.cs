@@ -17,6 +17,12 @@ namespace Fs.Liquid2D
     /// </summary>
     public abstract class Liquid2DForceFieldSource : MonoBehaviour
     {
+        [SerializeField, LocalizationTooltip(
+             "作用的粒子组标签。留空=作用于全部粒子；填写后仅对 nameTag 匹配的粒子施力。",
+             "Particle group tag to act on. Empty = affects all particles; set = only applies force to particles whose nameTag matches.",
+             "作用する粒子グループのタグ。空=全粒子に作用、設定時は nameTag 一致の粒子のみに施力。")]
+        private string nameTag = string.Empty;
+
         [SerializeField, Min(0f), LocalizationTooltip(
              "力场作用半径（世界单位）。半径外的粒子不受影响。",
              "Force-field effect radius (world units). Particles outside are unaffected.",
@@ -61,6 +67,9 @@ namespace Fs.Liquid2D
         private Liquid2DForceFieldMode forceMode = Liquid2DForceFieldMode.Falloff;
 
         protected Transform CachedTransform;
+
+        /// <summary>作用的粒子组标签（空=作用于全部）。 // Particle group tag to act on (empty = all). // 作用する粒子グループのタグ（空=全部）。</summary>
+        public string NameTag => nameTag;
 
         /// <summary>作用半径。 // Effect radius. // 作用半径。</summary>
         public float Radius { get => radius; set => radius = Mathf.Max(0f, value); }

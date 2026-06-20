@@ -57,6 +57,12 @@ namespace Fs.Liquid2D
              "重力スケール。1 は通常落下、0 は浮遊、負値は上昇（泡は 0 か負に）。")]
         public float GravityScale = 1f;
 
+        [Min(0f), LocalizationTooltip(
+             "流体质量密度（用于阿基米德浮力）。物体密度（质量/体积）小于它则漂浮、大于则下沉。水≈1，熔岩更大，泡沫更小。",
+             "Fluid mass density (for Archimedes buoyancy). A body floats when its density (mass/volume) is below this, sinks when above. Water≈1, lava higher, foam lower.",
+             "流体の質量密度（アルキメデス浮力用）。物体の密度（質量/体積）がこれより小さいと浮き、大きいと沈む。水≈1、溶岩は大、泡は小。")]
+        public float Density = 1f;
+
         /// <summary>
         /// 转为 Burst Job 可用的 blittable 数据。
         /// Convert to blittable data usable in Burst jobs.
@@ -71,25 +77,26 @@ namespace Fs.Liquid2D
             Friction = Friction,
             Restitution = Restitution,
             GravityScale = GravityScale,
+            Density = Density,
         };
 
         // —— 预设 // Presets // プリセット ——
 
         /// <summary>水：低粘、低张力、正常重力。 // Water: low viscosity/tension, normal gravity. // 水：低粘性/低張力、通常重力。</summary>
         public static Liquid2DParticleMaterial Water() => new Liquid2DParticleMaterial
-            { Mass = 1f, RestDensityScale = 1f, Viscosity = 0.01f, Cohesion = 0.08f, Friction = 0f, Restitution = 0f, GravityScale = 1f };
+            { Mass = 1f, RestDensityScale = 1f, Viscosity = 0.01f, Cohesion = 0.08f, Friction = 0f, Restitution = 0f, GravityScale = 1f, Density = 1f };
 
         /// <summary>熔岩：高粘、中张力、高质量、缓动。 // Lava: high viscosity/mass, medium tension. // 溶岩：高粘性/高質量、中張力。</summary>
         public static Liquid2DParticleMaterial Lava() => new Liquid2DParticleMaterial
-            { Mass = 3f, RestDensityScale = 1.1f, Viscosity = 0.6f, Cohesion = 0.25f, Friction = 0.05f, Restitution = 0f, GravityScale = 1f };
+            { Mass = 3f, RestDensityScale = 1.1f, Viscosity = 0.6f, Cohesion = 0.25f, Friction = 0.05f, Restitution = 0f, GravityScale = 1f, Density = 3f };
 
         /// <summary>泡沫：高张力、低质量、低/零重力，易结团上浮。 // Foam: high tension, low mass, low gravity. // 泡：高張力、低質量、低重力。</summary>
         public static Liquid2DParticleMaterial Foam() => new Liquid2DParticleMaterial
-            { Mass = 0.3f, RestDensityScale = 0.8f, Viscosity = 0.05f, Cohesion = 0.6f, Friction = 0f, Restitution = 0.1f, GravityScale = 0.1f };
+            { Mass = 0.3f, RestDensityScale = 0.8f, Viscosity = 0.05f, Cohesion = 0.6f, Friction = 0f, Restitution = 0.1f, GravityScale = 0.1f, Density = 0.3f };
 
         /// <summary>沙子：高摩擦、低粘、零张力（颗粒近似，真实颗粒需后续摩擦约束扩展）。 // Sand: high friction, no tension (granular approximation). // 砂：高摩擦、無張力（近似）。</summary>
         public static Liquid2DParticleMaterial Sand() => new Liquid2DParticleMaterial
-            { Mass = 1.5f, RestDensityScale = 1f, Viscosity = 0.2f, Cohesion = 0f, Friction = 0.6f, Restitution = 0f, GravityScale = 1f };
+            { Mass = 1.5f, RestDensityScale = 1f, Viscosity = 0.2f, Cohesion = 0f, Friction = 0.6f, Restitution = 0f, GravityScale = 1f, Density = 1.5f };
     }
 
     /// <summary>
@@ -106,9 +113,10 @@ namespace Fs.Liquid2D
         public float Friction;
         public float Restitution;
         public float GravityScale;
+        public float Density; // 质量密度（阿基米德浮力用）。 // mass density (Archimedes buoyancy). // 質量密度（浮力用）。
 
         /// <summary>默认材质（等价于水的中性参数）。 // Default (water-like neutral). // デフォルト（水相当）。</summary>
         public static Liquid2DMaterialData Default => new Liquid2DMaterialData
-            { InvMass = 1f, RestDensityScale = 1f, Viscosity = 0.01f, Cohesion = 0.08f, Friction = 0f, Restitution = 0f, GravityScale = 1f };
+            { InvMass = 1f, RestDensityScale = 1f, Viscosity = 0.01f, Cohesion = 0.08f, Friction = 0f, Restitution = 0f, GravityScale = 1f, Density = 1f };
     }
 }

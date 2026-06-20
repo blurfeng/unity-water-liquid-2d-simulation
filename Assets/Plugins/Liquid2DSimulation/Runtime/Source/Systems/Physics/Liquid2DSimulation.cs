@@ -267,9 +267,11 @@ namespace Fs.Liquid2D
 
             if (Params.H <= 0f) Params = SolverParams.Default;
 
-            var colliders = Liquid2DColliderRegistry.BuildBuffer(Allocator.TempJob, _dynamicReceivers);
-            var impulse = new NativeArray<float2>(math.max(1, _dynamicReceivers.Count), Allocator.TempJob, NativeArrayOptions.ClearMemory);
-            var forceFields = Liquid2DForceFieldRegistry.BuildBuffer(Allocator.TempJob);
+            var colliders = Liquid2DColliderRegistry.BuildBuffer(Allocator.TempJob, _dynamicReceivers, GetGroup);
+            int bodyCount = math.max(1, _dynamicReceivers.Count);
+            var impulse = new NativeArray<float2>(bodyCount, Allocator.TempJob, NativeArrayOptions.ClearMemory);
+            var contact = new NativeArray<float4>(bodyCount, Allocator.TempJob, NativeArrayOptions.ClearMemory);
+            var forceFields = Liquid2DForceFieldRegistry.BuildBuffer(Allocator.TempJob, GetGroup);
 
             // 销毁区域：扁平化为缓冲，并分配按 active 索引的 killFlags（求解器置位，Step 后回收 slot）。
             // Dead zones: flatten to a buffer and allocate active-indexed killFlags (solver sets them, slots recycled after Step).
@@ -287,6 +289,7 @@ namespace Fs.Liquid2D
                 MixData = _mixData,
                 Colliders = colliders,
                 ColliderImpulse = impulse,
+                ColliderContact = contact,
                 ForceFields = forceFields,
                 DeadZones = deadZones,
                 DeadZoneCount = deadZoneCount,
@@ -314,7 +317,7 @@ namespace Fs.Liquid2D
                     _activeDirty = true;
                 }
 
-                DispatchImpulses(impulse);
+                DispatchBodyForces(impulse, contact, Time.fixedDeltaTime);
 
                 // 回收落入销毁区域的粒子（killFlags 由 CPU/GPU 求解器置位）。 // Recycle particles inside dead zones (killFlags set by CPU/GPU solver). // 破棄領域内の粒子を回収。
                 if (deadZoneCount > 0) ApplyKills(killFlags, count);
@@ -324,6 +327,7 @@ namespace Fs.Liquid2D
                 colliders.Colliders.Dispose();
                 colliders.Points.Dispose();
                 impulse.Dispose();
+                contact.Dispose();
                 if (forceFields.Fields.IsCreated) forceFields.Fields.Dispose();
                 if (deadZones.Zones.IsCreated) deadZones.Zones.Dispose();
                 if (deadZones.Points.IsCreated) deadZones.Points.Dispose();
@@ -363,14 +367,32 @@ namespace Fs.Liquid2D
             return c;
         }
 
-        private void DispatchImpulses(NativeArray<float2> impulse)
+        // 把本帧累积的冲量 + 接触信息打包成 Liquid2DBodyForce 派发给各动态体的力接收者（双向耦合）。
+        // Pack this frame's accumulated impulse + contact info into Liquid2DBodyForce and dispatch to each dynamic body's
+        // force receiver (two-way coupling).
+        // 本フレームの累積力積 + 接触情報を Liquid2DBodyForce にまとめ、各動的体のレシーバーへ派遣（双方向）。
+        private void DispatchBodyForces(NativeArray<float2> impulse, NativeArray<float4> contact, float dt)
         {
             for (int b = 0; b < _dynamicReceivers.Count && b < impulse.Length; b++)
             {
                 var r = _dynamicReceivers[b];
                 if (r == null) continue;
+
                 float2 imp = impulse[b];
-                if (math.lengthsq(imp) > 1e-8f) r.ApplyLiquidImpulse(imp);
+                float4 con = b < contact.Length ? contact[b] : float4.zero;
+                int contactCount = (int)con.z;
+                if (math.lengthsq(imp) <= 1e-8f && contactCount <= 0) continue;
+
+                float2 center = contactCount > 0 ? new float2(con.x, con.y) / contactCount : float2.zero;
+                float fluidDensity = contactCount > 0 ? con.w / contactCount : 0f;
+                r.ApplyLiquidForces(new Liquid2DBodyForce
+                {
+                    Impulse = imp,
+                    ContactCenter = center,
+                    ContactCount = contactCount,
+                    FluidDensity = fluidDensity,
+                    Dt = dt,
+                });
             }
         }
 
@@ -448,5 +470,24 @@ namespace Fs.Liquid2D
             if (_materials.IsCreated) _materials.Dispose();
             if (_mixData.IsCreated) _mixData.Dispose();
         }
+
+#if UNITY_EDITOR
+        // 编辑器中「Play 模式下重新编译脚本」会触发域重载（domain reload）。本单例是运行时创建的
+        // HideAndDontSave 对象，域重载时不会走 OnDestroy，导致 SphGpuSolver 的 ComputeBuffer / NativeArray 泄漏。
+        // 在域重载前主动 DestroyImmediate 单例，触发 OnDestroy 完成释放。仅编辑器需要，构建中不存在域重载。
+        // Recompiling scripts while in Play mode triggers a domain reload in the editor. This runtime-created
+        // HideAndDontSave singleton does not get OnDestroy on a domain reload, leaking SphGpuSolver's ComputeBuffer /
+        // NativeArray. Destroy the singleton before the reload so OnDestroy runs and releases everything.
+        // Play モード中の再コンパイルはドメインリロードを起こし、HideAndDontSave のランタイム単例は OnDestroy が
+        // 呼ばれず ComputeBuffer / NativeArray が漏れます。リロード前に破棄して解放します。
+        [UnityEditor.InitializeOnLoadMethod]
+        private static void RegisterDomainReloadCleanup()
+        {
+            UnityEditor.AssemblyReloadEvents.beforeAssemblyReload += () =>
+            {
+                if (_instance) DestroyImmediate(_instance.gameObject);
+            };
+        }
+#endif
     }
 }

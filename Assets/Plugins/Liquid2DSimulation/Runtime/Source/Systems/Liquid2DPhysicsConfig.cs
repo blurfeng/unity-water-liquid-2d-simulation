@@ -73,6 +73,17 @@ namespace Fs.Liquid2D
         //             }
         //        }
         // ─────────────────────────────────────────────────────────────────────────────
+        // 【双向耦合与回读】动态体（挂 Liquid2DRigidbodyBridge 的碰撞体）的「冲走」与「浮力」走独立的 per-body
+        //   小数组回读（仅在存在动态体时触发），与 gpuReadbackToStore 无关 —— 因此 GPU 模式下无需开启
+        //   gpuReadbackToStore 即可正常冲走/漂浮。gpuReadbackToStore 只服务于直接读 CPU store 的逐粒子功能。
+        // 【Two-way coupling & readback】The "wash away" and "buoyancy" of dynamic bodies (colliders carrying
+        //   Liquid2DRigidbodyBridge) use an independent per-body small-array readback (only when dynamic bodies exist),
+        //   unrelated to gpuReadbackToStore — so wash/float work in GPU mode WITHOUT enabling gpuReadbackToStore.
+        //   gpuReadbackToStore only serves per-particle features that read the CPU store directly.
+        // 【双方向カップリングと回読】動的体（Liquid2DRigidbodyBridge 付きコライダー）の「押し流し」「浮力」は
+        //   独立した per-body 小配列回読（動的体がある時のみ）を使い、gpuReadbackToStore とは無関係。
+        //   よって GPU モードでも gpuReadbackToStore を有効にせず押し流し/浮遊が動作します。
+        // ─────────────────────────────────────────────────────────────────────────────
 
         #endregion
 
