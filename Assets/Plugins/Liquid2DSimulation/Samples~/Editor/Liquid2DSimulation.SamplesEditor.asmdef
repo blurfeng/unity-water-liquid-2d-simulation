@@ -1,0 +1,21 @@
+{
+    "name": "Liquid2DSimulation.SamplesEditor",
+    "rootNamespace": "Fs.Liquid2D.Samples.Editor",
+    "references": [
+        "Liquid2DSimulation",
+        "Liquid2DSimulation.Editor",
+        "Unity.RenderPipelines.Universal.Runtime",
+        "Unity.RenderPipelines.Core.Runtime"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

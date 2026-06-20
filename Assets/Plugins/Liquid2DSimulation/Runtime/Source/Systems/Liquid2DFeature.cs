@@ -33,7 +33,14 @@ namespace Fs.Liquid2D
              "Fluid effect settings.",
              "流体エフェクト設定。")] 
         private Liquid2DRenderFeatureSettings renderFeatureSettings;
-        
+
+        /// <summary>
+        /// 该 Feature 的名称标签（来自流体效果设置）。
+        /// The name tag of this feature (from the fluid effect settings).
+        /// この Feature の名前タグ（流体エフェクト設定から）。
+        /// </summary>
+        public string NameTag => renderFeatureSettings != null ? renderFeatureSettings.NameTag : null;
+
         private Liquid2DPass _liquid2DPass;
         private Material _materialBlur;
         private Material _materialEffect;

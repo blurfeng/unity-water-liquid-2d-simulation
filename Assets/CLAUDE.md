@@ -139,10 +139,15 @@ Follow the official .NET naming guidelines
 (https://learn.microsoft.com/zh-cn/dotnet/csharp/fundamentals/coding-style/identifier-names):
 
 - **PascalCase** — types (class/struct/enum/interface), methods, properties, events, namespaces,
-  enum members, `public`/`protected`/`internal` fields, and constants (`const` / `static readonly`).
+  enum members, `public`/`protected`/`internal` fields, and `public`/`protected`/`internal` constants
+  (`const` / `static readonly`).
 - **Interfaces** — `I` prefix + PascalCase (e.g. `ILiquid2DSolver`, `ILiquid2DForceReceiver`).
-- **Private / internal instance fields** — `_camelCase` with a leading underscore. (Existing static
-  private fields in this codebase, e.g. the `Shader.PropertyToID` cache, also use `_camelCase`.)
+- **Private fields — always `_camelCase` with a leading underscore, regardless of `static` / `readonly` /
+  `const`.** The underscore prefix is determined by *visibility* (private), not by lifetime: a
+  `private static readonly Color _colorOk` and a `private const int _maxRetries` both take the underscore,
+  just like instance fields. (This also covers the existing `Shader.PropertyToID` static caches.) Accessible
+  constants — i.e. `public`/`protected`/`internal` `const` / `static readonly` — use PascalCase per the rule
+  above.
 - **Method parameters & local variables** — `camelCase`.
 - **Generic type parameters** — `T` prefix + PascalCase (`T`, `TValue`, `TKey`).
 - ⚠️ **Serialization caveat:** changing a serialized field's name (including its first-letter case)

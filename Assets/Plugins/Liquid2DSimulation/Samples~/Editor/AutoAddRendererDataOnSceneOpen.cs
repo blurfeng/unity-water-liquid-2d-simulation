@@ -1,9 +1,9 @@
 ﻿using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
-using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using System.Linq;
+using Fs.Liquid2D.Editor;
 
 namespace Fs.Liquid2D.Samples.Editor
 {
@@ -41,30 +41,9 @@ namespace Fs.Liquid2D.Samples.Editor
             var rendererData = AssetDatabase.LoadAssetAtPath<ScriptableRendererData>(assetPath);
             if (!rendererData) return;
 
-            var urpAsset = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
-            if (!urpAsset) return;
-
-            var so = new SerializedObject(urpAsset);
-            var list = so.FindProperty("m_RendererDataList");
-            int rendererIndex = -1;
-            for (int i = 0; i < list.arraySize; i++)
-            {
-                if (list.GetArrayElementAtIndex(i).objectReferenceValue == rendererData)
-                {
-                    rendererIndex = i;
-                    break;
-                }
-            }
-            if (rendererIndex == -1)
-            {
-                list.InsertArrayElementAtIndex(list.arraySize);
-                list.GetArrayElementAtIndex(list.arraySize - 1).objectReferenceValue = rendererData;
-                so.ApplyModifiedProperties();
-                EditorUtility.SetDirty(urpAsset);
-                AssetDatabase.SaveAssets();
-                rendererIndex = list.arraySize - 1;
-                Debug.Log($"Auto added Liquid2DRenderer2D to URP Renderer List at index {rendererIndex}.");
-            }
+            // 通过通用工具，确保 RendererData 已加入当前 URP 资源并取得其索引。 // Use the shared utility to ensure the RendererData is in the URP asset and get its index.
+            int rendererIndex = Liquid2DEditorUtility.EnsureRendererDataInUrp(rendererData);
+            if (rendererIndex == -1) return;
 
             // 设置所有相机使用新 Renderer。 // Set all cameras to use new Renderer. // すべてのカメラで新しいRendererを使用するよう設定。
             foreach (var cam in Object.FindObjectsByType<Camera>(FindObjectsSortMode.None))
