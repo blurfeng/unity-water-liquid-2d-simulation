@@ -1,6 +1,6 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
---- !u!1 &2155624610036930552
+--- !u!1 &5407797533113675698
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -8,22 +8,22 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 6729538587706341266}
-  - component: {fileID: 1236614623622671160}
+  - component: {fileID: 8701381950238694280}
+  - component: {fileID: 1118354612016438053}
   m_Layer: 0
-  m_Name: LiquidSpawner
+  m_Name: LiquidRegionSpawner
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!4 &6729538587706341266
+--- !u!4 &8701381950238694280
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2155624610036930552}
+  m_GameObject: {fileID: 5407797533113675698}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -32,33 +32,35 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1236614623622671160
+--- !u!114 &1118354612016438053
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2155624610036930552}
+  m_GameObject: {fileID: 5407797533113675698}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ae45dd1dce65f354a975434a0a9d015d, type: 3}
+  m_Script: {fileID: 11500000, guid: 0fb9fce92f26c18478b9f033825d5085, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Fs.Liquid2D.LiquidSpawner
-  spawningEnabled: 1
-  startOnAwake: 1
-  firstStartDelay: 1
-  startDelay: 0.5
-  duration: 0
-  maxSpawnCount: 0
-  spawnedCount: 0
-  liquidParticles: []
-  nozzleWidth: 1
-  spawnDepthJitter: 0
-  flowRate: 60
-  flowRateFactor: 1
-  sizeRandomRange: {x: 0.9, y: 1.2}
-  ejectForce: 30
-  ejectForceFactor: 1
-  ejectForceRandomRange: {x: 0.9, y: 1.2}
-  swingAngleRange: 90
-  swingSpeed: 0.2
+  m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.LiquidRegionSpawner
+  spawnOnStart: 1
+  particles:
+  - Descriptor: {fileID: 11400000, guid: f35c2bc9e2e98fd4387aaeabc88c127f, type: 2}
+    Weight: 1
+    Lifetime: 0
+    IsInit: 1
+  spawnDensity: 50
+  initialVelocity: {x: 0, y: 0}
+  jitterStr: 0.05
+  refillEnabled: 0
+  refillFlowRate: 20
+  refillThreshold: 1
+  spawnRegions:
+  - Position: {x: 0, y: 0}
+    Size: {x: 12, y: 6}
+    OverrideParticles: 0
+    Particles: []
+    IsInit: 1
+  showGizmos: 1
+  estimatedParticleCount: 3655

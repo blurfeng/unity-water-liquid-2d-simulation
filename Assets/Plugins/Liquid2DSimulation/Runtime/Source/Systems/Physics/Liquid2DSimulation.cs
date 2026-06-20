@@ -14,6 +14,7 @@ namespace Fs.Liquid2D
     /// 2D 流体シミュレーションハブ（ランタイムシングルトン）。旧 Liquid2DParticleManager を置き換え。
     /// </summary>
     [DefaultExecutionOrder(-100)]
+    [AddComponentMenu("Liquid2D/Systems/Liquid2D Simulation")]
     public class Liquid2DSimulation : MonoBehaviour
     {
         private static Liquid2DSimulation _instance;
@@ -41,8 +42,8 @@ namespace Fs.Liquid2D
         /// <summary>全局求解参数（由 Liquid2DPhysicsConfig 配置）。 // Global solver params (configured by Liquid2DPhysicsConfig). // グローバル解法パラメータ。</summary>
         public static SolverParams Params = SolverParams.Default;
 
-        /// <summary>计算平台模式（GPU 预留）。 // Compute mode (GPU reserved). // 計算モード。</summary>
-        public static Liquid2DSimulationMode Mode = Liquid2DSimulationMode.Cpu;
+        /// <summary>计算平台模式。 // Compute mode. // 計算モード。</summary>
+        public static Liquid2DSimulationMode Mode = Liquid2DSimulationMode.Gpu;
 
         /// <summary>
         /// GPU 模式下每帧把 GPU 数据全量回读到 CPU store。仅为让依赖 CPU store 的功能（Liquid2DDebugGizmos、
@@ -80,6 +81,8 @@ namespace Fs.Liquid2D
 
         private void Awake()
         {
+            _instance = this;
+            
             _store = new Liquid2DParticleStore(2048);
             _activeIndices = new NativeArray<int>(_store.Capacity, Allocator.Persistent);
             CreateSolver();

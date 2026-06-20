@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using Fs.Liquid2D.Localization;
 using Fs.Liquid2D.Utility;
 using UnityEngine;
@@ -34,11 +35,24 @@ namespace Fs.Liquid2D
         }
 
 #if UNITY_EDITOR
-        public void OnValidate()
+        [SerializeField, HideInInspector]
+        public bool IsInit;
+        
+        public void TryInitOnEditor()
         {
-            if (Descriptor && !Descriptor.IsValid())
+            if (IsInit) return;
+            
+            IsInit = true;
+            Weight = 1;
+        }
+
+        public static void TryInitOnEditorForList(IEnumerable<Liquid2DParticleConfig> list)
+        {
+            if (list == null) return;
+
+            foreach (var p in list)
             {
-                Debug.LogWarning($"Liquid2DParticleDescriptor {Descriptor.name} 缺少 Sprite/Material，渲染将被跳过。");
+                p.TryInitOnEditor();
             }
         }
 #endif

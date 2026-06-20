@@ -64,6 +64,10 @@ namespace Fs.Liquid2D
         private int currentParticleCount;
 
 #if UNITY_EDITOR
+        
+        [SerializeField, TextArea(2, 5)] 
+        private string gpuReadbackToStoreInfo;
+        
         private void Update()
         {
             if (!Application.isPlaying)
@@ -80,6 +84,17 @@ namespace Fs.Liquid2D
         private void OnDrawGizmos()
         {
             if (!showGizmos) return;
+            
+            // 没有回写数据到 CPU Store，无法绘制 gizmo。
+            // No data is written back to the CPU store, cannot draw gizmo.
+            // CPU Store にデータが書き戻されていないため、gizmo を描画できません。
+            if (!Liquid2DSimulation.GpuReadbackToStore)
+            {
+                gpuReadbackToStoreInfo = "GPU Readback to Store is disabled, cannot draw gizmo.";
+                return;
+            }
+            gpuReadbackToStoreInfo = "GPU Readback to Store is enabled, can draw gizmo.";
+            
             if (!Application.isPlaying) return;
             if (!drawPhysicsRadius && !drawRenderSize) return;
             if (!Liquid2DSimulation.TryGetRenderData(out var store, out NativeArray<int> active, out int activeCount,

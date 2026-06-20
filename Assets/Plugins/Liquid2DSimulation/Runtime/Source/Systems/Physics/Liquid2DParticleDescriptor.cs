@@ -22,7 +22,7 @@ namespace Fs.Liquid2D
              "粒子半径（世界单位）。影响碰撞/邻居半径与物理间距。",
              "Particle radius (world units). Affects collision/neighbor radius and physics spacing.",
              "粒子半径（ワールド単位）。衝突/近傍半径と物理間隔に影響します。")]
-        public float Radius = 0.125f;
+        public float Radius = 0.2f;
 
         [Min(0.1f), LocalizationTooltip(
              "渲染可视倍率：绘制 quad 直径 = 半径 × 2 × 此值。metaball 融合需要远大于物理半径的可视 blob，建议 4~8。",

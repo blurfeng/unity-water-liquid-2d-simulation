@@ -13,6 +13,7 @@ namespace Fs.Liquid2D
     /// 2D 流体物理設定コンポーネント（オプション）。SPH デュアル密度ソルバーのグローバルパラメータ、計算モード、
     /// nameTag ごとの生存上限、物理固定タイムステップを設定します。シーン内の常駐オブジェクトにアタッチします。
     /// </summary>
+    [AddComponentMenu("Liquid2D/Systems/Liquid2D Physics Config")]
     public class Liquid2DPhysicsConfig : MonoBehaviour
     {
         #region Description 使用说明 // 使用説明
@@ -98,7 +99,7 @@ namespace Fs.Liquid2D
              "计算平台模式。CPU 为 Job System + Burst；GPU 为 Compute Shader（数据常驻 GPU，适合高粒子数）。",
              "Compute platform mode. CPU = Job System + Burst; GPU = Compute Shader (GPU-resident data, for high particle counts).",
              "計算プラットフォームモード。CPU は Job System + Burst、GPU は Compute Shader（GPU 常駐、高粒子数向け）。")]
-        private Liquid2DSimulationMode mode = Liquid2DSimulationMode.Cpu;
+        private Liquid2DSimulationMode mode = Liquid2DSimulationMode.Gpu;
 
         [SerializeField, LocalizationTooltip(
              "⚠ 性能警告：GPU 模式下每帧把粒子数据从 GPU 全量回读到 CPU。仅在需要让依赖 CPU 数据的功能" +
