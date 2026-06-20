@@ -14,7 +14,7 @@ namespace Fs.Liquid2D
     /// カスタム Mesh を使った流体コライダー。外輪郭エッジ（1三角形のみに属するエッジ）を抽出し有序ループに組み上げます。
     /// 複数ループ時は最長を使用。closed=true は中実多角形、false は開いた薄壁エッジチェーン。
     /// </summary>
-    [AddComponentMenu("Liquid2D/Colliders/Liquid2D Mesh Collider")]
+    [AddComponentMenu("Liquid 2D/Colliders/Liquid 2D Mesh Collider")]
     public class Liquid2DMeshCollider : Liquid2DCollider
     {
         [SerializeField, LocalizationTooltip(

@@ -13,7 +13,7 @@ namespace Fs.Liquid2D
     /// 2D 流体物理設定コンポーネント（オプション）。SPH デュアル密度ソルバーのグローバルパラメータ、計算モード、
     /// nameTag ごとの生存上限、物理固定タイムステップを設定します。シーン内の常駐オブジェクトにアタッチします。
     /// </summary>
-    [AddComponentMenu("Liquid2D/Systems/Liquid2D Physics Config")]
+    [AddComponentMenu("Liquid 2D/Systems/Liquid 2D Physics Config")]
     public class Liquid2DPhysicsConfig : MonoBehaviour
     {
         #region Description 使用说明 // 使用説明

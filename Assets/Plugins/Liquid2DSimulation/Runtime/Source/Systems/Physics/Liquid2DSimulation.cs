@@ -14,7 +14,7 @@ namespace Fs.Liquid2D
     /// 2D 流体シミュレーションハブ（ランタイムシングルトン）。旧 Liquid2DParticleManager を置き換え。
     /// </summary>
     [DefaultExecutionOrder(-100)]
-    [AddComponentMenu("Liquid2D/Systems/Liquid2D Simulation")]
+    [AddComponentMenu("Liquid 2D/Systems/Liquid 2D Simulation")]
     public class Liquid2DSimulation : MonoBehaviour
     {
         private static Liquid2DSimulation _instance;

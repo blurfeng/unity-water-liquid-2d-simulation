@@ -8,7 +8,7 @@ namespace Fs.Liquid2D
     /// <summary>
     /// 有向矩形盒（OBB）流体碰撞体，支持旋转。 // Oriented box (OBB) fluid collider, supports rotation. // 有向ボックス（OBB）流体コライダー。
     /// </summary>
-    [AddComponentMenu("Liquid2D/Colliders/Liquid2D Box Collider")]
+    [AddComponentMenu("Liquid 2D/Colliders/Liquid 2D Box Collider")]
     public class Liquid2DBoxCollider : Liquid2DCollider
     {
         [SerializeField, LocalizationTooltip("盒尺寸（全尺寸，受物体缩放影响）。", "Box size (full size, scaled by transform).", "ボックスサイズ（全サイズ、スケール影響）。")]

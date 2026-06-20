@@ -13,7 +13,7 @@ namespace Fs.Liquid2D
     /// 2D 流体境界コンテナ。粒子はこの境界を超えられず、超えると内側へ押し戻されます。
     /// <see cref="Liquid2DBoxCollider"/> と逆：Box は外へ、Bounds は内へ押します。
     /// </summary>
-    [AddComponentMenu("Liquid2D/Physics/Liquid2D Bounds")]
+    [AddComponentMenu("Liquid 2D/Physics/Liquid 2D Bounds")]
     public class Liquid2DBounds : Liquid2DCollider
     {
         [SerializeField, LocalizationTooltip(

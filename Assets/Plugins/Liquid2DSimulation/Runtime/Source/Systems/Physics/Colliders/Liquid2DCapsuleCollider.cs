@@ -8,7 +8,7 @@ namespace Fs.Liquid2D
     /// <summary>
     /// 胶囊流体碰撞体（沿局部 X 轴的线段 + 半径）。 // Capsule fluid collider (segment along local X + radius). // カプセル流体コライダー。
     /// </summary>
-    [AddComponentMenu("Liquid2D/Colliders/Liquid2D Capsule Collider")]
+    [AddComponentMenu("Liquid 2D/Colliders/Liquid 2D Capsule Collider")]
     public class Liquid2DCapsuleCollider : Liquid2DCollider
     {
         [SerializeField, Min(0f), LocalizationTooltip("线段全长（沿局部 X 轴）。", "Segment full length (along local X).", "線分の全長（ローカル X 軸）。")]

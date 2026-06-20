@@ -17,7 +17,7 @@ namespace Fs.Liquid2D
     /// 自動補充モードをサポート：各領域の生存粒子数を継続監視し、生存比率が閾値を下回った場合に
     /// 設定した流量で段階的に補充します。
     /// </summary>
-    [AddComponentMenu("Liquid2D/Gameplay/Liquid2D Region Spawner")]
+    [AddComponentMenu("Liquid 2D/Gameplay/Liquid 2D Region Spawner")]
     public class Liquid2DRegionSpawner : MonoBehaviour
     {
         [SerializeField, LocalizationTooltip(

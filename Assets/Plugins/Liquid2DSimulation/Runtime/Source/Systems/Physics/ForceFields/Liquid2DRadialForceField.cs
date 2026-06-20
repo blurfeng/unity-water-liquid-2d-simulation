@@ -11,7 +11,7 @@ namespace Fs.Liquid2D
     /// changed at runtime via <see cref="Liquid2DForceFieldSource.Strength"/>.
     /// 径方向力場：本オブジェクトの Transform 位置を中心に、範囲内の粒子へ引力/斥力を継続的に与えます。
     /// </summary>
-    [AddComponentMenu("Liquid2D/Physics/Force Fields/Liquid2D Radial Force Field")]
+    [AddComponentMenu("Liquid 2D/Physics/Force Fields/Liquid 2D Radial Force Field")]
     public class Liquid2DRadialForceField : Liquid2DForceFieldSource
     {
         public override bool TryGetField(out Liquid2DForceFieldData data)

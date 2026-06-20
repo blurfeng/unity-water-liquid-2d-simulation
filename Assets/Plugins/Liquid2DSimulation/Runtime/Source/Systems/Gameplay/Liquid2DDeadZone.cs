@@ -22,7 +22,7 @@ namespace Fs.Liquid2D
     /// into a containment boundary (analogous to <see cref="Liquid2DBounds"/> vs a collider) — handy for recycling escapees.
     /// Bounds モード（<see cref="BoundsMode"/>）は判定を反転し、形状の【外】の粒子を破棄します。
     /// </summary>
-    [AddComponentMenu("Liquid2D/Gameplay/Liquid2D Dead Zone")]
+    [AddComponentMenu("Liquid 2D/Gameplay/Liquid 2D Dead Zone")]
     public class Liquid2DDeadZone : MonoBehaviour
     {
         /// <summary>

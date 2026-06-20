@@ -13,7 +13,7 @@ namespace Fs.Liquid2D
     /// transformed to world by the object's TRS.
     /// 多角形 / エッジチェーン流体コライダー。closed=true は凸多角形（中実）、false は開いた折れ線（両面薄壁）。
     /// </summary>
-    [AddComponentMenu("Liquid2D/Colliders/Liquid2D Polygon Collider")]
+    [AddComponentMenu("Liquid 2D/Colliders/Liquid 2D Polygon Collider")]
     public class Liquid2DPolygonCollider : Liquid2DCollider
     {
         [SerializeField, LocalizationTooltip(

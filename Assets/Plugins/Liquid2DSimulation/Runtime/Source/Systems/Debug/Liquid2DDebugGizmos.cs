@@ -18,7 +18,7 @@ namespace Fs.Liquid2D
     /// エディタ用デバッグ可視化：各流体粒子の物理半径と描画サイズを Scene ビューに描画し、radius と Sprite 融合サイズの比率調整を補助します。
     /// 純データアーキテクチャでは粒子に GameObject が無いため、本コンポーネントが <see cref="Liquid2DSimulation"/> の SoA を読み描画します。データは実行時（Play）のみ。
     /// </summary>
-    [AddComponentMenu("Liquid2D/Gameplay/Liquid2D Debug Gizmos")]
+    [AddComponentMenu("Liquid 2D/Gameplay/Liquid 2D Debug Gizmos")]
     public class Liquid2DDebugGizmos : MonoBehaviour
     {
         [SerializeField, LocalizationTooltip(

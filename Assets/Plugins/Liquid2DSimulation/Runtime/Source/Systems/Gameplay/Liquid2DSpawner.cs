@@ -12,7 +12,7 @@ namespace Fs.Liquid2D
     /// Particle spawner. Continuously spawns fluid particles into the simulation, with various parameter controls and randomization.
     /// 粒子スポーナー。さまざまなパラメーター制御とランダム化を備えたシミュレーションへの流体粒子の継続的なスポーン。
     /// </summary>
-    [AddComponentMenu("Liquid2D/Gameplay/Liquid2D Spawner")]
+    [AddComponentMenu("Liquid 2D/Gameplay/Liquid 2D Spawner")]
     public class Liquid2DSpawner : MonoBehaviour
     {
         [SerializeField, LocalizationTooltip(

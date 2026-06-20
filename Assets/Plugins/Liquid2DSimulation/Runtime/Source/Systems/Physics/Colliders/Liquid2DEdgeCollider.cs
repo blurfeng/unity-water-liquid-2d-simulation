@@ -13,7 +13,7 @@ namespace Fs.Liquid2D
     /// <see cref="EdgeCollider2D"/> を使った流体エッジコライダー。エッジパスはエディター内で EC2D のシーンビューツールで編集。
     /// ビルド時は Awake で EdgeCollider2D を自動削除し、Unity 組み込み物理との干渉を防ぎます。
     /// </summary>
-    [AddComponentMenu("Liquid2D/Colliders/Liquid2D Edge Collider")]
+    [AddComponentMenu("Liquid 2D/Colliders/Liquid 2D Edge Collider")]
     [RequireComponent(typeof(EdgeCollider2D))]
     public class Liquid2DEdgeCollider : Liquid2DCollider
     {

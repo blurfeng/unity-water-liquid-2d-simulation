@@ -15,7 +15,7 @@ namespace Fs.Liquid2D
     /// Unity の <see cref="CustomCollider2D"/> を使った流体コライダー。全サブ形状（Circle / Capsule / Polygon / Edges）を
     /// 読み取り、対応する流体衝突形状に変換して同フレームのソルバーに注入します。
     /// </summary>
-    [AddComponentMenu("Liquid2D/Colliders/Liquid2D Custom Collider")]
+    [AddComponentMenu("Liquid 2D/Colliders/Liquid 2D Custom Collider")]
     [RequireComponent(typeof(CustomCollider2D))]
     public class Liquid2DCustomCollider : Liquid2DCollider
     {
