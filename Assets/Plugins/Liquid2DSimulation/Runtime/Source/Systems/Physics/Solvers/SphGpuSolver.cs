@@ -212,7 +212,7 @@ namespace Fs.Liquid2D
                 }
             }
 
-            // 仅有动态碰撞体时回读冲量（双向耦合）；否则不产生 CPU 同步点。 // Read impulse only when dynamic bodies exist. // 動的体がある時のみ回読。
+            // 仅有动态碰撞体时回读接触采样（双向耦合）；否则不产生 CPU 同步点。 // Read contact samples only when dynamic bodies exist. // 動的体がある時のみ回読。
             if (ctx.DynamicBodyCount > 0) ReadbackImpulse(ctx, numBodies);
 
             // 有销毁区域时回读销毁标记（小数组，count 字节级）。 // Read back kill flags when dead zones exist (small array). // 破棄領域がある時のみ回読。
@@ -444,13 +444,14 @@ namespace Fs.Liquid2D
 
         private void ReadbackImpulse(in Liquid2DSolveContext ctx, int numBodies)
         {
-            var impulseOut = ctx.ColliderImpulse;
-            if (!impulseOut.IsCreated || _impulseX == null) return;
+            // _impulseX/_impulseY 现累积「入射流体速度之和」（缓冲名沿用，语义已改）。 // _impulseX/_impulseY now accumulate the sum of incoming fluid velocities (buffer names kept, semantics changed). // 入射流速の和。
+            var velSumOut = ctx.ColliderVelSum;
+            if (!velSumOut.IsCreated || _impulseX == null) return;
             EnsureArray(ref _impXa, numBodies); EnsureArray(ref _impYa, numBodies);
             _impulseX.GetData(_impXa, 0, 0, numBodies);
             _impulseY.GetData(_impYa, 0, 0, numBodies);
-            for (int b = 0; b < numBodies && b < impulseOut.Length; b++)
-                impulseOut[b] += new float2(_impXa[b] / ImpulseScale, _impYa[b] / ImpulseScale);
+            for (int b = 0; b < numBodies && b < velSumOut.Length; b++)
+                velSumOut[b] += new float2(_impXa[b] / ImpulseScale, _impYa[b] / ImpulseScale);
 
             // 浮力接触累积回读：xy=接触位置之和（去定点化），z=接触数，w=接触流体密度之和（去定点化）。 // Buoyancy readback: xy=sum pos, z=count, w=sum fluid density. // 浮力接触回読。
             var contactOut = ctx.ColliderContact;

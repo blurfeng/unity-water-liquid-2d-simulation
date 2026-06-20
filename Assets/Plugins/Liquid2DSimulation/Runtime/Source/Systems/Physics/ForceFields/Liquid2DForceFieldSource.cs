@@ -33,7 +33,7 @@ namespace Fs.Liquid2D
              "力场强度。大于 0 吸引（指向中心），小于 0 排斥（远离中心）。",
              "Force-field strength. Greater than 0 attracts (toward center), less than 0 repels (away from center).",
              "力場の強度。0より大きいと引力（中心へ）、0より小さいと斥力（中心から）。")]
-        private float strength = 120f;
+        private float strength = 80f;
 
         [SerializeField, Range(0f, 1f), LocalizationTooltip(
              "速度衰减系数。0=不衰减，1=参考默认强度；越大越能快速抓住/制动范围内粒子（按到中心距离插值）。",

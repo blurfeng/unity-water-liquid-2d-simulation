@@ -7,11 +7,12 @@ namespace Fs.Liquid2D
     /// <summary>
     /// SPH 双密度流体求解器的 CPU 实现（Unity Job System + Burst + 空间哈希）。
     /// 每子步执行 外力+预测 → 建哈希 → 密度(双) → 压力力 → 粘性 → 积分+碰撞；帧末在最终位置网格上做一次邻居混色，
-    /// 并把动态碰撞体的反作用冲量规约回 colliderImpulse（双向耦合 seam）。
+    /// 并把动态碰撞体的接触采样（入射流体速度之和+接触位置/数/密度）规约回 colliderVelSum/colliderContact（双向耦合 seam）。
     /// CPU implementation of the SPH dual-density fluid solver (Unity Job System + Burst + spatial hash).
     /// Per substep: external forces+predict → build hash → dual density → pressure force → viscosity →
     /// integrate+collide. Once per frame it mixes neighbor colors (on a grid rebuilt from final positions) and reduces
-    /// dynamic-collider reaction impulses into colliderImpulse (two-way coupling seam).
+    /// dynamic-collider contact samples (sum of incoming fluid velocities + contact pos/count/density) into
+    /// colliderVelSum/colliderContact (two-way coupling seam).
     /// SPH デュアル密度流体ソルバーの CPU 実装（Unity Job System + Burst + 空間ハッシュ）。
     /// </summary>
     public sealed class SphCpuSolver : ILiquid2DSolver
@@ -99,22 +100,22 @@ namespace Fs.Liquid2D
                     ActiveIndices = ctx.ActiveIndices, VelNext = _velNext, Velocities = store.velocities,
                 }.Schedule(count, 64, h);
 
-                // 积分 + 碰撞（仅末子步累积耦合冲量）。 // Integrate + collide (accumulate coupling impulse only on last substep). // 積分 + 衝突。
+                // 积分 + 碰撞（仅末子步累积接触采样）。 // Integrate + collide (accumulate contact samples only on last substep). // 積分 + 衝突。
                 bool accumulate = lastStep && hasColliders;
                 int outLen = accumulate ? count : 1;
-                NativeArray<float2> outImpulse = new NativeArray<float2>(outLen, Allocator.TempJob, NativeArrayOptions.ClearMemory);
+                NativeArray<float2> outVelSum = new NativeArray<float2>(outLen, Allocator.TempJob, NativeArrayOptions.ClearMemory);
                 NativeArray<int> outBody = new NativeArray<int>(outLen, Allocator.TempJob, NativeArrayOptions.ClearMemory);
                 NativeArray<float2> outContact = new NativeArray<float2>(outLen, Allocator.TempJob, NativeArrayOptions.ClearMemory);
 
                 h = new SphIntegrateCollideJob
                 {
                     ActiveIndices = ctx.ActiveIndices, Positions = store.positions, Velocities = store.velocities,
-                    Radii = store.radii, InvMass = store.invMass, TypeId = store.typeId, GroupId = store.groupId,
+                    Radii = store.radii, TypeId = store.typeId, GroupId = store.groupId,
                     Materials = ctx.Materials,
                     Colliders = ctx.Colliders.Colliders, Points = ctx.Colliders.Points, DT = subDt,
                     CollisionDamping = p.CollisionDamping, MaxSpeed = p.MaxSpeed,
                     HasColliders = (byte)(hasColliders ? 1 : 0),
-                    Accumulate = (byte)(accumulate ? 1 : 0), OutImpulse = outImpulse, OutBody = outBody, OutContact = outContact,
+                    Accumulate = (byte)(accumulate ? 1 : 0), OutVelSum = outVelSum, OutBody = outBody, OutContact = outContact,
                 }.Schedule(count, 64, h);
 
                 // 末子步：在最终位置上重建网格并做一次邻居混色。 // Last substep: rebuild grid on final positions and mix colors. // 末サブステップで混色。
@@ -154,12 +155,12 @@ namespace Fs.Liquid2D
                 {
                     store.SwapColorBuffers();
 
-                    // 把每粒子冲量规约回动态碰撞体（双向耦合 seam）。 // Reduce per-particle impulses into dynamic colliders. // 力積を動的体に規約。
+                    // 把每粒子接触采样规约回动态碰撞体（双向耦合 seam）。 // Reduce per-particle contact samples into dynamic colliders. // 接触サンプルを動的体に規約。
                     // NativeArray 是包裹指针的结构；因 ctx 为 in（只读）需先拷到本地变量才能调用其索引器 setter（共享同一缓冲）。
                     // NativeArray wraps a pointer; since ctx is `in` (readonly), copy to a local to call its indexer setter (same underlying buffer).
-                    var impulseOut = ctx.ColliderImpulse;
+                    var velSumOut = ctx.ColliderVelSum;
                     var contactOut = ctx.ColliderContact;
-                    if (accumulate && impulseOut.IsCreated)
+                    if (accumulate && velSumOut.IsCreated)
                     {
                         bool hasContact = contactOut.IsCreated;
                         var materials = ctx.Materials;
@@ -167,8 +168,9 @@ namespace Fs.Liquid2D
                         for (int kk = 0; kk < count; kk++)
                         {
                             int body = outBody[kk];
-                            if (body < 0 || body >= impulseOut.Length) continue;
-                            impulseOut[body] += outImpulse[kk];
+                            if (body < 0 || body >= velSumOut.Length) continue;
+                            // 入射流体速度之和（平均流速=此值/接触数，相对速度阻力用）。 // Sum of incoming fluid velocities (avg = this / contactCount, for drag). // 入射流速の和。
+                            velSumOut[body] += outVelSum[kk];
                             // 接触累积（浮力用）：xy=接触位置之和，z=接触计数，w=接触粒子流体密度之和（平均密度=w/z）。
                             // Contact accumulation (buoyancy): xy=sum pos, z=count, w=sum of fluid density (avg = w/z).
                             // 接触累積：xy=位置和、z=接触数、w=流体密度和。
@@ -183,7 +185,7 @@ namespace Fs.Liquid2D
 
                 cellStart.Dispose();
                 sortedSlots.Dispose();
-                outImpulse.Dispose();
+                outVelSum.Dispose();
                 outBody.Dispose();
                 outContact.Dispose();
             }

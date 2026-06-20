@@ -41,9 +41,11 @@ RWStructuredBuffer<float2> Densities;    // (density, nearDensity)
 RWStructuredBuffer<float4> Colors;
 RWStructuredBuffer<float4> ColorsNext;
 RWStructuredBuffer<float>  LastMixTime;
-// 静态属性（spawn 后不变）：只读 SRV，由 CPU 从 store 整块上传，避免占用各 kernel 的 UAV 配额（上限 8）。
-// Static attributes (immutable after spawn): read-only SRV, uploaded whole from store by CPU, to avoid using per-kernel UAV slots (limit 8).
-// 静的属性：読み取り専用 SRV、CPU が store から一括アップロード。
+// 静态属性（spawn 后不变）：只读 SRV，由 CPU 从 store 整块上传，节省各 kernel 的 UAV 配额。
+// 注：UAV 上限取决于后端 —— 仅 D3D11.0 / 功能级别 11.0 时为 8；DX11.1+/DX12/Vulkan/Metal 等现代后端通常 64 起步乃至 bindless 无上限。把不变属性放 SRV 仍是好习惯（省配额、便于驱动优化）。
+// Static attributes (immutable after spawn): read-only SRV, uploaded whole from store by CPU, saving per-kernel UAV slots.
+// Note: the UAV limit is backend-dependent — 8 only on D3D11.0 / feature level 11.0; modern backends (DX11.1+/DX12/Vulkan/Metal) are typically 64+ up to bindless. Keeping immutable attributes in SRVs is still good practice.
+// 静的属性：読み取り専用 SRV、CPU が store から一括アップロード。UAV 上限はバックエンド依存（D3D11.0 のみ 8、現代は 64+〜bindless）。
 StructuredBuffer<float>  Radii;
 StructuredBuffer<float>  InvMass;
 StructuredBuffer<int>    TypeId;
@@ -69,6 +71,8 @@ StructuredBuffer<float2> ColliderPoints;
 struct ForceField { float2 center; float radius; float strength; float velocityDamping; float swirlStrength; float gravityAttenuation; float falloff; int mode; int groupId; int matchAll; };
 StructuredBuffer<ForceField> ForceFields;
 
+// 入射流体速度之和（按 body 索引，定点化 × impulseScale）。平均流速=此值/接触数，供桥接器做相对速度阻力（冲走）。 // Sum of incoming fluid velocities per body (fixed-point). Avg = this / contactCount; used by the bridge for relative-velocity drag. // 入射流速の和（×impulseScale）。
+// 注：缓冲名沿用 ImpulseX/Y 以避免改 shader 绑定字符串；语义已是「速度之和」而非冲量。 // Note: buffer names kept as ImpulseX/Y to avoid touching shader-binding strings; semantics are now "velocity sum", not impulse.
 RWStructuredBuffer<int> ImpulseX;
 RWStructuredBuffer<int> ImpulseY;
 // 浮力累积（按 body 索引）：接触数 + 接触位置之和（定点化 × impulseScale）+ 接触流体密度之和（定点化）。 // Buoyancy accumulation per body: contact count + sum of contact positions + sum of contact fluid density (fixed-point). // 浮力累積。
@@ -510,6 +514,9 @@ void IntegrateCollide(uint3 id : SV_DispatchThreadID)
     if (!isfinite(oldP.x) || !isfinite(oldP.y)) { oldP = float2(0, 0); v = float2(0, 0); }
     float2 p = oldP + v * dt;
 
+    // 入射来流速度（碰撞反射前），作为该粒子处局部流速的估计，用于相对速度阻力。 // Incoming flow velocity (pre-collision), local fluid-velocity estimate for relative-velocity drag. // 入射流速。
+    float2 vIncoming = v;
+
     float pr = Radii[i];
     int gi = GroupId[i];
     MaterialData mat = Materials[TypeId[i]];
@@ -523,17 +530,14 @@ void IntegrateCollide(uint3 id : SV_DispatchThreadID)
         float2 corr, n;
         if (!ProjectCollider(col, p, pr, corr, n)) continue;
         p += corr;
-        float2 vPre = v; // 碰撞前速度（反作用冲量用）。 // pre-collision velocity (for reaction impulse). // 衝突前速度。
         float vn = dot(v, n);
         if (vn < 0) v -= (1.0f + e) * vn * n;
         if (mat.friction > 0) { float2 vt = v - dot(v, n) * n; v -= vt * mat.friction; }
         if (accumulateImpulse == 1 && col.dynamic == 1 && col.bodyIndex >= 0)
         {
-            // 反作用冲量 = -质量 × 速度变化（牛顿第三定律，天然有界）。 // Reaction impulse = -mass × velocity change (bounded). // 反作用力積。
-            float mass = InvMass[i] > 1e-6f ? 1.0f / InvMass[i] : 0.0f;
-            float2 imp = -mass * (v - vPre);
-            InterlockedAdd(ImpulseX[col.bodyIndex], (int)(imp.x * impulseScale));
-            InterlockedAdd(ImpulseY[col.bodyIndex], (int)(imp.y * impulseScale));
+            // 入射流体速度之和（相对速度阻力用，定点化）。 // Sum of incoming fluid velocities (relative-velocity drag, fixed-point). // 入射流速の和。
+            InterlockedAdd(ImpulseX[col.bodyIndex], (int)(vIncoming.x * impulseScale));
+            InterlockedAdd(ImpulseY[col.bodyIndex], (int)(vIncoming.y * impulseScale));
             // 浮力累积：接触数 +1，接触位置（定点化）累加，接触流体密度（定点化）累加，供 CPU 求质心/平均密度/缩放浮力。
             // Buoyancy: +1 contact, accumulate contact pos and fluid density (fixed-point) for CPU centroid/avg-density/scaling.
             // 浮力累積：接触数・位置・流体密度を累積。

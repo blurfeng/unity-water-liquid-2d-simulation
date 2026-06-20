@@ -124,10 +124,10 @@ namespace Fs.Liquid2D
         private float smoothingRadius = 0.4f;
 
         [SerializeField, Min(0.01f), LocalizationTooltip(
-             "目标静止密度 ρ0。压力按 (密度-ρ0)·压力系数 计算；越大流体越“紧实”。",
-             "Target rest density ρ0. Pressure = (density - ρ0)·pressureMultiplier; higher packs tighter.",
-             "目標静止密度 ρ0。圧力 = (密度-ρ0)·圧力係数。大きいほど密。")]
-        private float targetDensity = 55f;
+             "目标静止密度 ρ0。压力按 (密度-ρ0)·压力系数 计算；越大流体越“紧实”。此处是全局配置，你可在每个材质 Liquid2DParticleMaterial 中单独设置 RestDensityScale 来为每种材质指定不同的目标静止密度。",
+             "Target rest density ρ0. Pressure = (density - ρ0)·pressureMultiplier; higher packs tighter. This is a global config; you can set RestDensityScale in each Liquid2DParticleMaterial to specify different target rest densities for each material.",
+             "目標静止密度 ρ0。圧力 = (密度-ρ0)·圧力係数。大きいほど密度が高く“ぎっしり”。これはグローバル設定で、各 Liquid2DParticleMaterial の RestDensityScale で材質ごとに異なる目標静止密度を指定できます。")]
+        private float targetDensity = 1f;
 
         [SerializeField, Min(0f), LocalizationTooltip(
              "压力系数 k。密度偏差转换为压力的强度，越大越不可压缩、越“弹”。",

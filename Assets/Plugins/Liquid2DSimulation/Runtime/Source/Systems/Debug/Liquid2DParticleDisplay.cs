@@ -154,7 +154,18 @@ namespace Fs.Liquid2D
                 currentParticleCount = count;
             else
                 currentParticleCount = 0;
-            
+
+            // 每帧统一清空待绘制标志：未启用/无数据时保持 false，避免 Editor Overlay Pass 绘制陈旧数据。
+            // 标志不再由 ExecuteDraw 一次性消费——这样同一帧的多个相机（Game + Scene 视图）都能绘制同一份缓存；
+            // 否则先渲染的相机会吃掉标志、令另一相机当帧漏画 → 选中对象时 Scene 视图重绘抢标志导致闪烁。
+            // Reset the pending flags every frame: stay false when disabled / no data so the Editor Overlay Pass won't draw
+            // stale data. The flags are no longer consumed (one-shot) by ExecuteDraw, so every camera in the same frame
+            // (Game + Scene view) draws the same cache; otherwise the first camera steals the flag and the other misses the
+            // frame → flicker when the Scene view repaints on selection.
+            // 毎フレーム待ち描画フラグをリセット。ExecuteDraw で消費しないため、同一フレームの複数カメラが同じキャッシュを描画。
+            _pendingDraw = false;
+            _pendingGpuDraw = false;
+
             if (!displayEnabled) return;
             if (!material) return;
 
@@ -305,13 +316,14 @@ namespace Fs.Liquid2D
                         cmd.DrawProcedural(Matrix4x4.identity, material, 0, MeshTopology.Triangles, 6, _cachedGpuCount, _gpuMpb);
                     }
                 }
-                _pendingGpuDraw = false;
+                // 不在此消费标志：同一帧多个相机（Game + Scene 视图）需各自绘制；标志每帧由 LateUpdate 统一刷新。
+                // Don't consume the flag here: multiple cameras (Game + Scene view) in the same frame each draw; LateUpdate refreshes it per frame.
+                // フラグはここで消費しない：同一フレームの複数カメラが各自描画。LateUpdate が毎フレーム刷新。
             }
             else
             {
                 if (!_pendingDraw) return;
                 cmd.DrawProcedural(Matrix4x4.identity, material, 0, MeshTopology.Triangles, 6, _pendingCount);
-                _pendingDraw = false;
             }
         }
 #endif

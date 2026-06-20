@@ -174,6 +174,7 @@ MonoBehaviour:
   - Descriptor: {fileID: 11400000, guid: f35c2bc9e2e98fd4387aaeabc88c127f, type: 2}
     Weight: 1
     Lifetime: 0
+    IsInit: 0
   nozzleWidth: 0.6
   spawnDepthJitter: 0
   flowRate: 220
@@ -233,8 +234,8 @@ MonoBehaviour:
   gpuReadbackToStore: 0
   gravity: {x: 0, y: -9.8}
   smoothingRadius: 0.35
-  targetDensity: 55
-  pressureMultiplier: 500
+  targetDensity: 1
+  pressureMultiplier: 125
   nearPressureMultiplier: 5
   viscosityStrength: 0.03
   collisionDamping: 0.95
@@ -790,6 +791,7 @@ MonoBehaviour:
   renderColor: {r: 1, g: 0.6, b: 0.1, a: 0.4}
   maxDraw: 6000
   currentParticleCount: 0
+  gpuReadbackToStoreInfo: GPU Readback to Store is disabled, cannot draw gizmo.
 --- !u!4 &437264683
 Transform:
   m_ObjectHideFlags: 0
@@ -853,6 +855,7 @@ MonoBehaviour:
     m_NumAlphaKeys: 2
   gradientResolution: 64
   velocityDisplayMax: 10
+  currentParticleCount: 0
 --- !u!1 &471646946
 GameObject:
   m_ObjectHideFlags: 0
@@ -1148,7 +1151,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DMouseInteractor
   nameTag: 
   radius: 2
-  strength: 200
+  strength: 100
   velocityDamping: 1
   swirlStrength: 0
   gravityAttenuation: 1
@@ -1219,14 +1222,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 63e450263fe0e6a44a12e2ebb60dd787, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DRigidbodyBridge
-  forceScale: 1
+  dragCoefficient: 3
   applyTorque: 1
   maxSpeedChange: 8
   useBuoyancy: 1
   bodyVolume: 0
   fullSubmersionContacts: 12
   submergedLinearDrag: 1
-  submergedAngularDrag: 1
+  submergedAngularDrag: 100
 --- !u!50 &1488928530
 Rigidbody2D:
   serializedVersion: 5
@@ -1239,7 +1242,7 @@ Rigidbody2D:
   m_Simulated: 1
   m_UseFullKinematicContacts: 0
   m_UseAutoMass: 0
-  m_Mass: 1
+  m_Mass: 0.8
   m_LinearDamping: 0
   m_AngularDamping: 0.05
   m_GravityScale: 1
@@ -1500,6 +1503,7 @@ MonoBehaviour:
   - Descriptor: {fileID: 11400000, guid: f35c2bc9e2e98fd4387aaeabc88c127f, type: 2}
     Weight: 1
     Lifetime: 0
+    IsInit: 1
   spawnDensity: 50
   initialVelocity: {x: 0, y: 0}
   jitterStr: 0.05
@@ -1507,11 +1511,11 @@ MonoBehaviour:
   refillFlowRate: 20
   refillThreshold: 1
   spawnRegions:
-  - IsInit: 1
-    Position: {x: 0, y: 0}
+  - Position: {x: 0, y: 0}
     Size: {x: 12, y: 6}
     OverrideParticles: 0
     Particles: []
+    IsInit: 1
   showGizmos: 1
   estimatedParticleCount: 3655
 --- !u!4 &1656945275

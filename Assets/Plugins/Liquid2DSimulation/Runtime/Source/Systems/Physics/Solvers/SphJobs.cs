@@ -374,10 +374,11 @@ namespace Fs.Liquid2D
 
     /// <summary>
     /// 积分 + 碰撞：pos += v·dt；遍历碰撞体 <see cref="Liquid2DColliderMath.Project"/> 推出、沿法线反射速度
-    /// （回弹 = restitution × collisionDamping）、切向摩擦（friction）、动态体累积反作用冲量（双向耦合）。
+    /// （回弹 = restitution × collisionDamping）、切向摩擦（friction）；命中动态体时记录入射流体速度+接触位置（相对速度阻力/浮力用，双向耦合）。
     /// Integrate + collide: pos += v·dt; project out of colliders, reflect normal velocity (bounce = restitution ×
-    /// collisionDamping), apply tangential friction, accumulate dynamic-body reaction impulse (two-way coupling).
-    /// 積分 + 衝突。コライダーから押し出し、法線速度を反射、接線摩擦、動的体へ反作用力積を累積。
+    /// collisionDamping), apply tangential friction; on dynamic-body hit, record incoming fluid velocity + contact position
+    /// (for relative-velocity drag/buoyancy, two-way coupling).
+    /// 積分 + 衝突。コライダーから押し出し、法線速度を反射、接線摩擦；動的体命中時は入射流速+接触位置を記録（相対速度抗力/浮力用）。
     /// </summary>
     [BurstCompile]
     public struct SphIntegrateCollideJob : IJobParallelFor
@@ -386,7 +387,6 @@ namespace Fs.Liquid2D
         [NativeDisableParallelForRestriction] public NativeArray<float2> Positions;
         [NativeDisableParallelForRestriction] public NativeArray<float2> Velocities;
         [ReadOnly] public NativeArray<float> Radii;
-        [ReadOnly] public NativeArray<float> InvMass;
         [ReadOnly] public NativeArray<int> TypeId;
         [ReadOnly] public NativeArray<int> GroupId;
         [ReadOnly] public NativeArray<Liquid2DMaterialData> Materials;
@@ -397,8 +397,8 @@ namespace Fs.Liquid2D
         /// <summary>最大速度限制（0 = 不限制）。 // Max speed clamp (0 = unlimited). // 最大速度制限（0 = 無制限）。</summary>
         public float MaxSpeed;
         public byte HasColliders;
-        public byte Accumulate;                            // 1 时记录冲量。 // record impulse when 1. // 1 のとき力積記録。
-        [WriteOnly] public NativeArray<float2> OutImpulse;  // 长度 activeCount。 // length activeCount.
+        public byte Accumulate;                            // 1 时记录接触采样。 // record contact samples when 1. // 1 のとき接触サンプル記録。
+        [WriteOnly] public NativeArray<float2> OutVelSum;   // 长度 activeCount，命中动态体时记录入射流体速度（相对速度阻力用）。 // incoming fluid velocity on dynamic hit (relative-velocity drag). // 入射流体速度。
         [WriteOnly] public NativeArray<int> OutBody;        // 长度 activeCount，-1 表示无。 // length activeCount, -1 = none.
         [WriteOnly] public NativeArray<float2> OutContact;  // 长度 activeCount，命中动态体时的接触位置（浮力质心用）。 // contact pos on dynamic hit (buoyancy centroid). // 接触位置。
 
@@ -419,7 +419,9 @@ namespace Fs.Liquid2D
 
             float2 p = Positions[i] + v * DT;
 
-            float2 totalImpulse = float2.zero;
+            // 入射来流速度（碰撞反射前），作为该粒子处局部流速的估计，用于相对速度阻力。 // Incoming flow velocity (pre-collision), local fluid-velocity estimate for relative-velocity drag. // 入射流速。
+            float2 vIncoming = v;
+            float2 fluidVel = float2.zero;
             float2 contactPos = float2.zero;
             int hitBody = -1;
 
@@ -439,9 +441,6 @@ namespace Fs.Liquid2D
 
                     p += corr;
 
-                    // 碰撞前速度（用于按牛顿第三定律求传给动态体的反作用冲量）。 // Pre-collision velocity (for the Newtonian reaction impulse to a dynamic body). // 衝突前速度。
-                    float2 vPre = v;
-
                     // 速度反射：去掉指向表面内的法向分量，并按回弹系数反弹。 // Reflect velocity: remove inward normal component, bounce by e. // 速度反射。
                     float vn = dot(v, n);
                     if (vn < 0f) v -= (1f + e) * vn * n;
@@ -455,13 +454,12 @@ namespace Fs.Liquid2D
 
                     if (Accumulate == 1 && col.Dynamic == 1 && col.BodyIndex >= 0)
                     {
-                        // 反作用冲量 = -质量 × 粒子速度变化（碰撞传给物体的动量，天然有界，避免基于穿透量的爆炸）。
-                        // Reaction impulse = -mass × particle velocity change (momentum transferred to the body; naturally
-                        // bounded, avoiding the penetration-based explosion).
-                        // 反作用力積 = -質量 × 粒子速度変化（物体へ伝わる運動量、自然に有界）。
-                        float mass = InvMass[i] > 1e-6f ? 1f / InvMass[i] : 0f;
-                        totalImpulse += -mass * (v - vPre);
-                        contactPos = p; // 接触位置（浮力质心用，归属最后命中的动态体）。 // contact pos (buoyancy centroid, last hit body). // 接触位置。
+                        // 记录入射流体速度与接触位置（归属最后命中的动态体），供桥接器求平均流速做相对速度阻力、求质心。
+                        // Record incoming fluid velocity and contact position (attributed to the last hit body) for the bridge's
+                        // average-flow drag and centroid.
+                        // 入射流速と接触位置を記録（最後に命中した動的体に帰属）。
+                        fluidVel = vIncoming;
+                        contactPos = p;
                         hitBody = col.BodyIndex;
                     }
                 }
@@ -472,7 +470,7 @@ namespace Fs.Liquid2D
 
             if (Accumulate == 1)
             {
-                OutImpulse[k] = totalImpulse;
+                OutVelSum[k] = fluidVel;
                 OutBody[k] = hitBody;
                 OutContact[k] = contactPos;
             }

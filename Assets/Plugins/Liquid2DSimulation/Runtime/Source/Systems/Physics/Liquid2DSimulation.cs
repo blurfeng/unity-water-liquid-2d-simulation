@@ -61,7 +61,6 @@ namespace Fs.Liquid2D
         private readonly List<Liquid2DParticleDescriptor> _descriptors = new List<Liquid2DParticleDescriptor>();
         private NativeArray<Liquid2DMaterialData> _materials;
         private NativeArray<Liquid2DMixData> _mixData;
-        private bool _materialsDirty;
 
         // nameTag → groupId（0 为空标签通配）。 // nameTag → groupId (0 = empty-tag wildcard). // nameTag → groupId。
         private readonly Dictionary<string, int> _nameTagToGroup = new Dictionary<string, int>();
@@ -127,7 +126,6 @@ namespace Fs.Liquid2D
             int id = _descriptors.Count;
             d.RuntimeTypeId = id;
             _descriptors.Add(d);
-            _materialsDirty = true;
             return id;
         }
 
@@ -142,19 +140,25 @@ namespace Fs.Liquid2D
 
         private void EnsureMaterials()
         {
-            if (!_materialsDirty && _materials.IsCreated) return;
             int n = math.max(1, _descriptors.Count);
-            if (_materials.IsCreated) _materials.Dispose();
-            if (_mixData.IsCreated) _mixData.Dispose();
-            _materials = new NativeArray<Liquid2DMaterialData>(n, Allocator.Persistent);
-            _mixData = new NativeArray<Liquid2DMixData>(n, Allocator.Persistent);
+            // 仅当描述符数量变化（或首次）才重新分配；其余情况按值原地回填，
+            // 这样运行时修改描述符材质（如 GravityScale / Density）能逐帧生效（CPU 与 GPU 上传同时受益）。
+            // Reallocate only when the descriptor count changes (or first time); otherwise refill values in place,
+            // so runtime edits to a descriptor's material (e.g. GravityScale / Density) take effect each frame (CPU and GPU upload alike).
+            // 記述子数が変化（または初回）した時のみ再確保。それ以外は値を上書きし、実行時のマテリアル変更を毎フレーム反映。
+            if (!_materials.IsCreated || _materials.Length != n)
+            {
+                if (_materials.IsCreated) _materials.Dispose();
+                if (_mixData.IsCreated) _mixData.Dispose();
+                _materials = new NativeArray<Liquid2DMaterialData>(n, Allocator.Persistent);
+                _mixData = new NativeArray<Liquid2DMixData>(n, Allocator.Persistent);
+            }
             for (int i = 0; i < _descriptors.Count; i++)
             {
                 var d = _descriptors[i];
                 _materials[i] = d != null && d.Material != null ? d.Material.ToData() : Liquid2DMaterialData.Default;
                 _mixData[i] = BuildMix(d != null ? d.MixSettings : null);
             }
-            _materialsDirty = false;
         }
 
         private static Liquid2DMixData BuildMix(Liquid2DParticleMixSettings m)
@@ -272,7 +276,7 @@ namespace Fs.Liquid2D
 
             var colliders = Liquid2DColliderRegistry.BuildBuffer(Allocator.TempJob, _dynamicReceivers, GetGroup);
             int bodyCount = math.max(1, _dynamicReceivers.Count);
-            var impulse = new NativeArray<float2>(bodyCount, Allocator.TempJob, NativeArrayOptions.ClearMemory);
+            var velSum = new NativeArray<float2>(bodyCount, Allocator.TempJob, NativeArrayOptions.ClearMemory);
             var contact = new NativeArray<float4>(bodyCount, Allocator.TempJob, NativeArrayOptions.ClearMemory);
             var forceFields = Liquid2DForceFieldRegistry.BuildBuffer(Allocator.TempJob, GetGroup);
 
@@ -291,7 +295,7 @@ namespace Fs.Liquid2D
                 Materials = _materials,
                 MixData = _mixData,
                 Colliders = colliders,
-                ColliderImpulse = impulse,
+                ColliderVelSum = velSum,
                 ColliderContact = contact,
                 ForceFields = forceFields,
                 DeadZones = deadZones,
@@ -320,7 +324,7 @@ namespace Fs.Liquid2D
                     _activeDirty = true;
                 }
 
-                DispatchBodyForces(impulse, contact, Time.fixedDeltaTime);
+                DispatchBodyForces(velSum, contact, Time.fixedDeltaTime);
 
                 // 回收落入销毁区域的粒子（killFlags 由 CPU/GPU 求解器置位）。 // Recycle particles inside dead zones (killFlags set by CPU/GPU solver). // 破棄領域内の粒子を回収。
                 if (deadZoneCount > 0) ApplyKills(killFlags, count);
@@ -329,7 +333,7 @@ namespace Fs.Liquid2D
             {
                 colliders.Colliders.Dispose();
                 colliders.Points.Dispose();
-                impulse.Dispose();
+                velSum.Dispose();
                 contact.Dispose();
                 if (forceFields.Fields.IsCreated) forceFields.Fields.Dispose();
                 if (deadZones.Zones.IsCreated) deadZones.Zones.Dispose();
@@ -370,27 +374,30 @@ namespace Fs.Liquid2D
             return c;
         }
 
-        // 把本帧累积的冲量 + 接触信息打包成 Liquid2DBodyForce 派发给各动态体的力接收者（双向耦合）。
-        // Pack this frame's accumulated impulse + contact info into Liquid2DBodyForce and dispatch to each dynamic body's
-        // force receiver (two-way coupling).
-        // 本フレームの累積力積 + 接触情報を Liquid2DBodyForce にまとめ、各動的体のレシーバーへ派遣（双方向）。
-        private void DispatchBodyForces(NativeArray<float2> impulse, NativeArray<float4> contact, float dt)
+        // 把本帧累积的接触采样（流体速度之和 + 接触位置/数/密度）打包成 Liquid2DBodyForce 派发给各动态体的力接收者（双向耦合）。
+        // 平均流速 = 速度之和 / 接触数，供接收者做相对速度阻力；接触数=0 时无浮力/阻力，跳过。
+        // Pack this frame's contact samples (velocity sum + contact pos/count/density) into Liquid2DBodyForce and dispatch to
+        // each dynamic body's receiver (two-way coupling). Average fluid velocity = velSum / contactCount, for relative-velocity
+        // drag; with no contact there is no buoyancy/drag, so skip.
+        // 本フレームの接触サンプルを Liquid2DBodyForce にまとめ、各動的体のレシーバーへ派遣。平均流速=速度和/接触数。
+        private void DispatchBodyForces(NativeArray<float2> velSum, NativeArray<float4> contact, float dt)
         {
-            for (int b = 0; b < _dynamicReceivers.Count && b < impulse.Length; b++)
+            for (int b = 0; b < _dynamicReceivers.Count && b < velSum.Length; b++)
             {
                 var r = _dynamicReceivers[b];
                 if (r == null) continue;
 
-                float2 imp = impulse[b];
                 float4 con = b < contact.Length ? contact[b] : float4.zero;
                 int contactCount = (int)con.z;
-                if (math.lengthsq(imp) <= 1e-8f && contactCount <= 0) continue;
+                if (contactCount <= 0) continue;
 
-                float2 center = contactCount > 0 ? new float2(con.x, con.y) / contactCount : float2.zero;
-                float fluidDensity = contactCount > 0 ? con.w / contactCount : 0f;
+                float invCount = 1f / contactCount;
+                float2 fluidVel = velSum[b] * invCount;
+                float2 center = new float2(con.x, con.y) * invCount;
+                float fluidDensity = con.w * invCount;
                 r.ApplyLiquidForces(new Liquid2DBodyForce
                 {
-                    Impulse = imp,
+                    FluidVelocity = fluidVel,
                     ContactCenter = center,
                     ContactCount = contactCount,
                     FluidDensity = fluidDensity,

@@ -6,37 +6,38 @@ using UnityEngine;
 namespace Fs.Liquid2D
 {
     /// <summary>
-    /// 流体反作用力 → Unity <see cref="Rigidbody2D"/> 的桥接器。把每帧由流体累积的 <see cref="Liquid2DBodyForce"/>
-    /// （净冲量 + 接触质心 + 接触数 + 平均流体密度）施加到刚体上，实现「水流冲走物体」「物体在水中漂浮/随波晃动」。
+    /// 流体作用力 → Unity <see cref="Rigidbody2D"/> 的桥接器。把每帧由流体累积的 <see cref="Liquid2DBodyForce"/>
+    /// （平均流体速度 + 接触质心 + 接触数 + 平均流体密度）转成两类力施加到刚体上：
+    /// ① 冲走 = 相对速度阻力（F ∝ 流体速度 − 物体速度，流体静止时趋 0），② 漂浮 = 阿基米德浮力。
     /// 同物体（或父级）挂了本组件的 <see cref="Liquid2DCollider"/> 即被视为动态体；不挂则为静态。
     /// 浮力按阿基米德原理：浮力 = ρ流体 · g · 体积 · 浸没比例；物体密度（mass/体积）小于流体密度则上浮、大于则下沉。
-    /// Bridges fluid reaction forces to a Unity <see cref="Rigidbody2D"/>. Applies the per-frame
-    /// <see cref="Liquid2DBodyForce"/> (net impulse + contact centroid + count + avg fluid density) to the body, enabling
-    /// "water sweeps away objects" and "objects floating / bobbing in water". A <see cref="Liquid2DCollider"/> on the same
-    /// object (or a parent) carrying this component is treated as a dynamic body. Buoyancy follows Archimedes:
-    /// force = fluidDensity · g · volume · submergedFraction; a body floats when its density (mass/volume) is below the
-    /// fluid's, sinks when above.
-    /// 流体反作用力を Unity <see cref="Rigidbody2D"/> へ橋渡し。アルキメデス浮力で物体密度により浮沈します。
+    /// Bridges fluid forces to a Unity <see cref="Rigidbody2D"/>. Each frame it turns the accumulated
+    /// <see cref="Liquid2DBodyForce"/> (avg fluid velocity + contact centroid + count + avg fluid density) into two forces:
+    /// (1) wash = relative-velocity drag (F ∝ fluidVel − bodyVel, → 0 when the fluid is still), and (2) float = Archimedes
+    /// buoyancy. A <see cref="Liquid2DCollider"/> on the same object (or a parent) carrying this component is treated as a
+    /// dynamic body. Buoyancy: force = fluidDensity · g · volume · submergedFraction; a body floats when its density
+    /// (mass/volume) is below the fluid's, sinks when above.
+    /// 流体力を Unity <see cref="Rigidbody2D"/> へ橋渡し。①相対速度抗力（押し流し）②アルキメデス浮力（浮沈）の 2 種類の力に変換。
     /// </summary>
     [RequireComponent(typeof(Rigidbody2D))]
     public class Liquid2DRigidbodyBridge : MonoBehaviour, ILiquid2DForceReceiver
     {
         [SerializeField, Min(0f), LocalizationTooltip(
-             "冲走力缩放。放大/缩小流体对物体的推动冲量（被水流冲走的强度）。",
-             "Wash force scale. Scales the fluid's pushing impulse on the body (how strongly it gets swept away).",
-             "押し流し力のスケール。流体が物体を押す力積を拡大/縮小します（流される強さ）。")]
-        private float forceScale = 1f;
+             "阻力系数（冲走强度）。冲走力 = 此系数 · 浸没比例 · (流体速度 − 物体速度)。越大越快被水流带动；流体静止时趋于 0、不会无端推动物体。",
+             "Drag coefficient (wash strength). Wash force = this · submergedFraction · (fluidVelocity − bodyVelocity). Larger = carried by the flow faster; tends to 0 when the fluid is still, so the body isn't pushed for no reason.",
+             "抗力係数（押し流し強度）。押し流し力 = 係数 · 浸水率 · (流体速度 − 物体速度)。大きいほど流れに乗りやすい。流体静止時は 0 に近づき無駄に押されない。")]
+        private float dragCoefficient = 3f;
 
         [SerializeField, LocalizationTooltip(
-             "在接触质心处施力以产生力矩（物体会因受力不均而旋转/翻倒）。⚠ 接触质心有噪声，开启易导致乱转；默认关闭，所有力施加在质心、只平移不旋转。",
-             "Apply force at the contact centroid to produce torque (uneven force rotates/tips the body). ⚠ The centroid is noisy and can cause spinning; off by default (all forces at center of mass, translate only).",
-             "接触質心で力を加え力矩を生む。⚠ 質心はノイズが多く回転を招きやすいため既定はオフ（全て質心で平行移動のみ）。")]
+             "在接触质心处施加阻力以产生力矩（来流偏置一侧时物体会旋转/翻倒/摇摆）。关闭则在质心施力、只平移不旋转。",
+             "Apply drag at the contact centroid to produce torque (off-center flow rotates/tips/bobs the body). Off = applied at center of mass, translate only.",
+             "接触質心で抗力を加え力矩を生む（偏った来流で回転/転倒/揺動）。オフなら質心で施加し平行移動のみ。")]
         private bool applyTorque;
 
         [SerializeField, Min(0f), LocalizationTooltip(
-             "单步速度变化上限（世界单位/秒，0=不限制）。钳制流体每个物理步对本物体速度的改变量，防止 SPH 偶发尖峰把物体弹飞。",
-             "Max speed change per step (world units/s; 0 = unlimited). Clamps how much the fluid can change this body's velocity per physics step, preventing SPH spikes from flinging it.",
-             "1 ステップの速度変化上限（ワールド単位/秒、0=無制限）。流体が 1 物理ステップで与える速度変化を制限します。")]
+             "单步速度变化上限（世界单位/秒，0=不限制）。钳制流体每个物理步对本物体速度的改变量，防止偶发尖峰把物体弹飞。相对速度阻力本身自限，通常不会触发。",
+             "Max speed change per step (world units/s; 0 = unlimited). Clamps the fluid's velocity change on this body per physics step against rare spikes. Relative-velocity drag is self-limiting, so this rarely triggers.",
+             "1 ステップの速度変化上限（ワールド単位/秒、0=無制限）。稀なスパイク対策。相対速度抗力は自己制限的で通常作動しません。")]
         private float maxSpeedChange = 4f;
 
         [Header("Buoyancy")]
@@ -124,43 +125,56 @@ namespace Fs.Liquid2D
         public void ApplyLiquidForces(in Liquid2DBodyForce force)
         {
             if (!_rb) return;
+            if (force.ContactCount <= 0) return; // 无接触 = 不在流体中，无浮力/阻力。 // no contact = not in fluid. // 非接触。
 
             float dt = force.Dt > 1e-6f ? force.Dt : Time.fixedDeltaTime;
-            bool submerged = force.ContactCount > 0;
-            Vector2 center = submerged ? new Vector2(force.ContactCenter.x, force.ContactCenter.y) : _rb.worldCenterOfMass;
+            // 浸没比例（0..1）：接触粒子越多越接近满浸，缩放浮力与阻力。 // Submerged fraction; scales buoyancy and drag. // 浸水率。
+            float submerged = fullSubmersionContacts > 0f ? Mathf.Clamp01(force.ContactCount / fullSubmersionContacts) : 1f;
 
-            // 冲走：净反作用冲量。接触质心处施力以带动力矩。 // Wash: net reaction impulse, applied at the contact centroid for torque. // 押し流し。
-            Vector2 impulse = new Vector2(force.Impulse.x, force.Impulse.y) * forceScale;
-            // 安全钳制：限制单步速度变化（impulse / mass），防止 SPH 尖峰把物体弹飞。 // Safety clamp: cap per-step Δv. // 安全制限。
+            // 施力点：默认质心（只平移不旋转）；applyTorque 时用接触质心（来流偏置一侧 → 力矩，物体翻转/摇摆）。
+            // Application point: center of mass by default (translate only); contact centroid when applyTorque (off-center flow → torque).
+            // 作用点：既定は質心（平行移動のみ）、applyTorque 時は接触質心（偏った来流 → 力矩）。
+            Vector2 applyPoint = applyTorque
+                ? new Vector2(force.ContactCenter.x, force.ContactCenter.y)
+                : _rb.worldCenterOfMass;
+
+            // 冲走 = 相对速度阻力：F = dragCoefficient · 浸没比例 · (流体速度 − 物体在该点的速度)。
+            // 流体静止时 (流体速度≈0、物体也慢) → F≈0，物体不会被无端推动，只受重力+浮力 → 密度决定沉浮；
+            // 流体快速流动时 → F 顺流推动 → 自然「冲走」。这是物理上的粘性/拖曳力，自限且稳定。
+            // Wash = relative-velocity drag: F = dragCoefficient · submergedFraction · (fluidVel − bodyVel at the point).
+            // Still fluid → F≈0 (no spurious push; only gravity + buoyancy → density decides sink/float); fast flow → F carries the
+            // body along (wash). This is the physical viscous/drag force — self-limiting and stable.
+            // 押し流し = 相対速度抗力：F = 係数 · 浸水率 · (流体速度 − 物体速度)。静止流体で 0、速い流れで押し流す。自己制限的で安定。
+            Vector2 fluidVel = new Vector2(force.FluidVelocity.x, force.FluidVelocity.y);
+            Vector2 bodyVel = _rb.GetPointVelocity(applyPoint);
+            Vector2 dragForce = dragCoefficient * submerged * (fluidVel - bodyVel);
+
+            // 安全钳制：限制单步速度变化（力·dt/质量 ≤ maxSpeedChange），防止偶发尖峰。 // Safety clamp on per-step Δv. // 安全制限。
             if (maxSpeedChange > 0f)
             {
-                float maxImp = maxSpeedChange * _rb.mass;
-                if (impulse.sqrMagnitude > maxImp * maxImp) impulse = impulse.normalized * maxImp;
+                float maxF = maxSpeedChange * _rb.mass / Mathf.Max(1e-6f, dt);
+                if (dragForce.sqrMagnitude > maxF * maxF) dragForce = dragForce.normalized * maxF;
             }
-            if (impulse.sqrMagnitude > 1e-10f)
-            {
-                if (applyTorque && submerged) _rb.AddForceAtPosition(impulse, center, ForceMode2D.Impulse);
-                else _rb.AddForce(impulse, ForceMode2D.Impulse);
-            }
+            if (dragForce.sqrMagnitude > 1e-10f)
+                _rb.AddForceAtPosition(dragForce, applyPoint, ForceMode2D.Force);
 
-            if (!submerged) return;
-
-            // 浮力（阿基米德）：浮力 = ρ流体 · g · 体积 · 浸没比例；在质心处施加 → 物体密度决定沉浮，且自然产生扶正力矩。
-            // Buoyancy (Archimedes): force = fluidDensity · g · volume · submergedFraction; applied at the centroid →
-            // body density decides float/sink and yields a natural righting torque.
-            // 浮力（アルキメデス）：浮力 = ρ流体 · g · 体積 · 浸水率。質心で施加。
+            // 浮力（阿基米德）：浮力 = ρ流体 · g · 体积 · 浸没比例；在质心处施加 → 零力矩，物体密度（mass/体积）决定沉浮。
+            // Buoyancy (Archimedes): force = fluidDensity · g · volume · submergedFraction; at the center of mass → no torque,
+            // body density (mass/volume) decides float/sink. ForceMode2D.Force integrates over the fixed step.
+            // 浮力（アルキメデス）：浮力 = ρ流体 · g · 体積 · 浸水率。質心で施加 → 力矩ゼロ、密度で浮沈。
             if (useBuoyancy && force.FluidDensity > 0f)
             {
                 float gMag = Physics2D.gravity.magnitude;
-                Vector2 up = gMag > 1e-6f ? -(Vector2)Physics2D.gravity / gMag : Vector2.up;
-                float s = fullSubmersionContacts > 0f ? Mathf.Clamp01(force.ContactCount / fullSubmersionContacts) : 1f;
-                float buoyForce = force.FluidDensity * gMag * EffectiveVolume() * s; // 阿基米德浮力幅值。 // Archimedes magnitude. // 浮力の大きさ。
-                if (buoyForce > 0f) _rb.AddForceAtPosition(up * (buoyForce * dt), center, ForceMode2D.Impulse);
+                Vector2 up = gMag > 1e-6f ? -Physics2D.gravity / gMag : Vector2.up;
+                float buoyForce = force.FluidDensity * gMag * EffectiveVolume() * submerged; // 阿基米德浮力幅值。 // magnitude. // 浮力の大きさ。
+                if (buoyForce > 0f) _rb.AddForce(up * buoyForce, ForceMode2D.Force);
             }
 
-            // 浸没阻尼：消除抖动，稳定漂浮。 // Submerged drag: removes jitter for stable floating. // 浸水減衰。
-            if (submergedLinearDrag > 0f) _rb.linearVelocity *= Mathf.Clamp01(1f - submergedLinearDrag * dt);
-            if (submergedAngularDrag > 0f) _rb.angularVelocity *= Mathf.Clamp01(1f - submergedAngularDrag * dt);
+            // 浸没附加阻尼：在相对速度阻力之外再消除残余抖动、稳定漂浮（不需要可设 0）。按浸没比例缩放。
+            // Extra submerged damping on top of drag to kill residual jitter for stable floating (set 0 if undesired). Scaled by submersion.
+            // 浸水附加減衰：残余の振動を消し安定浮遊（不要なら 0）。浸水率でスケール。
+            if (submergedLinearDrag > 0f) _rb.linearVelocity *= Mathf.Clamp01(1f - submergedLinearDrag * submerged * dt);
+            if (submergedAngularDrag > 0f) _rb.angularVelocity *= Mathf.Clamp01(1f - submergedAngularDrag * submerged * dt);
         }
     }
 }

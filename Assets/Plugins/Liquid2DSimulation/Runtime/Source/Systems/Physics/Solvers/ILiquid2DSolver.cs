@@ -32,16 +32,16 @@ namespace Fs.Liquid2D
         /// <summary>力场集合（吸引/排斥，外力阶段施加）。 // Force-field set (attract/repel, applied in external-forces stage). // 力場集合。</summary>
         public Liquid2DForceFieldBuffer ForceFields;
 
-        /// <summary>动态碰撞体的本帧累积冲量（双向耦合用，长度=动态体数）。 // Per-frame accumulated impulse for dynamic colliders (two-way coupling). // 動的コライダーのフレーム累積力積。</summary>
-        public NativeArray<float2> ColliderImpulse;
+        /// <summary>动态碰撞体的本帧接触流体速度之和（双向耦合用，长度=动态体数）。平均流体速度 = 此值 / 接触数，用于相对速度阻力。 // Per-frame sum of contacting fluid velocities for dynamic colliders (two-way coupling). Average fluid velocity = this / contactCount, for relative-velocity drag. // 動的コライダーの接触流体速度の和。</summary>
+        public NativeArray<float2> ColliderVelSum;
 
         /// <summary>
-        /// 动态碰撞体的本帧接触累积（浮力用，长度=动态体数）：xy=接触粒子位置之和，z=接触粒子数，w=保留。
-        /// 接收者按 z 估算浮力/阻尼强度，按 xy/z 求接触质心以施加力矩。
+        /// 动态碰撞体的本帧接触累积（浮力用，长度=动态体数）：xy=接触粒子位置之和，z=接触粒子数，w=接触流体密度之和。
+        /// 接收者按 z 估算浸没比例（缩放浮力/阻力），按 xy/z 求接触质心（力矩），按 w/z 求平均流体密度（阿基米德浮力）。
         /// Per-frame contact accumulation for dynamic colliders (buoyancy; length = dynamic body count): xy = sum of contact
-        /// particle positions, z = contact count, w = reserved. Receivers scale buoyancy/drag by z and use xy/z as the
-        /// contact centroid for torque.
-        /// 動的コライダーのフレーム接触累積（浮力用）：xy=接触粒子位置の和、z=接触数、w=予約。
+        /// particle positions, z = contact count, w = sum of contact fluid density. Receivers use z for the submerged fraction
+        /// (scales buoyancy/drag), xy/z as the contact centroid (torque), and w/z as the average fluid density (buoyancy).
+        /// 動的コライダーのフレーム接触累積（浮力用）：xy=接触位置の和、z=接触数、w=流体密度の和。
         /// </summary>
         public NativeArray<float4> ColliderContact;
 

@@ -3,23 +3,24 @@ using Unity.Mathematics;
 namespace Fs.Liquid2D
 {
     /// <summary>
-    /// 本帧由流体作用到某动态物体上的合力信息（双向耦合数据包）。包含净反作用冲量、接触质心与接触粒子数，
-    /// 接收者据此驱动物体运动（冲走）、施加浮力/阻尼（漂浮）并在质心处产生力矩（翻倒/摇摆）。
-    /// Aggregate fluid-to-body forces for this frame (two-way coupling payload): the net reaction impulse, the contact
-    /// centroid, and the contact particle count. A receiver uses these to drive motion (wash away), apply buoyancy/drag
-    /// (floating), and produce torque about the centroid (tipping/bobbing).
-    /// 本フレームに流体が動的物体へ与える合力情報（双方向カップリングのデータ）。純反作用力積・接触質心・接触粒子数を含み、
-    /// レシーバーはこれで物体を駆動（押し流す）し、浮力/減衰（浮遊）を与え、質心で力矩（転倒/揺動）を生みます。
+    /// 本帧由流体作用到某动态物体上的合力信息（双向耦合数据包）。包含接触处的平均流体速度、接触质心、接触粒子数与平均流体密度，
+    /// 接收者据此用「相对速度阻力」驱动物体运动（冲走）、用阿基米德浮力实现漂浮/下沉，并可选地在质心处产生力矩（翻倒/摇摆）。
+    /// Aggregate fluid-to-body forces for this frame (two-way coupling payload): the average fluid velocity at contacts, the
+    /// contact centroid, the contact particle count, and the average fluid density. A receiver uses these to drive motion via
+    /// relative-velocity drag (wash away), float/sink via Archimedes buoyancy, and optionally produce torque about the
+    /// centroid (tipping/bobbing).
+    /// 本フレームに流体が動的物体へ与える合力情報（双方向カップリングのデータ）。接触処の平均流体速度・接触質心・接触粒子数・平均
+    /// 流体密度を含み、レシーバーは相対速度抗力で駆動（押し流す）し、アルキメデス浮力で浮沈させ、必要なら質心で力矩を生みます。
     /// </summary>
     public struct Liquid2DBodyForce
     {
-        /// <summary>本帧累积的净反作用冲量（世界坐标）。 // Net reaction impulse accumulated this frame (world space). // 純反作用力積（ワールド）。</summary>
-        public float2 Impulse;
+        /// <summary>接触处的平均流体速度（世界坐标）。用于相对速度阻力：力 ∝ (流体速度 − 物体速度)。 // Average fluid velocity at contacts (world). For relative-velocity drag: force ∝ (fluidVel − bodyVel). // 接触処の平均流体速度（ワールド）。</summary>
+        public float2 FluidVelocity;
 
         /// <summary>接触质心（世界坐标）。仅当 <see cref="ContactCount"/> &gt; 0 时有效。 // Contact centroid (world). Valid only when ContactCount &gt; 0. // 接触質心（ワールド）。</summary>
         public float2 ContactCenter;
 
-        /// <summary>本帧与该物体接触的流体粒子数（用于浮力/阻尼缩放，0 表示未接触）。 // Fluid particles contacting the body this frame (scales buoyancy/drag; 0 = no contact). // 接触粒子数。</summary>
+        /// <summary>本帧与该物体接触的流体粒子数（用于浮力/阻力缩放，0 表示未接触）。 // Fluid particles contacting the body this frame (scales buoyancy/drag; 0 = no contact). // 接触粒子数。</summary>
         public int ContactCount;
 
         /// <summary>接触处的平均流体密度（按接触粒子的材质 Density 求平均，用于阿基米德浮力）。 // Average fluid mass density at contacts (for Archimedes buoyancy). // 接触処の平均流体密度。</summary>
