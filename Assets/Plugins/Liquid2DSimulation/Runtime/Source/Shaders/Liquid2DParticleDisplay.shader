@@ -2,7 +2,7 @@
 //   · CPU 模式：缓冲为密实数组，SV_InstanceID 直接索引；
 //   · GPU 模式（关键字 _GPU_PROCEDURAL）：缓冲为常驻 GPU（slot 索引），slot = _ActiveIndices[SV_InstanceID]，
 //     与正式 Feature 的 Liquid2DParticleGpu 流程一致（全程 GPU、零回读、每帧最新）。
-// 两路径均支持模拟颜色与速度渐变两种模式。
+// 两路径均支持速度渐变与模拟颜色两种模式。
 // Standalone fluid particle display shader. Both paths use DrawProcedural (no mesh); the quad is generated in-shader and
 // the fragment carves a circle from it by UV:
 //   · CPU mode: dense buffers indexed directly by SV_InstanceID;
@@ -47,7 +47,8 @@ Shader "Custom/URP/2D/Liquid2DParticleDisplay"
             TEXTURE2D(_ColourMap);  SAMPLER(sampler_ColourMap);
 
             float _VelocityMax;
-            int   _ColourMode;  // 0 = 模拟颜色, 1 = 速度渐变。 // 0 = simulation, 1 = velocity gradient. // 0 = シミュレーション色, 1 = 速度グラデーション。
+            int   _ColourMode;  // 0 = 速度渐变, 1 = 模拟颜色。 // 0 = velocity gradient, 1 = simulation colour. // 0 = 速度グラデーション、1 = シミュレーション色。
+            
 
             // 两个三角形拼出四边形（[-0.5,0.5]）+ [0,1] UV。两路径共用。
             // Two triangles form a quad ([-0.5,0.5]) with [0,1] UV. Shared by both paths.
@@ -112,7 +113,7 @@ Shader "Custom/URP/2D/Liquid2DParticleDisplay"
 
                 OUT.positionCS = TransformWorldToHClip(float3(world, 0.0));
                 OUT.uv         = QUV[vid];
-                OUT.color      = (_ColourMode == 1) ? ColourFromVelocity(_Velocities[slot]) : _Colors[slot];
+                OUT.color      = (_ColourMode == 0) ? ColourFromVelocity(_Velocities[slot]) : _Colors[slot];
                 return OUT;
             }
 #else
@@ -129,7 +130,7 @@ Shader "Custom/URP/2D/Liquid2DParticleDisplay"
 
                 OUT.positionCS = TransformWorldToHClip(float3(world, 0.0));
                 OUT.uv         = QUV[vid];
-                OUT.color      = (_ColourMode == 1) ? ColourFromVelocity(_Velocities[iid]) : _Colors[iid];
+                OUT.color      = (_ColourMode == 0) ? ColourFromVelocity(_Velocities[iid]) : _Colors[iid];
                 return OUT;
             }
 #endif

@@ -31,7 +31,7 @@ MonoBehaviour:
     MixColorsWithContactParticlesCheckInternal: 0.1
   Material:
     Mass: 4
-    RestDensityScale: 55
+    RestDensityScale: 1
     Viscosity: 0.01
     Cohesion: 0.08
     Friction: 0

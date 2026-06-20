@@ -270,7 +270,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4604536c1b2ac6644b9380bdbb57c3fd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DBoxCollider
-  isDynamic: 0
+  nameTag: 
   size: {x: 1, y: 1}
 --- !u!1001 &184987542
 PrefabInstance:
@@ -433,7 +433,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 835bc58ca79440946863947592623e62, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DCircleCollider
-  isDynamic: 0
+  nameTag: 
   radius: 0.5
 --- !u!1 &262193638
 GameObject:
@@ -576,7 +576,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 835bc58ca79440946863947592623e62, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DCircleCollider
-  isDynamic: 0
+  nameTag: 
   radius: 0.5
 --- !u!1001 &285246935
 PrefabInstance:
@@ -669,7 +669,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 1236614623622671160, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
       propertyPath: flowRate
-      value: 200
+      value: 60
       objectReference: {fileID: 0}
     - target: {fileID: 1236614623622671160, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
       propertyPath: ejectForce
@@ -1028,7 +1028,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4604536c1b2ac6644b9380bdbb57c3fd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DBoxCollider
-  isDynamic: 0
+  nameTag: 
   size: {x: 1, y: 1}
 --- !u!1001 &598965414
 PrefabInstance:
@@ -1191,7 +1191,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4604536c1b2ac6644b9380bdbb57c3fd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DBoxCollider
-  isDynamic: 0
+  nameTag: 
   size: {x: 1, y: 1}
 --- !u!1 &619394800
 GameObject:
@@ -1381,7 +1381,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4604536c1b2ac6644b9380bdbb57c3fd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DBoxCollider
-  isDynamic: 0
+  nameTag: 
   size: {x: 1, y: 1}
 --- !u!1 &859368165
 GameObject:
@@ -1578,7 +1578,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 835bc58ca79440946863947592623e62, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DCircleCollider
-  isDynamic: 0
+  nameTag: 
   radius: 0.5
 --- !u!1 &917625082
 GameObject:
@@ -1721,7 +1721,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 835bc58ca79440946863947592623e62, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DCircleCollider
-  isDynamic: 0
+  nameTag: 
   radius: 0.5
 --- !u!1 &933598288
 GameObject:
@@ -1874,7 +1874,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4604536c1b2ac6644b9380bdbb57c3fd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DBoxCollider
-  isDynamic: 0
+  nameTag: 
   size: {x: 1, y: 1}
 --- !u!1 &938786637
 GameObject:
@@ -2027,7 +2027,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4604536c1b2ac6644b9380bdbb57c3fd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DBoxCollider
-  isDynamic: 0
+  nameTag: 
   size: {x: 1, y: 1}
 --- !u!1 &1004555348
 GameObject:
@@ -2133,7 +2133,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4604536c1b2ac6644b9380bdbb57c3fd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DBoxCollider
-  isDynamic: 0
+  nameTag: 
   size: {x: 1, y: 1}
 --- !u!1 &1021816738
 GameObject:
@@ -2322,7 +2322,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4604536c1b2ac6644b9380bdbb57c3fd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DBoxCollider
-  isDynamic: 0
+  nameTag: 
   size: {x: 1, y: 1}
 --- !u!1 &1085418666
 GameObject:
@@ -2428,7 +2428,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4604536c1b2ac6644b9380bdbb57c3fd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DBoxCollider
-  isDynamic: 0
+  nameTag: 
   size: {x: 1, y: 1}
 --- !u!1 &1130515030
 GameObject:
@@ -2534,7 +2534,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 835bc58ca79440946863947592623e62, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DCircleCollider
-  isDynamic: 0
+  nameTag: 
   radius: 0.5
 --- !u!1 &1209698427
 GameObject:
@@ -2640,7 +2640,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4604536c1b2ac6644b9380bdbb57c3fd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DBoxCollider
-  isDynamic: 0
+  nameTag: 
   size: {x: 1, y: 1}
 --- !u!1 &1228673359
 GameObject:
@@ -2963,7 +2963,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 835bc58ca79440946863947592623e62, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DCircleCollider
-  isDynamic: 0
+  nameTag: 
   radius: 0.5
 --- !u!1 &1379036869
 GameObject:
@@ -3108,8 +3108,81 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 835bc58ca79440946863947592623e62, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DCircleCollider
-  isDynamic: 0
+  nameTag: 
   radius: 0.5
+--- !u!1001 &1683731235
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 405409796193559244, guid: dbba302a87fd62a4e98980153551b667, type: 3}
+      propertyPath: m_Mass
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 750698002683812287, guid: dbba302a87fd62a4e98980153551b667, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -16.92
+      objectReference: {fileID: 0}
+    - target: {fileID: 750698002683812287, guid: dbba302a87fd62a4e98980153551b667, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: -7
+      objectReference: {fileID: 0}
+    - target: {fileID: 750698002683812287, guid: dbba302a87fd62a4e98980153551b667, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 750698002683812287, guid: dbba302a87fd62a4e98980153551b667, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 750698002683812287, guid: dbba302a87fd62a4e98980153551b667, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 750698002683812287, guid: dbba302a87fd62a4e98980153551b667, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 750698002683812287, guid: dbba302a87fd62a4e98980153551b667, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 750698002683812287, guid: dbba302a87fd62a4e98980153551b667, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 750698002683812287, guid: dbba302a87fd62a4e98980153551b667, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 750698002683812287, guid: dbba302a87fd62a4e98980153551b667, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1551674025852397728, guid: dbba302a87fd62a4e98980153551b667, type: 3}
+      propertyPath: m_Color.b
+      value: 0.5660378
+      objectReference: {fileID: 0}
+    - target: {fileID: 1551674025852397728, guid: dbba302a87fd62a4e98980153551b667, type: 3}
+      propertyPath: m_Color.g
+      value: 0.5660378
+      objectReference: {fileID: 0}
+    - target: {fileID: 1551674025852397728, guid: dbba302a87fd62a4e98980153551b667, type: 3}
+      propertyPath: m_Color.r
+      value: 0.5660378
+      objectReference: {fileID: 0}
+    - target: {fileID: 7122470589717026656, guid: dbba302a87fd62a4e98980153551b667, type: 3}
+      propertyPath: m_Name
+      value: Liquid2DRigidbody (1)
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: dbba302a87fd62a4e98980153551b667, type: 3}
 --- !u!1 &1729434137
 GameObject:
   m_ObjectHideFlags: 0
@@ -3251,7 +3324,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 835bc58ca79440946863947592623e62, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DCircleCollider
-  isDynamic: 0
+  nameTag: 
   radius: 0.5
 --- !u!1 &1910570415
 GameObject:
@@ -3601,7 +3674,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4604536c1b2ac6644b9380bdbb57c3fd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DBoxCollider
-  isDynamic: 0
+  nameTag: 
   size: {x: 1, y: 1}
 --- !u!1 &2100353494
 GameObject:
@@ -3746,6 +3819,10 @@ PrefabInstance:
       propertyPath: scale
       value: 0.12
       objectReference: {fileID: 0}
+    - target: {fileID: 5853212532852650967, guid: 6657c86b4c980274b821df95f20ef894, type: 3}
+      propertyPath: displayEnabled
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 8891003256158766862, guid: 6657c86b4c980274b821df95f20ef894, type: 3}
       propertyPath: m_Name
       value: Liquid2DParticleDisplay
@@ -3812,6 +3889,67 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 20a0295b5e48ad640bfda69cbc99c5e6, type: 3}
+--- !u!1001 &8824771791508454708
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 405409796193559244, guid: dbba302a87fd62a4e98980153551b667, type: 3}
+      propertyPath: m_Mass
+      value: 0.3
+      objectReference: {fileID: 0}
+    - target: {fileID: 750698002683812287, guid: dbba302a87fd62a4e98980153551b667, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -19.48
+      objectReference: {fileID: 0}
+    - target: {fileID: 750698002683812287, guid: dbba302a87fd62a4e98980153551b667, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: -7
+      objectReference: {fileID: 0}
+    - target: {fileID: 750698002683812287, guid: dbba302a87fd62a4e98980153551b667, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 750698002683812287, guid: dbba302a87fd62a4e98980153551b667, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 750698002683812287, guid: dbba302a87fd62a4e98980153551b667, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 750698002683812287, guid: dbba302a87fd62a4e98980153551b667, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 750698002683812287, guid: dbba302a87fd62a4e98980153551b667, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 750698002683812287, guid: dbba302a87fd62a4e98980153551b667, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 750698002683812287, guid: dbba302a87fd62a4e98980153551b667, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 750698002683812287, guid: dbba302a87fd62a4e98980153551b667, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7122470589717026656, guid: dbba302a87fd62a4e98980153551b667, type: 3}
+      propertyPath: m_Name
+      value: Liquid2DRigidbody
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: dbba302a87fd62a4e98980153551b667, type: 3}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -3831,3 +3969,5 @@ SceneRoots:
   - {fileID: 519420032}
   - {fileID: 619394802}
   - {fileID: 2046058817}
+  - {fileID: 8824771791508454708}
+  - {fileID: 1683731235}

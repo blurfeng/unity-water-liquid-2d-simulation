@@ -9,7 +9,7 @@ namespace Fs.Liquid2D
     /// <summary>
     /// 测试用粒子显示组件（正式流程是走 Renderer 2D Data 中配置的 Feature）。运行时流体粒子独立可视化组件。通过 <c>Graphics.DrawProcedural</c> 将所有活跃粒子渲染到场景（quad 由 shader 程序化生成，无需 mesh），
     /// 数据直接来自 <see cref="Liquid2DSimulation"/> SoA，不依赖 URP Render Feature。
-    /// 支持模拟颜色与速度渐变两种着色模式；配套着色器 <c>Custom/URP/2D/Liquid2DParticleDisplay</c>。
+    /// 支持速度渐变与模拟颜色两种着色模式；配套着色器 <c>Custom/URP/2D/Liquid2DParticleDisplay</c>。
     /// Runtime standalone fluid-particle visualization. Renders all active particles via
     /// <c>Graphics.DrawProcedural</c> (the quad is generated in-shader, no mesh required), reading data directly from
     /// <see cref="Liquid2DSimulation"/> SoA without a URP Render Feature. Supports simulation-colour and velocity-gradient
@@ -48,10 +48,10 @@ namespace Fs.Liquid2D
         // ── 颜色模式 Colour mode カラーモード ──────────────────────────────────
         [Header("Colour")]
         [SerializeField, LocalizationTooltip(
-            "颜色模式：Simulation=粒子模拟自身颜色；VelocityGradient=按速度大小映射渐变色。",
+            "颜色模式：VelocityGradient=按速度大小映射渐变色；Simulation=粒子模拟自身颜色。",
             "Colour mode: Simulation = per-particle simulation colour; VelocityGradient = map speed to gradient.",
             "カラーモード：Simulation=粒子自身の色；VelocityGradient=速さでグラデーション色。")]
-        private ColourMode colourMode = ColourMode.Simulation;
+        private ColourMode colourMode = ColourMode.VelocityGradient;
 
         [SerializeField, LocalizationTooltip(
             "速度渐变色（ColourMode = VelocityGradient 时生效）。",
@@ -85,10 +85,11 @@ namespace Fs.Liquid2D
         /// </summary>
         public enum ColourMode
         {
-            /// <summary>使用粒子模拟自身颜色（RGBA）。 // Use per-particle simulation colour (RGBA). // 粒子自身のシミュレーション色（RGBA）。</summary>
-            Simulation = 0,
             /// <summary>按速度大小映射渐变色图。 // Map speed to gradient colour map. // 速さでグラデーションカラーマップにマッピング。</summary>
-            VelocityGradient = 1,
+            VelocityGradient = 0,
+            
+            /// <summary>使用粒子模拟自身颜色（RGBA）。 // Use per-particle simulation colour (RGBA). // 粒子自身のシミュレーション色（RGBA）。</summary>
+            Simulation = 1,
         }
 
         // ── 内部状态 Internal state 内部状態 ────────────────────────────────────

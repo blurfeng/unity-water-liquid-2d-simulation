@@ -167,10 +167,6 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 5853212532852650967, guid: 6657c86b4c980274b821df95f20ef894, type: 3}
-      propertyPath: scale
-      value: 0.12
-      objectReference: {fileID: 0}
     - target: {fileID: 8891003256158766862, guid: 6657c86b4c980274b821df95f20ef894, type: 3}
       propertyPath: m_Name
       value: Liquid2DParticleDisplay
@@ -231,10 +227,6 @@ PrefabInstance:
     - target: {fileID: 3616119019485894971, guid: c107a39805142964384382b1ae40a2d9, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8065927890518322416, guid: c107a39805142964384382b1ae40a2d9, type: 3}
-      propertyPath: targetDensity
-      value: 0.5
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -740,7 +732,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8411cc57852125d448f1b34e5f3283b5, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DEdgeCollider
-  isDynamic: 0
+  nameTag: 
 --- !u!1 &1449317170
 GameObject:
   m_ObjectHideFlags: 0
