@@ -39,8 +39,7 @@ state out of the simulation, never off Transforms.
 
 ### Physics — pure-data SPH (`Runtime/Source/Systems/Physics/`)
 
-There are **no per-particle GameObjects**. (The old `Liquid2DParticle` MonoBehaviour + static registry is
-gone.) Particles are rows in Structure-of-Arrays buffers, advanced by an SPH **dual-density** solver.
+There are **no per-particle GameObjects**. Particles are rows in Structure-of-Arrays buffers, advanced by an SPH **dual-density** solver.
 
 - **`Liquid2DSimulation.cs`** — runtime singleton hub (`[DefaultExecutionOrder(-100)]`, lazily creates a
   hidden GameObject; **play-mode only**). Owns the `Liquid2DParticleStore`, the solver, the descriptor /
@@ -101,14 +100,6 @@ Supporting pieces:
 Scene wiring: add `Liquid2DFeature` to the URP 2D Renderer Data, and configure **Rendering Layer Masks**
 (not sorting layers) for obstructors (block flow) and occluders (cover but don't block).
 
-## Unity coding conventions
-
-- **Inspector fields stay private.** Any field that is serialized and exposed for editing in the Inspector
-  is always declared `private` with `[SerializeField]` — never `public`. This applies to every serializable
-  context: `MonoBehaviour`, `ScriptableObject`, and plain `[Serializable]` data classes/structs nested in
-  them. When such a field must be read or written from outside the class, expose a dedicated accessor
-  property instead of widening the field's visibility.
-
 ## Conventions / gotchas
 
 - **Trilingual docs**: public API XML comments are written in Chinese / English / Japanese, and inspector
@@ -131,3 +122,11 @@ Scene wiring: add `Liquid2DFeature` to the URP 2D Renderer Data, and configure *
   scenes in sync with the dev `Assets/Scenes/`.
 - Editor-only code is guarded by `#if UNITY_EDITOR`.
 - Full usage/configuration docs: `README.md` (中文), `README_EN.md`, `README_JA.md`.
+
+## Unity coding conventions
+
+- **Inspector fields stay private.** Any field that is serialized and exposed for editing in the Inspector
+  is always declared `private` with `[SerializeField]` — never `public`. This applies to every serializable
+  context: `MonoBehaviour`, `ScriptableObject`, and plain `[Serializable]` data classes/structs nested in
+  them. When such a field must be read or written from outside the class, expose a dedicated accessor
+  property instead of widening the field's visibility.
