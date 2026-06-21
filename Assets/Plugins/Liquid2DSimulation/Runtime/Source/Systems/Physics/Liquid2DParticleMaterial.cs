@@ -27,6 +27,12 @@ namespace Fs.Liquid2D
              "SPH 静止密度の倍率（シミュレーション調整用、物理的質量密度ではありません）。グローバル TargetDensity をスケールし、粒子の堆積具合と圧縮感を制御します。浮力には影響しません——浮力用の流体質量密度は下の Density フィールドで設定してください。")]
         public float TargetDensityScale = 1f;
 
+        [Min(0f), LocalizationTooltip(
+             "近压力倍率缩放。缩放全局 NearPressureMultiplier，控制该材质粒子的近程斥力强度（影响流体的弹性与防重叠能力）。1 = 使用全局值。",
+             "Near-pressure multiplier scale. Scales the global NearPressureMultiplier to control the short-range repulsion strength for this material (affects \"springiness\" and overlap prevention). 1 = use global value.",
+             "近圧力倍率スケール。グローバル NearPressureMultiplier をスケールし、この材質の近距離斥力強度を制御します（弾力性と重複防止に影響）。1 = グローバル値を使用。")]
+        public float NearPressureMultiplierScale = 1f;
+
         [Range(0f, 1f), LocalizationTooltip(
              "粘性（XSPH）。越大越粘稠、流动越缓（水低、熔岩高）。",
              "Viscosity (XSPH). Higher is thicker and flows slower (low for water, high for lava).",
@@ -72,6 +78,7 @@ namespace Fs.Liquid2D
         {
             InvMass = Mass > 0f ? 1f / Mass : 0f,
             TargetDensityScale = Mathf.Max(0.01f, TargetDensityScale),
+            NearPressureMultiplierScale = Mathf.Max(0f, NearPressureMultiplierScale),
             Viscosity = Viscosity,
             Cohesion = Cohesion,
             Friction = Friction,
@@ -84,19 +91,19 @@ namespace Fs.Liquid2D
 
         /// <summary>水：低粘、低张力、正常重力。 // Water: low viscosity/tension, normal gravity. // 水：低粘性/低張力、通常重力。</summary>
         public static Liquid2DParticleMaterial Water() => new Liquid2DParticleMaterial
-            { Mass = 1f, TargetDensityScale = 1f, Viscosity = 0.01f, Cohesion = 0.08f, Friction = 0f, Restitution = 0f, GravityScale = 1f, Density = 1f };
+            { Mass = 1f, TargetDensityScale = 1f, NearPressureMultiplierScale = 1f, Viscosity = 0.01f, Cohesion = 0.08f, Friction = 0f, Restitution = 0f, GravityScale = 1f, Density = 1f };
 
         /// <summary>熔岩：高粘、中张力、高质量、缓动。 // Lava: high viscosity/mass, medium tension. // 溶岩：高粘性/高質量、中張力。</summary>
         public static Liquid2DParticleMaterial Lava() => new Liquid2DParticleMaterial
-            { Mass = 3f, TargetDensityScale = 1.1f, Viscosity = 0.6f, Cohesion = 0.25f, Friction = 0.05f, Restitution = 0f, GravityScale = 1f, Density = 3f };
+            { Mass = 3f, TargetDensityScale = 1.1f, NearPressureMultiplierScale = 1f, Viscosity = 0.6f, Cohesion = 0.25f, Friction = 0.05f, Restitution = 0f, GravityScale = 1f, Density = 3f };
 
         /// <summary>泡沫：高张力、低质量、低/零重力，易结团上浮。 // Foam: high tension, low mass, low gravity. // 泡：高張力、低質量、低重力。</summary>
         public static Liquid2DParticleMaterial Foam() => new Liquid2DParticleMaterial
-            { Mass = 0.3f, TargetDensityScale = 0.8f, Viscosity = 0.05f, Cohesion = 0.6f, Friction = 0f, Restitution = 0.1f, GravityScale = 0.1f, Density = 0.3f };
+            { Mass = 0.3f, TargetDensityScale = 0.8f, NearPressureMultiplierScale = 1f, Viscosity = 0.05f, Cohesion = 0.6f, Friction = 0f, Restitution = 0.1f, GravityScale = 0.1f, Density = 0.3f };
 
         /// <summary>沙子：高摩擦、低粘、零张力（颗粒近似，真实颗粒需后续摩擦约束扩展）。 // Sand: high friction, no tension (granular approximation). // 砂：高摩擦、無張力（近似）。</summary>
         public static Liquid2DParticleMaterial Sand() => new Liquid2DParticleMaterial
-            { Mass = 1.5f, TargetDensityScale = 1f, Viscosity = 0.2f, Cohesion = 0f, Friction = 0.6f, Restitution = 0f, GravityScale = 1f, Density = 1.5f };
+            { Mass = 1.5f, TargetDensityScale = 1f, NearPressureMultiplierScale = 1f, Viscosity = 0.2f, Cohesion = 0f, Friction = 0.6f, Restitution = 0f, GravityScale = 1f, Density = 1.5f };
     }
 
     /// <summary>
@@ -108,6 +115,7 @@ namespace Fs.Liquid2D
     {
         public float InvMass;
         public float TargetDensityScale;
+        public float NearPressureMultiplierScale;
         public float Viscosity;
         public float Cohesion;
         public float Friction;
@@ -117,6 +125,6 @@ namespace Fs.Liquid2D
 
         /// <summary>默认材质（等价于水的中性参数）。 // Default (water-like neutral). // デフォルト（水相当）。</summary>
         public static Liquid2DMaterialData Default => new Liquid2DMaterialData
-            { InvMass = 1f, TargetDensityScale = 1f, Viscosity = 0.01f, Cohesion = 0.08f, Friction = 0f, Restitution = 0f, GravityScale = 1f, Density = 1f };
+            { InvMass = 1f, TargetDensityScale = 1f, NearPressureMultiplierScale = 1f, Viscosity = 0.01f, Cohesion = 0.08f, Friction = 0f, Restitution = 0f, GravityScale = 1f, Density = 1f };
     }
 }

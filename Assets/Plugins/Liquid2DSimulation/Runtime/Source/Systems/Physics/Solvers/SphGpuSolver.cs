@@ -341,7 +341,7 @@ namespace Fs.Liquid2D
         }
         private void EnsureAuxBuffers(int numTypes, int numColliders, int numPoints, int numBodies, int numForceFields)
         {
-            Ensure(ref _materials, numTypes, 32); Ensure(ref _mixDatas, numTypes, 20);
+            Ensure(ref _materials, numTypes, 36); Ensure(ref _mixDatas, numTypes, 20);
             Ensure(ref _colliders, Mathf.Max(1, numColliders), 52); Ensure(ref _points, Mathf.Max(1, numPoints), 8);
             Ensure(ref _bodyAccum, numBodies * _accumStride, 4);
             Ensure(ref _forceFields, Mathf.Max(1, numForceFields), 44);

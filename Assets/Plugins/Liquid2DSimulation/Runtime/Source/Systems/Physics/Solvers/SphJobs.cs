@@ -241,8 +241,8 @@ namespace Fs.Liquid2D
 
         private float NearPressure(float nearDensity, int slot)
         {
-            float coh = Materials[TypeId[slot]].Cohesion;
-            return nearDensity * NearPressureMultiplier * (0.5f + coh);
+            var mat = Materials[TypeId[slot]];
+            return nearDensity * NearPressureMultiplier * mat.NearPressureMultiplierScale * (0.5f + mat.Cohesion);
         }
 
         public void Execute(int k)

@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: ParticleDescriptor
   m_EditorClassIdentifier: 
   Radius: 0.1
-  RenderScale: 3.6
+  RenderScale: 2
   DefaultLifetime: 0
   RenderSettings:
     Sprite: {fileID: 21300000, guid: 474aa5d06b976c5449aa374d5c77d9aa, type: 3}
@@ -32,6 +32,7 @@ MonoBehaviour:
   Material:
     Mass: 8
     TargetDensityScale: 1
+    NearPressureMultiplierScale: 1
     Viscosity: 0.01
     Cohesion: 0.08
     Friction: 0

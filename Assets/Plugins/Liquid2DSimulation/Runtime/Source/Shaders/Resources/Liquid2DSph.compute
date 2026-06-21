@@ -55,7 +55,7 @@ StructuredBuffer<int>    GroupId;
 StructuredBuffer<int> ActiveIndices;
 
 // ---- 逐 typeId 材质（与 Liquid2DMaterialData 对齐）。末尾 density 为浮力用质量密度。 ----
-struct MaterialData { float invMass; float targetDensityScale; float viscosity; float cohesion; float friction; float restitution; float gravityScale; float density; };
+struct MaterialData { float invMass; float targetDensityScale; float nearPressureMultiplierScale; float viscosity; float cohesion; float friction; float restitution; float gravityScale; float density; };
 StructuredBuffer<MaterialData> Materials;
 
 // ---- 逐 typeId 混色参数（与 Liquid2DGpuMixData 对齐）。 ----
@@ -415,7 +415,7 @@ void Density(uint3 id : SV_DispatchThreadID)
 }
 
 float PressureFor(int slot) { float rho0 = targetDensity * Materials[TypeId[slot]].targetDensityScale; return (Densities[slot].x - rho0) * pressureMultiplier; }
-float NearPressureFor(int slot) { float coh = Materials[TypeId[slot]].cohesion; return Densities[slot].y * nearPressureMultiplier * (0.5f + coh); }
+float NearPressureFor(int slot) { MaterialData mat = Materials[TypeId[slot]]; return Densities[slot].y * nearPressureMultiplier * mat.nearPressureMultiplierScale * (0.5f + mat.cohesion); }
 
 [numthreads(NumThreads,1,1)]
 void Pressure(uint3 id : SV_DispatchThreadID)
