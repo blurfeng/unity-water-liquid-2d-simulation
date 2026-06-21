@@ -37,4 +37,4 @@ MonoBehaviour:
     Friction: 0.05
     Restitution: 0
     GravityScale: 1
-    Density: 1
+    Density: 3

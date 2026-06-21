@@ -22,9 +22,9 @@ namespace Fs.Liquid2D
         public float Mass = 1f;
 
         [Min(0.01f), LocalizationTooltip(
-             "静止密度倍率。相对全局静止密度的缩放，影响堆积体积与可压缩观感。",
-             "Rest density multiplier relative to the global rest density; affects packing volume and compressibility feel.",
-             "静止密度の倍率。グローバル静止密度に対するスケールで、堆積体積と圧縮感に影響します。")]
+             "SPH 静止密度倍率（模拟调参，非物理质量密度）。缩放全局 TargetDensity，影响粒子堆积松紧与可压缩观感。此参数不参与浮力计算——浮力所用的流体质量密度请在下方 Density 字段单独设置。",
+             "SPH rest density multiplier (simulation tuning, not physical mass density). Scales the global TargetDensity to control packing tightness and compressibility feel. This does NOT affect buoyancy — set fluid mass density for buoyancy in the Density field below.",
+             "SPH 静止密度の倍率（シミュレーション調整用、物理的質量密度ではありません）。グローバル TargetDensity をスケールし、粒子の堆積具合と圧縮感を制御します。浮力には影響しません——浮力用の流体質量密度は下の Density フィールドで設定してください。")]
         public float TargetDensityScale = 1f;
 
         [Range(0f, 1f), LocalizationTooltip(
@@ -58,9 +58,9 @@ namespace Fs.Liquid2D
         public float GravityScale = 1f;
 
         [Min(0f), LocalizationTooltip(
-             "流体质量密度（用于阿基米德浮力）。物体密度（质量/体积）小于它则漂浮、大于则下沉。水≈1，熔岩更大，泡沫更小。",
-             "Fluid mass density (for Archimedes buoyancy). A body floats when its density (mass/volume) is below this, sinks when above. Water≈1, lava higher, foam lower.",
-             "流体の質量密度（アルキメデス浮力用）。物体の密度（質量/体積）がこれより小さいと浮き、大きいと沈む。水≈1、溶岩は大、泡は小。")]
+             "流体质量密度（专用于阿基米德浮力比对）。物体密度（质量/体积）小于此值则漂浮、大于则下沉。水≈1，熔岩更大，泡沫更小。注意：此字段与上方 TargetDensityScale（SPH 堆积参数）相互独立——两者编码不同的物理属性，需分别调节。",
+             "Fluid mass density (used exclusively for Archimedes buoyancy comparison). A body floats when its density (mass/volume) is below this value, sinks when above. Water≈1, lava higher, foam lower. Note: this is independent of TargetDensityScale (an SPH packing parameter) — they encode different physical properties and must be tuned separately.",
+             "流体の質量密度（アルキメデス浮力の比較専用）。物体の密度（質量/体積）がこれより小さいと浮き、大きいと沈む。水≈1、溶岩は大、泡は小。注意：上の TargetDensityScale（SPH 堆積パラメータ）とは独立しています——異なる物理属性を表し、それぞれ個別に調整が必要です。")]
         public float Density = 1f;
 
         /// <summary>
