@@ -131,6 +131,7 @@ float2 gravity;
 float dt;
 float time;
 float impulseScale;
+int colorMixMode; // 0=LinearRgb, 1=Oklab, 2=Ryb
 
 // ============ 核函数。 ============
 float Poly6Coef()     { return 4.0f  / (PI * pow(h, 8.0f)); }
@@ -570,6 +571,105 @@ void IntegrateCollide(uint3 id : SV_DispatchThreadID)
     Velocities[i] = v;
 }
 
+// ============ 颜色混合辅助函数 ============
+// Colour-mixing helper functions.
+// 色混合ヘルパー関数。
+
+// ---- Oklab 转换（Björn Ottosson 标准实现）。输入/输出：线性 sRGB [0,1]。 ----
+// Oklab conversion (Björn Ottosson standard). Input/output: linear sRGB [0,1].
+float3 SrgbLinearToOklab(float3 c)
+{
+    float l = 0.4122214708f * c.x + 0.5363325363f * c.y + 0.0514459929f * c.z;
+    float m = 0.2119034982f * c.x + 0.6806995451f * c.y + 0.1073969566f * c.z;
+    float s = 0.0883024619f * c.x + 0.2817188376f * c.y + 0.6299787005f * c.z;
+    // HLSL 无 cbrt，用 sign*pow(abs+eps, 1/3) 防 NaN。
+    // No cbrt in HLSL; use sign*pow(abs+eps, 1/3) to avoid NaN.
+    float3 lms = sign(float3(l, m, s)) * pow(max(abs(float3(l, m, s)), 1e-10f), 1.0f / 3.0f);
+    return float3(
+        0.2104542553f * lms.x + 0.7936177850f * lms.y - 0.0040720468f * lms.z,
+        1.9779984951f * lms.x - 2.4285922050f * lms.y + 0.4505937099f * lms.z,
+        0.0259040371f * lms.x + 0.7827717662f * lms.y - 0.8086757660f * lms.z);
+}
+
+float3 OklabToSrgbLinear(float3 lab)
+{
+    float3 lms = float3(
+        lab.x + 0.3963377774f * lab.y + 0.2158037573f * lab.z,
+        lab.x - 0.1055613458f * lab.y - 0.0638541728f * lab.z,
+        lab.x - 0.0894841775f * lab.y - 1.2914855480f * lab.z);
+    lms = lms * lms * lms;
+    return float3(
+        +4.0767416621f * lms.x - 3.3077115913f * lms.y + 0.2309699292f * lms.z,
+        -1.2684380046f * lms.x + 2.6097574011f * lms.y - 0.3413193965f * lms.z,
+        -0.0041960863f * lms.x - 0.7034186147f * lms.y + 1.7076147010f * lms.z);
+}
+
+// ---- Gossett-Chen RYB 颜料三线性立方体（2004）。输入/输出：sRGB [0,1]。 ----
+// Gossett-Chen RYB pigment trilinear cube (2004). Input/output: sRGB [0,1].
+// Gossett-Chen RYB 顔料三線形立方体（2004）。入出力は sRGB [0,1]。
+float3 RybToRgb(float3 ryb)
+{
+    float3 c000 = float3(1,     1,     1    ); // white
+    float3 c100 = float3(1,     0,     0    ); // red
+    float3 c010 = float3(1,     1,     0    ); // yellow
+    float3 c001 = float3(0.163, 0.373, 0.6  ); // blue (Prussian)
+    float3 c110 = float3(1,     0.5,   0    ); // orange
+    float3 c101 = float3(0.5,   0,     0.5  ); // purple
+    float3 c011 = float3(0,     0.66,  0.2  ); // green
+    float3 c111 = float3(0.2,   0.094, 0    ); // black
+    float r = ryb.x, y = ryb.y, b = ryb.z;
+    float3 c00 = lerp(c000, c100, r);
+    float3 c01 = lerp(c001, c101, r);
+    float3 c10 = lerp(c010, c110, r);
+    float3 c11 = lerp(c011, c111, r);
+    float3 c0  = lerp(c00, c10, y);
+    float3 c1  = lerp(c01, c11, y);
+    return lerp(c0, c1, b);
+}
+
+// RGB → RYB 逆映射（Newton-Raphson + 解析雅可比，5 次迭代达机器精度）。
+// 精确逆是关键：不精确会让 RybToRgb(RgbToRyb(c))≠c，残差经"亮→RYB坐标减小→更亮"的正反馈把混合色冲到纯白。
+// RGB → RYB inverse (Newton-Raphson + analytic Jacobian, 5 iters → machine precision). Accurate inverse kills the
+// "brighter → smaller RYB → brighter" feedback that drifts mixed colours to white.
+// RGB → RYB 逆写像（Newton 法 + 解析ヤコビアン、5 回）。白へのドリフトを根絶。
+float3 RgbToRyb(float3 rgb)
+{
+    float3 c000 = float3(1, 1, 1);
+    float3 c100 = float3(1, 0, 0);
+    float3 c010 = float3(1, 1, 0);
+    float3 c001 = float3(0.163, 0.373, 0.6);
+    float3 c110 = float3(1, 0.5, 0);
+    float3 c101 = float3(0.5, 0, 0.5);
+    float3 c011 = float3(0, 0.66, 0.2);
+    float3 c111 = float3(0.2, 0.094, 0);
+
+    float3 ryb = float3(0.5, 0.5, 0.5);
+    [unroll]
+    for (int it = 0; it < 5; it++)
+    {
+        float r = ryb.x, y = ryb.y, b = ryb.z;
+        float3 e00 = lerp(c000, c100, r), e01 = lerp(c001, c101, r);
+        float3 e10 = lerp(c010, c110, r), e11 = lerp(c011, c111, r);
+        float3 e0 = lerp(e00, e10, y), e1 = lerp(e01, e11, y);
+        float3 f = lerp(e0, e1, b);                                  // = RybToRgb(ryb)
+        // 雅可比三列（∂f/∂r, ∂f/∂y, ∂f/∂b）。 // Jacobian columns. // ヤコビ列。
+        float3 dr = lerp(lerp(c100 - c000, c110 - c010, y), lerp(c101 - c001, c111 - c011, y), b);
+        float3 dy = lerp(e10 - e00, e11 - e01, b);
+        float3 db = e1 - e0;
+        // Cramer 法则解 J·step = (f - rgb)。 // Solve J·step = (f - rgb) via Cramer. // Cramer で解く。
+        float3 res = f - rgb;
+        float3 vw = cross(dy, db);
+        float det = dot(dr, vw);
+        float3 step;
+        if (abs(det) > 1e-6f)
+            step = float3(dot(res, vw), dot(dr, cross(res, db)), dot(dr, cross(dy, res))) / det;
+        else
+            step = res * 0.7;                                        // 退化时回退梯度步。 // gradient fallback.
+        ryb = clamp(ryb - step, 0.0, 1.0);
+    }
+    return ryb;
+}
+
 [numthreads(NumThreads,1,1)]
 void MixColor(uint3 id : SV_DispatchThreadID)
 {
@@ -582,7 +682,14 @@ void MixColor(uint3 id : SV_DispatchThreadID)
 
     int gi = GroupId[i];
     float2 pi = Positions[i]; float ri = Radii[i];
-    float4 accum = 0; float wsum = 0;
+
+    // Oklab 模式在 Lab 空间逐粒子累积；其余模式在 RGB 空间累积。
+    // Oklab mode accumulates per-particle in Lab space; other modes in RGB.
+    float4 accumRgb = float4(0, 0, 0, 0);
+    float3 accumLab = float3(0, 0, 0);
+    float accumAlpha = 0;
+    float wsum = 0;
+
     int budget = MaxScan;
     int2 cc = CellCoord(pi);
     for (int dy = -1; dy <= 1 && budget > 0; dy++)
@@ -603,16 +710,52 @@ void MixColor(uint3 id : SV_DispatchThreadID)
             float contact = ri + Radii[j];
             float2 r = pi - Positions[j];
             if (dot(r, r) >= contact * contact) continue;
-            accum += Colors[j]; wsum += 1;
+            float4 cj = Colors[j];
+            if (colorMixMode == 1) // Oklab：在 Lab 空间累积。 // Oklab: accumulate in Lab space. // Lab 空間で累積。
+            {
+                accumLab += SrgbLinearToOklab(cj.xyz);
+                accumAlpha += cj.w;
+            }
+            else if (colorMixMode == 2) // Ryb：先转 RYB 空间再累积。 // Ryb: convert to RYB first. // RYB 空間に変換してから累積。
+            {
+                accumRgb += float4(RgbToRyb(cj.xyz), cj.w);
+            }
+            else // LinearRgb
+            {
+                accumRgb += cj;
+            }
+            wsum += 1;
         }
     }
     if (wsum <= 0) { ColorsNext[i] = ci4; return; }
-    float4 avg = (accum + ci4) / (wsum + 1.0f);
+
     float speed = mi.speed;
     if (speed < 1.0f && mi.withMovement == 1)
     {
         float vf = saturate(dot(Velocities[i], Velocities[i]) / max(1e-4f, mi.maxSpeed * mi.maxSpeed));
         speed = saturate(speed + vf * (1.0f - speed));
+    }
+
+    float4 avg;
+    if (colorMixMode == 1) // Oklab
+    {
+        float3 labSelf = SrgbLinearToOklab(ci4.xyz);
+        float3 labAvg = (accumLab + labSelf) / (wsum + 1.0f);
+        float3 rgbAvg = clamp(OklabToSrgbLinear(labAvg), 0.0f, 1.0f);
+        avg = float4(rgbAvg, (accumAlpha + ci4.w) / (wsum + 1.0f));
+    }
+    else if (colorMixMode == 2) // Ryb (Gossett-Chen 三线性立方体 + 锚定增量，消除往返误差导致的同色漂移/闪烁。)
+    {
+        // accumRgb.xyz = 邻居 RYB 之和。锚定到自身：同色时增量恒为 0，结果精确等于 ci4。
+        // accumRgb.xyz = sum of neighbour RYBs. Anchor to self: identical colours give a zero delta → exact ci4.
+        float3 selfRyb = RgbToRyb(ci4.xyz);
+        float3 mixedRyb = (accumRgb.xyz + selfRyb) / (wsum + 1.0f);
+        float3 deltaRgb = RybToRgb(mixedRyb) - RybToRgb(selfRyb);
+        avg = float4(clamp(ci4.xyz + deltaRgb, 0.0f, 1.0f), (accumRgb.w + ci4.w) / (wsum + 1.0f));
+    }
+    else // 0: LinearRgb
+    {
+        avg = (accumRgb + ci4) / (wsum + 1.0f);
     }
     ColorsNext[i] = lerp(ci4, avg, speed);
     LastMixTime[i] = time;

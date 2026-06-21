@@ -247,12 +247,12 @@ namespace Fs.Liquid2D.Editor
             if (_renderScale != null)
             {
                 float scale = _renderScale.floatValue;
-                if (scale < 4f || scale > 8f)
+                if (scale < 1f || scale > 8f)
                 {
                     EditorGUILayout.HelpBox(
-                        L("RenderScale 建议取 4~8：metaball 融合需要远大于物理半径的可视 blob。",
-                            "RenderScale recommended 4~8: metaball fusion needs visual blobs much larger than the physics radius.",
-                            "RenderScale は 4~8 推奨：メタボール融合には物理半径より大きな可視 blob が必要です。"),
+                        L("RenderScale 建议取 1~8：metaball 融合需要远大于物理半径的可视 blob。",
+                            "RenderScale recommended 1~8: metaball fusion needs visual blobs much larger than the physics radius.",
+                            "RenderScale は 1~8 推奨：メタボール融合には物理半径より大きな可視 blob が必要です。"),
                         MessageType.Info);
                 }
             }

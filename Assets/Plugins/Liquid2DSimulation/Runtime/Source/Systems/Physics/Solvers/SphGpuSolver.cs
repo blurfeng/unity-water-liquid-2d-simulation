@@ -28,6 +28,7 @@ namespace Fs.Liquid2D
         private static readonly int _numDeadZones = Shader.PropertyToID("numDeadZones");
         private static readonly int _dt = Shader.PropertyToID("dt");
         private static readonly int _time = Shader.PropertyToID("time");
+        private static readonly int _colorMixMode = Shader.PropertyToID("colorMixMode");
         private static readonly int _sortPositions = Shader.PropertyToID("SortPositions");
         private static readonly int _accumulateImpulse = Shader.PropertyToID("accumulateImpulse");
         private static readonly int _numUploads = Shader.PropertyToID("numUploads");
@@ -182,6 +183,7 @@ namespace Fs.Liquid2D
             float subDt = dt / substeps;
             _cs.SetFloat(_dt, subDt);
             _cs.SetFloat(_time, ctx.Time);
+            _cs.SetInt(_colorMixMode, ctx.MixMode);
 
             int gP = Groups(count);
             int gT = Groups(tableSize);

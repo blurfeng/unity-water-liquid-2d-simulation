@@ -134,7 +134,8 @@ namespace Fs.Liquid2D
                         ActiveIndices = ctx.ActiveIndices, Positions = store.positions, Velocities = store.velocities,
                         Colors = store.colors, TypeId = store.typeId, GroupId = store.groupId, Radii = store.radii,
                         MixData = ctx.MixData, CellStart = cellStart, SortedSlots = sortedSlots, TableSize = tableSize,
-                        InvCellSize = invCell, Time = ctx.Time, LastMixTime = store.lastMixTime, ColorsNext = store.colorsNext,
+                        InvCellSize = invCell, Time = ctx.Time, MixMode = ctx.MixMode,
+                        LastMixTime = store.lastMixTime, ColorsNext = store.colorsNext,
                     }.Schedule(count, 64, h);
 
                     // 销毁区域标记（在最终位置上）：求解后由 Liquid2DSimulation 回收命中粒子。

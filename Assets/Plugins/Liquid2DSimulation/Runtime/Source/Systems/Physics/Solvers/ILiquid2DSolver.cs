@@ -74,6 +74,9 @@ namespace Fs.Liquid2D
         /// <summary>当前时间（Time.time），用于混色节流等。 // Current time, for mix throttling etc. // 現在時刻（混色スロットリング等）。</summary>
         public float Time;
 
+        /// <summary>全局颜色混合模式（0=LinearRgb, 1=Oklab, 2=Ryb）。 // Global colour-mix mode (0=LinearRgb, 1=Oklab, 2=Ryb). // グローバル色混合モード。</summary>
+        public int MixMode;
+
         /// <summary>动态碰撞体数量（>0 时 GPU 才回读冲量）。 // Dynamic collider count (GPU reads impulse back only when >0). // 動的コライダー数。</summary>
         public int DynamicBodyCount;
 

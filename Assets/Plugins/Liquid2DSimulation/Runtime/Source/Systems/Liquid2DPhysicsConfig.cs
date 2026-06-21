@@ -102,6 +102,12 @@ namespace Fs.Liquid2D
         private Liquid2DSimulationMode mode = Liquid2DSimulationMode.Gpu;
 
         [SerializeField, LocalizationTooltip(
+             "全局颜色混合算法。LinearRgb：线性 RGB 平均（旧行为，蓝+黄=灰）。Oklab：感知均匀色彩空间混合，颜色过渡自然（默认）。Ryb：RYB 颜料色轮，蓝+黄=绿。",
+             "Global colour-mixing algorithm. LinearRgb: linear-RGB average (legacy; blue+yellow=grey). Oklab: perceptually-uniform mixing, natural transitions (default). Ryb: RYB pigment wheel, blue+yellow=green.",
+             "グローバル色混合アルゴリズム。LinearRgb：線形 RGB 平均（旧動作、青+黄=灰）。Oklab：知覚均一混合（デフォルト）。Ryb：RYB 顔料色相環、青+黄=緑。")]
+        private Liquid2DColorMixMode colorMixMode = Liquid2DColorMixMode.Oklab;
+
+        [SerializeField, LocalizationTooltip(
              "⚠ 性能警告：GPU 模式下每帧把粒子数据从 GPU 全量回读到 CPU。仅在需要让依赖 CPU 数据的功能" +
              "（Liquid2DDebugGizmos 调试可视化、GetPosition/GetVelocity 查询）在 GPU 模式下工作时才开启。" +
              "这是同步 GPU→CPU 阻塞点，会严重降低性能（粒子越多越明显），正式使用务必关闭。Liquid2DParticleDisplay 与正式 Feature 渲染不受影响、无需此开关。",
@@ -199,6 +205,7 @@ namespace Fs.Liquid2D
         public void Apply()
         {
             Liquid2DSimulation.Mode = mode;
+            Liquid2DSimulation.ColorMixMode = colorMixMode;
             Liquid2DSimulation.GpuReadbackToStore = gpuReadbackToStore;
             Liquid2DSimulation.MaxParticlesPerTag = maxParticlesPerTag;
             Liquid2DSimulation.Params = new SolverParams
