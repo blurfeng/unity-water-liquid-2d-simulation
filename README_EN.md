@@ -20,6 +20,9 @@
   <a href="#download-package">Download</a>
 </p>
 
+> [!ERROR]  
+> This document is an old version and is awaiting update.
+
 # Liquid 2D Simulation
 Liquid 2D Simulation is a 2D fluid simulation system designed for `Unity`. \
 Ready to use out of the box, it enables you to quickly achieve realistic physical fluid effects. \
