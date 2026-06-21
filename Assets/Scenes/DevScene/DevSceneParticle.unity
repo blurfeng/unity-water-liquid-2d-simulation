@@ -184,6 +184,11 @@ MonoBehaviour:
   ejectForceRandomRange: {x: 0.9, y: 1.1}
   swingAngleRange: 20
   swingSpeed: 0.3
+  moveEnabled: 0
+  moveOnAwake: 0
+  moveMode: 1
+  moveSpeed: 3
+  waypoints: []
 --- !u!1 &500200
 GameObject:
   m_ObjectHideFlags: 0
@@ -230,6 +235,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   applyOnAwake: 1
   mode: 1
+  colorMixMode: 1
   gpuReadbackToStore: 0
   gravity: {x: 0, y: -9.8}
   smoothingRadius: 0.35
@@ -340,7 +346,7 @@ SpriteRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_MaskInteraction: 0
-  m_Sprite: {fileID: 7482667652216324306, guid: 311925a002f4447b3a28927169b83ea6, type: 3}
+  m_Sprite: {fileID: 7482667652216324306, guid: 440a3684f18f2ff4b9fa7bb40d348d2c, type: 3}
   m_Color: {r: 0.75, g: 0.9656862, b: 1, a: 0.02745098}
   m_FlipX: 0
   m_FlipY: 0
@@ -493,7 +499,7 @@ SpriteRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_MaskInteraction: 0
-  m_Sprite: {fileID: 7482667652216324306, guid: 311925a002f4447b3a28927169b83ea6, type: 3}
+  m_Sprite: {fileID: 7482667652216324306, guid: 440a3684f18f2ff4b9fa7bb40d348d2c, type: 3}
   m_Color: {r: 0.75, g: 0.9656862, b: 1, a: 0.02745098}
   m_FlipX: 0
   m_FlipY: 0
@@ -646,7 +652,7 @@ SpriteRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_MaskInteraction: 0
-  m_Sprite: {fileID: 7482667652216324306, guid: 311925a002f4447b3a28927169b83ea6, type: 3}
+  m_Sprite: {fileID: 7482667652216324306, guid: 440a3684f18f2ff4b9fa7bb40d348d2c, type: 3}
   m_Color: {r: 0.75, g: 0.9656862, b: 1, a: 0.02745098}
   m_FlipX: 0
   m_FlipY: 0
@@ -790,7 +796,6 @@ MonoBehaviour:
   renderColor: {r: 1, g: 0.6, b: 0.1, a: 0.4}
   maxDraw: 6000
   currentParticleCount: 0
-  gpuReadbackToStoreInfo: GPU Readback to Store is disabled, cannot draw gizmo.
 --- !u!4 &437264683
 Transform:
   m_ObjectHideFlags: 0
