@@ -130,7 +130,7 @@ GameObject:
   - component: {fileID: 500101}
   - component: {fileID: 500102}
   m_Layer: 0
-  m_Name: LiquidSpawner
+  m_Name: Spawner
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -178,7 +178,6 @@ MonoBehaviour:
   nozzleWidth: 1
   flowRate: 300
   flowRateFactor: 1
-  maxSpawnPerStep: 6
   sizeRandomRange: {x: 1, y: 1}
   ejectForce: 60
   ejectForceFactor: 1
@@ -1682,7 +1681,7 @@ GameObject:
   - component: {fileID: 1656945275}
   - component: {fileID: 1656945274}
   m_Layer: 0
-  m_Name: LiquidRegionSpawner
+  m_Name: RegionSpawner
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1832,9 +1831,9 @@ SceneRoots:
   m_Roots:
   - {fileID: 500201}
   - {fileID: 437264683}
+  - {fileID: 1101620319}
   - {fileID: 500101}
   - {fileID: 1656945275}
-  - {fileID: 1101620319}
   - {fileID: 471646947}
   - {fileID: 1646027099}
   - {fileID: 1041098852}

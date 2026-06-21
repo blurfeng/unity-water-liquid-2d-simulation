@@ -10,15 +10,15 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 4419959a35074fd479d67081a726a448, type: 3}
-  m_Name: MagmaDescriptor1
+  m_Name: DescriptorMagma2
   m_EditorClassIdentifier: 
-  Radius: 0.4
-  RenderScale: 2.4
+  Radius: 0.2
+  RenderScale: 1.2
   DefaultLifetime: 0
   RenderSettings:
     Sprite: {fileID: 21300000, guid: d395cef0ea5fee348a6160a686f26c30, type: 3}
     Material: {fileID: 2100000, guid: 7453d47e894769e43b1338caed5ddfeb, type: 2}
-    Color: {r: 1.304119, g: 0.061450627, b: 0, a: 1}
+    Color: {r: 2.0174966, g: 0.2518134, b: 0, a: 1}
     NameTag: Magma
   MixSettings:
     MixColors: 0
@@ -30,7 +30,7 @@ MonoBehaviour:
     MixColorsWithContactParticlesInternal: 0.1
     MixColorsWithContactParticlesCheckInternal: 0.1
   Material:
-    Mass: 7
+    Mass: 16
     TargetDensityScale: 1
     Viscosity: 0.4
     Cohesion: 0.2

@@ -219,7 +219,7 @@ namespace Fs.Liquid2D
 
 #if UNITY_EDITOR
             // Display Overlay Pass 相关（Editor only）。 // Display Overlay Pass related (Editor only). // Display Overlay Pass 関連（Editor 専用）。
-            public Liquid2DParticleDisplay[] Displays;
+            public Liquid2DDebugParticleDisplay[] Displays;
 #endif
         }
 
@@ -568,7 +568,7 @@ namespace Fs.Liquid2D
             // Effect Pass 之后，将 Liquid2DParticleDisplay 粒子叠加绘制到相机颜色缓冲，使其覆盖在水体效果之上。
             // After the Effect Pass, draw Liquid2DParticleDisplay particles into the camera colour buffer so they appear above the water effect.
             // Effect Pass の後、Liquid2DParticleDisplay の粒子を相機カラーバッファに描画し、水体エフェクトの上に重ねます。
-            var activeDisplays = Object.FindObjectsByType<Liquid2DParticleDisplay>(
+            var activeDisplays = Object.FindObjectsByType<Liquid2DDebugParticleDisplay>(
                 FindObjectsSortMode.None);
             if (activeDisplays.Length > 0)
             {

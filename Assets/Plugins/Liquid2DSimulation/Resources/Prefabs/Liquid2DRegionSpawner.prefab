@@ -1,6 +1,6 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
---- !u!1 &5407797533113675698
+--- !u!1 &3689997492064422366
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -8,37 +8,37 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 8701381950238694280}
-  - component: {fileID: 1118354612016438053}
+  - component: {fileID: 353707099211669849}
+  - component: {fileID: 912074352490673528}
   m_Layer: 0
-  m_Name: LiquidRegionSpawner
+  m_Name: Liquid2DRegionSpawner
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!4 &8701381950238694280
+--- !u!4 &353707099211669849
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5407797533113675698}
+  m_GameObject: {fileID: 3689997492064422366}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: -14.32, y: 12.200001, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1118354612016438053
+--- !u!114 &912074352490673528
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5407797533113675698}
+  m_GameObject: {fileID: 3689997492064422366}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 0fb9fce92f26c18478b9f033825d5085, type: 3}
@@ -46,7 +46,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.LiquidRegionSpawner
   spawnOnStart: 1
   particles:
-  - Descriptor: {fileID: 11400000, guid: f35c2bc9e2e98fd4387aaeabc88c127f, type: 2}
+  - Descriptor: {fileID: 0}
     Weight: 1
     Lifetime: 0
     IsInit: 1

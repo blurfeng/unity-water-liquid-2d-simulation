@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 5853212532852650967}
   - component: {fileID: 2981897732334380774}
   m_Layer: 0
-  m_Name: Liquid2DParticleDisplay
+  m_Name: Liquid2DDebugParticleDisplay
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

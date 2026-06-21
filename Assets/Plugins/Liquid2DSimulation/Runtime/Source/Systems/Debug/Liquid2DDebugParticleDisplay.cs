@@ -18,8 +18,8 @@ namespace Fs.Liquid2D
     /// URP Render Feature 不要で <see cref="Liquid2DSimulation"/> SoA から直接データを取得。
     /// シミュレーション色・速度グラデーションの 2 モードに対応；専用シェーダー <c>Custom/URP/2D/Liquid2DParticleDisplay</c>。
     /// </summary>
-    [AddComponentMenu("Liquid 2D/Gameplay/Liquid 2D Particle Display")]
-    public class Liquid2DParticleDisplay : MonoBehaviour
+    [AddComponentMenu("Liquid 2D/Gameplay/Liquid 2D Debug Particle Display")]
+    public class Liquid2DDebugParticleDisplay : MonoBehaviour
     {
         // ── 总开关 Master toggle マスタースイッチ ──────────────────────────────
         [SerializeField, LocalizationTooltip(

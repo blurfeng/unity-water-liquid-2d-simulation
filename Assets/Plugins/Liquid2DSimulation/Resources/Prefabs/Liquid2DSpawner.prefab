@@ -1,6 +1,6 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
---- !u!1 &2155624610036930552
+--- !u!1 &5526293045739168357
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -8,57 +8,60 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 6729538587706341266}
-  - component: {fileID: 1236614623622671160}
+  - component: {fileID: 7355936089657945764}
+  - component: {fileID: 2940575597263087387}
   m_Layer: 0
-  m_Name: LiquidSpawner
+  m_Name: Liquid2DSpawner
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!4 &6729538587706341266
+--- !u!4 &7355936089657945764
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2155624610036930552}
+  m_GameObject: {fileID: 5526293045739168357}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: -14.32, y: 17.6, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1236614623622671160
+--- !u!114 &2940575597263087387
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2155624610036930552}
+  m_GameObject: {fileID: 5526293045739168357}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ae45dd1dce65f354a975434a0a9d015d, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Fs.Liquid2D.LiquidSpawner
+  m_EditorClassIdentifier: 
   spawningEnabled: 1
   startOnAwake: 1
-  firstStartDelay: 1
-  startDelay: 0.5
+  firstStartDelay: 0.5
+  startDelay: 3
   duration: 0
   maxSpawnCount: 0
   spawnedCount: 0
-  liquidParticles: []
+  liquidParticles:
+  - Descriptor: {fileID: 0}
+    Weight: 1
+    Lifetime: 0
+    IsInit: 0
   nozzleWidth: 1
-  spawnDepthJitter: 0
-  flowRate: 60
+  flowRate: 300
   flowRateFactor: 1
-  sizeRandomRange: {x: 0.9, y: 1.2}
-  ejectForce: 30
+  sizeRandomRange: {x: 1, y: 1}
+  ejectForce: 60
   ejectForceFactor: 1
-  ejectForceRandomRange: {x: 0.9, y: 1.2}
-  swingAngleRange: 90
-  swingSpeed: 0.2
+  ejectForceRandomRange: {x: 0.9, y: 1.1}
+  swingAngleRange: 0
+  swingSpeed: 0

@@ -10,7 +10,7 @@
 //     slot = _ActiveIndices[SV_InstanceID], mirroring the official Feature's Liquid2DParticleGpu path (fully GPU, zero readback).
 // Both paths support simulation-colour and velocity-gradient modes.
 // 流体パーティクル独立表示シェーダー。両パスとも DrawProcedural（mesh 不要）、quad はシェーダー内生成、フラグメントで UV により円形を切り出す。
-Shader "Custom/URP/2D/Liquid2DParticleDisplay"
+Shader "Custom/URP/2D/Liquid2DDebugParticleDisplay"
 {
     Properties
     {
