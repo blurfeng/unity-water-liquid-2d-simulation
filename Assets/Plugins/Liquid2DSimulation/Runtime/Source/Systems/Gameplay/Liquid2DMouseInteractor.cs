@@ -105,11 +105,36 @@ namespace Fs.Liquid2D
 #endif
         }
 
+        // ── Gizmos 缓存 ─────────────────────────────────────────────────────
+        // TryGetField 每帧由 Player Loop 调用，此时 Input / Mouse.current 读值可靠。
+        // OnDrawGizmos 由 Editor Scene 窗口调用，其上下文里 Input / Mouse.current 读到的
+        // 是 Game 窗口视口坐标，与 Scene 相机不匹配，直接转换会产生位置错误和上下颠倒。
+        // 解决方案：在 TryGetField 里缓存当帧世界坐标和激活状态，Gizmos 直接使用缓存。
+        //
+        // TryGetField is called each frame from the Player Loop, where Input / Mouse.current
+        // values are reliable. OnDrawGizmos is invoked by the Editor Scene view; reading input
+        // there yields Game-view viewport coordinates that mismatch the Scene camera, causing
+        // wrong positions and a vertically-flipped result.
+        // Fix: cache the world position and active state inside TryGetField; Gizmos reads the cache.
+        //
+        // TryGetField は Player Loop から毎フレーム呼ばれるため Input / Mouse.current は正確。
+        // OnDrawGizmos は Editor の Scene ビューから呼ばれ、Input はゲームビューのスクリーン座標を
+        // 返すため Scene カメラとずれ、位置がずれて上下反転する。
+        // 対策：TryGetField でワールド座標をキャッシュし、Gizmos はキャッシュを参照する。
+#if UNITY_EDITOR
+        private bool  _gizmosActive;
+        private bool  _gizmosPull;
+        private Vector3 _gizmosWorldPos;
+#endif
+
         // ── 核心逻辑 ────────────────────────────────────────────────────────
 
         public override bool TryGetField(out Liquid2DForceFieldData data)
         {
             data = default;
+#if UNITY_EDITOR
+            _gizmosActive = false; // 默认本帧无 Gizmos / reset each frame / 毎フレームリセット
+#endif
 
             bool pull = enablePull && IsPullPressed();
             bool push = enablePush && IsPushPressed();
@@ -124,6 +149,15 @@ namespace Fs.Liquid2D
             Vector2 screenPos = GetMouseScreenPosition();
             Vector3 screenPoint = new Vector3(screenPos.x, screenPos.y, cam.nearClipPlane);
             Vector3 world = cam.ScreenToWorldPoint(screenPoint);
+
+#if UNITY_EDITOR
+            // 缓存供 OnDrawGizmos 使用，z 归零对齐 2D 场景。
+            // Cache for OnDrawGizmos; z zeroed to align with the 2D scene plane.
+            // OnDrawGizmos 用にキャッシュ。z をゼロにして 2D シーン平面に合わせます。
+            _gizmosActive   = true;
+            _gizmosPull     = pull;
+            _gizmosWorldPos = new Vector3(world.x, world.y, 0f);
+#endif
 
             // 左键吸引取正强度，右键排斥取负强度（与 Strength 的符号约定一致）。
             // LMB attracts with positive strength, RMB repels with negative strength (matching the Strength sign convention).
@@ -144,22 +178,13 @@ namespace Fs.Liquid2D
 #if UNITY_EDITOR
         private void OnDrawGizmos()
         {
-            if (!Application.isPlaying) return;
+            // 仅在运行时、且 TryGetField 本帧已成功写入缓存时绘制。
+            // Only draw when playing and TryGetField has populated the cache this frame.
+            // 再生中かつ TryGetField が今フレームにキャッシュを書き込んだ場合のみ描画。
+            if (!Application.isPlaying || !_gizmosActive) return;
 
-            bool pull = enablePull && IsPullPressed();
-            bool push = enablePush && IsPushPressed();
-            if (!pull && !push) return;
-
-            var cam = interactionCamera ? interactionCamera : Camera.main;
-            if (!cam) return;
-
-            Vector2 screenPos = GetMouseScreenPosition();
-            Vector3 screenPoint = new Vector3(screenPos.x, screenPos.y, cam.nearClipPlane);
-            Vector3 world = cam.ScreenToWorldPoint(screenPoint);
-            world.z = 0f;
-
-            Gizmos.color = pull ? Color.green : Color.red;
-            Gizmos.DrawWireSphere(world, Radius);
+            Gizmos.color = _gizmosPull ? Color.green : Color.red;
+            Gizmos.DrawWireSphere(_gizmosWorldPos, Radius);
         }
 #endif
     }
