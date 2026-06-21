@@ -7,6 +7,31 @@ using Unity.Mathematics;
 
 namespace Fs.Liquid2D
 {
+    // 路径移动模式。 // Path movement mode. // パス移動モード。
+    public enum Liquid2DMoveMode
+    {
+        Once,      // 单次，到终点停止。 // Stop at the final waypoint. // 終点で停止。
+        Loop,      // 循环，到终点跳回起点。 // Jump back to start on completion. // 終点から起点へジャンプ。
+        PingPong   // 来回，到两端时反向。 // Reverse direction at both ends. // 両端で方向反転。
+    }
+
+    // 路径点数据。 // Waypoint data. // ウェイポイントデータ。
+    [Serializable]
+    public class Liquid2DWaypoint
+    {
+        [LocalizationTooltip(
+            "路径点位置（父对象局部坐标，即 localPosition 目标值）。",
+            "Waypoint position (parent-local coordinates, the target localPosition value).",
+            "ウェイポイント位置（親ローカル座標、localPosition の目標値）。")]
+        public Vector2 Position;
+
+        [Min(0), LocalizationTooltip(
+            "到达此路径点后的停留时间（秒，0 表示不停留）。",
+            "Dwell time after reaching this waypoint in seconds (0 = no dwell).",
+            "このウェイポイント到達後の待機時間（秒、0 = 待機なし）。")]
+        public float WaitTime;
+    }
+
     /// <summary>
     /// 粒子生成器。持续喷射流体粒子到模拟器中，支持各种参数控制和随机化。
     /// Particle spawner. Continuously spawns fluid particles into the simulation, with various parameter controls and randomization.
@@ -105,10 +130,47 @@ namespace Fs.Liquid2D
         private float swingAngleRange;
 
         [SerializeField, LocalizationTooltip(
-             "摆动速度（周期/秒）", 
-             "Swing speed (cycles per second)", 
+             "摆动速度（周期/秒）",
+             "Swing speed (cycles per second)",
              "スイング速度（サイクル/秒）")]
         private float swingSpeed = 0.2f;
+
+        [SerializeField, LocalizationTooltip(
+             "是否启用路径移动。启用后 Spawner 将沿路径点序列移动（与喷射独立）。",
+             "Enable path movement. When enabled, the Spawner moves along the waypoint sequence (independent of spawning).",
+             "パス移動を有効にします。有効にすると、Spawner はウェイポイント列に沿って移動します（噴射とは独立）。")]
+        private bool moveEnabled;
+
+        public bool MoveEnabled => moveEnabled;
+
+        [SerializeField, LocalizationTooltip(
+             "是否在启动时自动开始移动。",
+             "Whether to automatically start moving on startup.",
+             "起動時に自動的に移動を開始するかどうか。")]
+        private bool moveOnAwake;
+
+        [SerializeField, LocalizationTooltip(
+             "路径移动模式：Once（单次到终点）、Loop（循环）、PingPong（来回往复）。",
+             "Path movement mode: Once (stop at end), Loop (jump back to start), PingPong (reverse at ends).",
+             "パス移動モード：Once（終点で停止）、Loop（起点へ戻る）、PingPong（往復）。")]
+        private Liquid2DMoveMode moveMode = Liquid2DMoveMode.Loop;
+
+        [SerializeField, Min(0.001f), LocalizationTooltip(
+             "移动速度（世界单位/秒）。",
+             "Movement speed (world units per second).",
+             "移動速度（ワールド単位/秒）。")]
+        private float moveSpeed = 3f;
+
+        [SerializeField, LocalizationTooltip(
+             "路径点列表（父对象局部坐标）。Spawner 按顺序依次移动到各路径点。",
+             "Waypoint list (parent-local coordinates). The Spawner moves through them in order.",
+             "ウェイポイントリスト（親ローカル座標）。Spawner は順番に各ウェイポイントへ移動します。")]
+        private List<Liquid2DWaypoint> waypoints = new List<Liquid2DWaypoint>();
+
+        // 路径点只读访问（供 Editor 用，运行时请勿修改列表结构）。
+        // Read-only waypoint access for Editor use; do not modify list structure at runtime.
+        // エディタ用の読み取り専用ウェイポイントアクセス。実行時はリスト構造を変更しないでください。
+        public System.Collections.Generic.IReadOnlyList<Liquid2DWaypoint> Waypoints => waypoints;
 
         public Transform TransformGet
         {
@@ -154,10 +216,44 @@ namespace Fs.Liquid2D
         private bool _checkDuration = true; // 是否检查持续时间。 // Whether to check duration. // 持続時間をチェックするかどうか。
         private int _spawnedCount; // 已生成粒子总数。 // Total spawned particle count. // 生成済みパーティクル総数。
 
-        public bool IsSpawning { get; private set; } // 是否正在喷射中。 // Whether it is currently spawning. // 現在噴射中かどうか。
+        private int   _waypointCurrentIndex;  // 当前目标路径点索引。 // Current target waypoint index. // 現在の目標ウェイポイントインデックス。
+        private int   _moveDirection = 1;     // PingPong 方向（+1 或 -1）。 // PingPong direction. // PingPong 方向。
+        private float _waitTimer;             // 当前路径点等待计时。 // Current waypoint dwell timer. // 現在のウェイポイント待機タイマー。
+        private bool  _isMoving;              // 是否正在移动。 // Whether currently moving. // 現在移動中かどうか。
+        private bool  _isMoveComplete;        // Once 模式完成标志。 // Once-mode completion flag. // Once モード完了フラグ。
+
+        public bool IsSpawning { get; private set; }       // 是否正在喷射中。 // Whether it is currently spawning. // 現在噴射中かどうか。
+        public bool IsMoving => _isMoving;                 // 是否正在移动。 // Whether currently moving. // 現在移動中かどうか。
+        public int  CurrentWaypointIndex => _waypointCurrentIndex; // 当前目标路径点索引。 // Current target waypoint index. // 現在の目標ウェイポイントインデックス。
+        public bool IsMoveComplete => _isMoveComplete;     // Once 模式是否已完成。 // Whether Once-mode movement is complete. // Once モードが完了したかどうか。
         private static bool _isInitForJit; // 是否已为JIT预热。 // Whether JIT has been warmed up. // JITがウォームアップされているかどうか。
 
-        #region 公开方法 Public Methods 
+        #region 公开方法 Public Methods
+
+        /// <summary>
+        /// 开始路径移动。
+        /// Start path movement.
+        /// パス移動を開始。
+        /// </summary>
+        public void StartMove()
+        {
+            if (!moveEnabled) return;
+            _isMoving = true;
+            _isMoveComplete = false;
+            _waypointCurrentIndex = 0;
+            _moveDirection = 1;
+            _waitTimer = 0f;
+        }
+
+        /// <summary>
+        /// 停止路径移动。
+        /// Stop path movement.
+        /// パス移動を停止。
+        /// </summary>
+        public void StopMove()
+        {
+            _isMoving = false;
+        }
 
         /// <summary>
         /// 开始喷射流体粒子。
@@ -355,22 +451,35 @@ namespace Fs.Liquid2D
             // 初始化流量和喷射力。 // Initialize flow rate and ejection force. // 流量と噴射力を初期化します。
             SetFlowRate(flowRate);
             SetEjectForce(ejectForce);
-            
+
             if (startOnAwake)
             {
                 StartSpawn();
             }
+
+            // 路径移动自动启动。 // Auto-start path movement. // パス移動の自動開始。
+            if (moveEnabled && moveOnAwake)
+                StartMove();
         }
         
         protected virtual void FixedUpdate()
         {
+            float dt = Time.fixedDeltaTime;
+
+            // 路径移动独立于喷射总开关，优先处理。
+            // Path movement is independent of the spawning master toggle.
+            // パス移動は噴射マスタースイッチから独立し、先に処理します。
+            if (moveEnabled && _isMoving && !_isMoveComplete
+                && waypoints != null && waypoints.Count > 0)
+            {
+                UpdateMovement(dt);
+            }
+
             // 总开关关闭时暂停，不影响内部状态。 // Master toggle off: pause without touching internal state. // マスタースイッチがオフのとき、内部状態を変えずに一時停止。
             if (!spawningEnabled) return;
 
             // 未在喷射中。 // Not spawning. // 噴射中ではない。
             if (!IsSpawning) return;
-
-            float dt = Time.fixedDeltaTime;
 
             // 延迟启动。 // Delayed start. // 遅延スタート。
             if (_checkDelayStart && !_isDelayedStarted)
@@ -423,6 +532,93 @@ namespace Fs.Liquid2D
             }
         }
         
+        private Vector2 GetWaypointWorldPos(int index)
+        {
+            Vector2 localPos = waypoints[index].Position;
+            return TransformGet.parent != null
+                ? (Vector2)TransformGet.parent.TransformPoint(new Vector3(localPos.x, localPos.y, 0f))
+                : localPos;
+        }
+
+        private void UpdateMovement(float dt)
+        {
+            int count = waypoints.Count;
+
+            // 运行时路径点被移除的防御性重置。
+            // Defensive reset if waypoints are removed at runtime.
+            // 実行時にウェイポイントが削除された場合の防御的リセット。
+            if (_waypointCurrentIndex >= count)
+                _waypointCurrentIndex = 0;
+
+            // 单路径点特例：瞬移后完成（Once）或停留（其他模式）。
+            // Single-waypoint case: teleport immediately.
+            // ウェイポイントが1つの特例：即座にテレポート。
+            if (count == 1)
+            {
+                Vector2 wp = GetWaypointWorldPos(0);
+                TransformGet.position = new Vector3(wp.x, wp.y, TransformGet.position.z);
+                if (moveMode == Liquid2DMoveMode.Once)
+                {
+                    _isMoveComplete = true;
+                    _isMoving = false;
+                }
+                return;
+            }
+
+            // 等待计时。 // Dwell timer. // 待機タイマー。
+            if (_waitTimer > 0f)
+            {
+                _waitTimer -= dt;
+                return;
+            }
+
+            Vector2 current = TransformGet.position;
+            Vector2 target  = GetWaypointWorldPos(_waypointCurrentIndex);
+            Vector2 next    = Vector2.MoveTowards(current, target, moveSpeed * dt);
+            TransformGet.position = new Vector3(next.x, next.y, TransformGet.position.z);
+
+            // 到达判断。 // Arrival check. // 到着判定。
+            if ((next - target).sqrMagnitude < 1e-8f)
+            {
+                _waitTimer = waypoints[_waypointCurrentIndex].WaitTime;
+                AdvanceWaypointIndex(count);
+            }
+        }
+
+        private void AdvanceWaypointIndex(int count)
+        {
+            switch (moveMode)
+            {
+                case Liquid2DMoveMode.Once:
+                    _waypointCurrentIndex++;
+                    if (_waypointCurrentIndex >= count)
+                    {
+                        _waypointCurrentIndex = count - 1;
+                        _isMoveComplete = true;
+                        _isMoving = false;
+                    }
+                    break;
+
+                case Liquid2DMoveMode.Loop:
+                    _waypointCurrentIndex = (_waypointCurrentIndex + 1) % count;
+                    break;
+
+                case Liquid2DMoveMode.PingPong:
+                    _waypointCurrentIndex += _moveDirection;
+                    if (_waypointCurrentIndex >= count)
+                    {
+                        _moveDirection = -1;
+                        _waypointCurrentIndex = count - 2;
+                    }
+                    else if (_waypointCurrentIndex < 0)
+                    {
+                        _moveDirection = 1;
+                        _waypointCurrentIndex = 1;
+                    }
+                    break;
+            }
+        }
+
         /// <summary>
         /// 获取当前喷射角度，包含摆动偏移。
         /// Get current ejection angle, including swing offset.
@@ -584,6 +780,9 @@ namespace Fs.Liquid2D
             {
                 StartSpawn();
             }
+
+            // 移动速度防呆。 // Guard against invalid move speed. // 無効な移動速度を防ぐ。
+            if (moveSpeed <= 0f) moveSpeed = 0.001f;
         }
 
         private void OnDrawGizmos()
@@ -659,6 +858,46 @@ namespace Fs.Liquid2D
             float endCapLen = Mathf.Min(0.1f, nozzleWidth * 0.1f);
             Gizmos.DrawLine(leftPos, leftPos + dir * endCapLen);
             Gizmos.DrawLine(rightPos, rightPos + dir * endCapLen);
+
+            // 绘制路径点路径。 // Draw waypoint path. // ウェイポイントパスを描画。
+            if (moveEnabled && waypoints != null && waypoints.Count > 0)
+            {
+                int wCount = waypoints.Count;
+                for (int i = 0; i < wCount; i++)
+                {
+                    Vector3 wPos = GetWaypointWorldPos(i);
+
+                    // 起点绿，终点红，中间点黄；运行时当前目标点青色高亮。
+                    // Green for start, red for end, yellow for middle; cyan for current target at runtime.
+                    // 起点は緑、終点は赤、中間は黄色；実行時の現在目標は青緑でハイライト。
+                    if (Application.isPlaying && i == _waypointCurrentIndex)
+                        Gizmos.color = Color.cyan;
+                    else if (i == 0)
+                        Gizmos.color = Color.green;
+                    else if (i == wCount - 1)
+                        Gizmos.color = Color.red;
+                    else
+                        Gizmos.color = Color.yellow;
+
+                    Gizmos.DrawWireSphere(wPos, 0.12f);
+                    UnityEditor.Handles.Label(wPos + Vector3.up * 0.18f, i.ToString());
+
+                    if (i < wCount - 1)
+                    {
+                        Gizmos.color = new Color(0.5f, 0.8f, 1f, 0.7f);
+                        Gizmos.DrawLine(wPos, GetWaypointWorldPos(i + 1));
+                    }
+                }
+
+                // Loop 模式绘制终点→起点的灰色返回线。
+                // Loop mode: draw a grey return line from end to start.
+                // Loop モード：終点から起点へのグレーの返回線を描画。
+                if (moveMode == Liquid2DMoveMode.Loop && wCount >= 2)
+                {
+                    Gizmos.color = new Color(0.5f, 0.5f, 0.5f, 0.4f);
+                    Gizmos.DrawLine(GetWaypointWorldPos(wCount - 1), GetWaypointWorldPos(0));
+                }
+            }
         }
         #endif
     }
