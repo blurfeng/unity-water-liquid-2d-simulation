@@ -47,7 +47,7 @@ MonoBehaviour:
   spawningEnabled: 1
   startOnAwake: 1
   firstStartDelay: 0.5
-  startDelay: 3
+  startDelay: 1
   duration: 0
   maxSpawnCount: 0
   spawnedCount: 0
@@ -65,3 +65,8 @@ MonoBehaviour:
   ejectForceRandomRange: {x: 0.9, y: 1.1}
   swingAngleRange: 0
   swingSpeed: 0
+  moveEnabled: 0
+  moveOnAwake: 0
+  moveMode: 1
+  moveSpeed: 3
+  waypoints: []
