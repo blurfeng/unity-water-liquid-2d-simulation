@@ -25,7 +25,7 @@ namespace Fs.Liquid2D
              "静止密度倍率。相对全局静止密度的缩放，影响堆积体积与可压缩观感。",
              "Rest density multiplier relative to the global rest density; affects packing volume and compressibility feel.",
              "静止密度の倍率。グローバル静止密度に対するスケールで、堆積体積と圧縮感に影響します。")]
-        public float RestDensityScale = 1f;
+        public float TargetDensityScale = 1f;
 
         [Range(0f, 1f), LocalizationTooltip(
              "粘性（XSPH）。越大越粘稠、流动越缓（水低、熔岩高）。",
@@ -71,7 +71,7 @@ namespace Fs.Liquid2D
         public Liquid2DMaterialData ToData() => new Liquid2DMaterialData
         {
             InvMass = Mass > 0f ? 1f / Mass : 0f,
-            RestDensityScale = Mathf.Max(0.01f, RestDensityScale),
+            TargetDensityScale = Mathf.Max(0.01f, TargetDensityScale),
             Viscosity = Viscosity,
             Cohesion = Cohesion,
             Friction = Friction,
@@ -84,19 +84,19 @@ namespace Fs.Liquid2D
 
         /// <summary>水：低粘、低张力、正常重力。 // Water: low viscosity/tension, normal gravity. // 水：低粘性/低張力、通常重力。</summary>
         public static Liquid2DParticleMaterial Water() => new Liquid2DParticleMaterial
-            { Mass = 1f, RestDensityScale = 1f, Viscosity = 0.01f, Cohesion = 0.08f, Friction = 0f, Restitution = 0f, GravityScale = 1f, Density = 1f };
+            { Mass = 1f, TargetDensityScale = 1f, Viscosity = 0.01f, Cohesion = 0.08f, Friction = 0f, Restitution = 0f, GravityScale = 1f, Density = 1f };
 
         /// <summary>熔岩：高粘、中张力、高质量、缓动。 // Lava: high viscosity/mass, medium tension. // 溶岩：高粘性/高質量、中張力。</summary>
         public static Liquid2DParticleMaterial Lava() => new Liquid2DParticleMaterial
-            { Mass = 3f, RestDensityScale = 1.1f, Viscosity = 0.6f, Cohesion = 0.25f, Friction = 0.05f, Restitution = 0f, GravityScale = 1f, Density = 3f };
+            { Mass = 3f, TargetDensityScale = 1.1f, Viscosity = 0.6f, Cohesion = 0.25f, Friction = 0.05f, Restitution = 0f, GravityScale = 1f, Density = 3f };
 
         /// <summary>泡沫：高张力、低质量、低/零重力，易结团上浮。 // Foam: high tension, low mass, low gravity. // 泡：高張力、低質量、低重力。</summary>
         public static Liquid2DParticleMaterial Foam() => new Liquid2DParticleMaterial
-            { Mass = 0.3f, RestDensityScale = 0.8f, Viscosity = 0.05f, Cohesion = 0.6f, Friction = 0f, Restitution = 0.1f, GravityScale = 0.1f, Density = 0.3f };
+            { Mass = 0.3f, TargetDensityScale = 0.8f, Viscosity = 0.05f, Cohesion = 0.6f, Friction = 0f, Restitution = 0.1f, GravityScale = 0.1f, Density = 0.3f };
 
         /// <summary>沙子：高摩擦、低粘、零张力（颗粒近似，真实颗粒需后续摩擦约束扩展）。 // Sand: high friction, no tension (granular approximation). // 砂：高摩擦、無張力（近似）。</summary>
         public static Liquid2DParticleMaterial Sand() => new Liquid2DParticleMaterial
-            { Mass = 1.5f, RestDensityScale = 1f, Viscosity = 0.2f, Cohesion = 0f, Friction = 0.6f, Restitution = 0f, GravityScale = 1f, Density = 1.5f };
+            { Mass = 1.5f, TargetDensityScale = 1f, Viscosity = 0.2f, Cohesion = 0f, Friction = 0.6f, Restitution = 0f, GravityScale = 1f, Density = 1.5f };
     }
 
     /// <summary>
@@ -107,7 +107,7 @@ namespace Fs.Liquid2D
     public struct Liquid2DMaterialData
     {
         public float InvMass;
-        public float RestDensityScale;
+        public float TargetDensityScale;
         public float Viscosity;
         public float Cohesion;
         public float Friction;
@@ -117,6 +117,6 @@ namespace Fs.Liquid2D
 
         /// <summary>默认材质（等价于水的中性参数）。 // Default (water-like neutral). // デフォルト（水相当）。</summary>
         public static Liquid2DMaterialData Default => new Liquid2DMaterialData
-            { InvMass = 1f, RestDensityScale = 1f, Viscosity = 0.01f, Cohesion = 0.08f, Friction = 0f, Restitution = 0f, GravityScale = 1f, Density = 1f };
+            { InvMass = 1f, TargetDensityScale = 1f, Viscosity = 0.01f, Cohesion = 0.08f, Friction = 0f, Restitution = 0f, GravityScale = 1f, Density = 1f };
     }
 }

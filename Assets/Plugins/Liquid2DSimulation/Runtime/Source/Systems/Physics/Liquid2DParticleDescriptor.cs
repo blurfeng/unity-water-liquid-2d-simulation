@@ -28,7 +28,7 @@ namespace Fs.Liquid2D
              "渲染可视倍率：绘制 quad 直径 = 半径 × 2 × 此值。metaball 融合需要远大于物理半径的可视 blob，建议 4~8。",
              "Render visual multiplier: drawn quad diameter = radius × 2 × this. Metaball fusion needs visual blobs much larger than the physics radius; 4~8 recommended.",
              "描画倍率：quad 直径 = 半径 × 2 × この値。メタボール融合には物理半径より大きな可視 blob が必要（4~8 推奨）。")]
-        public float RenderScale = 5f;
+        public float RenderScale = 4f;
 
         [Min(0f), LocalizationTooltip(
              "默认生命时间（秒），0 表示无限。可被生成参数覆盖。",

@@ -418,6 +418,10 @@ PrefabInstance:
       value: 20
       objectReference: {fileID: 0}
     - target: {fileID: 1236614623622671160, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
+      propertyPath: nozzleWidth
+      value: 0.01
+      objectReference: {fileID: 0}
+    - target: {fileID: 1236614623622671160, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
       propertyPath: swingAngleRange
       value: 0
       objectReference: {fileID: 0}
@@ -693,7 +697,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8411cc57852125d448f1b34e5f3283b5, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DEdgeCollider
-  isDynamic: 0
+  nameTag: 
 --- !u!1001 &1442336367
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -713,6 +717,10 @@ PrefabInstance:
     - target: {fileID: 1236614623622671160, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
       propertyPath: ejectForce
       value: 20
+      objectReference: {fileID: 0}
+    - target: {fileID: 1236614623622671160, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
+      propertyPath: nozzleWidth
+      value: 0.01
       objectReference: {fileID: 0}
     - target: {fileID: 1236614623622671160, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
       propertyPath: swingAngleRange
@@ -1053,8 +1061,8 @@ Transform:
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
-  - {fileID: 1998006501}
   - {fileID: 635353703}
+  - {fileID: 1998006501}
   - {fileID: 849988099}
   - {fileID: 1518324537}
   - {fileID: 687640559}

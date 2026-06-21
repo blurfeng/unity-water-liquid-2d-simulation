@@ -49,13 +49,13 @@ MonoBehaviour:
   gpuReadbackToStore: 0
   gravity: {x: 0, y: -9.8}
   smoothingRadius: 0.35
-  targetDensity: 1
-  pressureMultiplier: 125
+  targetDensity: 55
+  pressureMultiplier: 500
   nearPressureMultiplier: 5
   viscosityStrength: 0.03
   collisionDamping: 0.95
   substeps: 3
-  maxSpeed: 60
+  maxSpeed: 40
   maxParticlesPerTag: 0
   overrideFixedTimestep: 0
   fixedTimestep: 0.02

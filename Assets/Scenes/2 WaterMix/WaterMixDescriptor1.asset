@@ -23,7 +23,7 @@ MonoBehaviour:
   MixSettings:
     MixColors: 1
     MixColorsRadiusRate: 2
-    MixColorsSpeed: 0.8
+    MixColorsSpeed: 0.3
     MixColorsWithMovement: 0
     MixColorsWithMovementMaxSpeed: 100
     MixColorsWhenStationary: 0
@@ -31,7 +31,7 @@ MonoBehaviour:
     MixColorsWithContactParticlesCheckInternal: 0.1
   Material:
     Mass: 2
-    RestDensityScale: 24
+    TargetDensityScale: 1
     Viscosity: 0.01
     Cohesion: 0.1
     Friction: 0

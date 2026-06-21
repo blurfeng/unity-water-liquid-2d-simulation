@@ -17,10 +17,10 @@ namespace Fs.Liquid2D
 
     /// <summary>
     /// SPH 双密度求解全局参数（密度 + 近密度压力）。逐描述符的材质（<see cref="Liquid2DMaterialData"/>）在求解时与这些全局项合并：
-    /// restDensityScale 缩放 targetDensity，material.viscosity 叠加 viscosityStrength，cohesion 调制近密度压力，
+    /// targetDensityScale 缩放 targetDensity，material.viscosity 叠加 viscosityStrength，cohesion 调制近密度压力，
     /// friction/restitution 影响碰撞，gravityScale 缩放重力。
     /// Global SPH dual-density solver parameters (density + near-density pressure). Per-descriptor materials
-    /// (<see cref="Liquid2DMaterialData"/>) merge with these at solve time: restDensityScale scales targetDensity,
+    /// (<see cref="Liquid2DMaterialData"/>) merge with these at solve time: targetDensityScale scales targetDensity,
     /// material.viscosity adds to viscosityStrength, cohesion modulates near-pressure, friction/restitution affect
     /// collisions, gravityScale scales gravity.
     /// SPH デュアル密度ソルバーのグローバルパラメータ（密度 + 近密度圧力）。記述子ごとのマテリアルは解法時にマージされます。

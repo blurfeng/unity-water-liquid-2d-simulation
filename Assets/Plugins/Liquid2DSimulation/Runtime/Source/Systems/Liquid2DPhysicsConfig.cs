@@ -124,34 +124,36 @@ namespace Fs.Liquid2D
         private float smoothingRadius = 0.4f;
 
         [SerializeField, Min(0.01f), LocalizationTooltip(
-             "目标静止密度 ρ0。压力按 (密度-ρ0)·压力系数 计算；越大流体越“紧实”。此处是全局配置，你可在每个材质 Liquid2DParticleMaterial 中单独设置 RestDensityScale 来为每种材质指定不同的目标静止密度。",
-             "Target rest density ρ0. Pressure = (density - ρ0)·pressureMultiplier; higher packs tighter. This is a global config; you can set RestDensityScale in each Liquid2DParticleMaterial to specify different target rest densities for each material.",
-             "目標静止密度 ρ0。圧力 = (密度-ρ0)·圧力係数。大きいほど密度が高く“ぎっしり”。これはグローバル設定で、各 Liquid2DParticleMaterial の RestDensityScale で材質ごとに異なる目標静止密度を指定できます。")]
-        private float targetDensity = 1f;
+             "目标静止密度 ρ0。压力按 (密度-ρ0)·压力系数 计算；越大流体越“紧实”。此处是全局配置，你可在每个材质 Liquid2DParticleMaterial 中单独设置 TargetDensityScale 来为每种材质指定不同的目标静止密度。",
+             "Target rest density ρ0. Pressure = (density - ρ0)·pressureMultiplier; higher packs tighter. This is a global config; you can set TargetDensityScale in each Liquid2DParticleMaterial to specify different target rest densities for each material.",
+             "目標静止密度 ρ0。圧力 = (密度-ρ0)·圧力係数。大きいほど密度が高く“ぎっしり”。これはグローバル設定で、各 Liquid2DParticleMaterial の TargetDensityScale で材質ごとに異なる目標静止密度を指定できます。")]
+        private float targetDensity = 55f;
+        
+        // pressureMultiplier = 500, targetDensity * Liquid2DParticleMaterial.Material.TargetDensityScale = 55 左右是一个表现良好的水流体参数组合，过大过小都会导致不稳定。
 
         [SerializeField, Min(0f), LocalizationTooltip(
-             "压力系数 k。密度偏差转换为压力的强度，越大越不可压缩、越“弹”。",
-             "Pressure multiplier k. Converts density deviation to pressure; higher is more incompressible/springy.",
-             "圧力係数 k。密度偏差を圧力に変換する強度。大きいほど非圧縮的で弾性的。")]
-        private float pressureMultiplier = 125f;
+             "压力系数 k。密度偏差转换为压力的强度，越大越不可压缩、越“弹”。值过小会导致越底层粒子约被挤压到一起，导致整体体积的缩小。",
+             "Pressure multiplier k. Converts density deviation to pressure; higher is more incompressible/springy. Too low and lower-layer particles get squeezed together, shrinking the overall volume.",
+             "圧力係数 k。密度偏差を圧力に変換する強度。大きいほど非圧縮的で弾性的。小さすぎると下層の粒子が押しつぶされ、全体の体積が縮小します。")]
+        private float pressureMultiplier = 500f;
 
         [SerializeField, Min(0f), LocalizationTooltip(
              "近密度压力系数。增强近距离刚性，防止粒子相互重叠/穿插。",
              "Near-pressure multiplier. Adds short-range stiffness to prevent particle overlap.",
              "近密度圧力係数。近距離の剛性を加え、粒子の重なりを防止。")]
-        private float nearPressureMultiplier = 8f;
+        private float nearPressureMultiplier = 5f;
 
         [SerializeField, Min(0f), LocalizationTooltip(
              "全局粘性强度（材质 viscosity 叠加于此）。越大越粘稠、流动越缓。",
              "Global viscosity strength (material viscosity adds to this). Higher is thicker and slower.",
              "グローバル粘性強度（マテリアル粘性が加算）。大きいほど粘く遅い。")]
-        private float viscosityStrength = 0.06f;
+        private float viscosityStrength = 0.03f;
 
         [SerializeField, Range(0f, 1f), LocalizationTooltip(
              "碰撞反弹能量保留系数（0–1）。0 完全吸能、1 完全弹回。",
              "Collision bounce retention (0–1). 0 = fully absorb, 1 = fully bounce.",
              "衝突反発の保持係数（0–1）。0 は吸収、1 は完全反発。")]
-        private float collisionDamping = 0.4f;
+        private float collisionDamping = 0.95f;
 
         [SerializeField, Min(1), LocalizationTooltip(
              "子步进数（每个固定步细分，提升快速运动与高压力稳定性）。",
@@ -163,7 +165,7 @@ namespace Fs.Liquid2D
              "最大粒子速度（世界单位/秒，0 表示不限制）。防止压力参数过大导致粒子速度失控乱飞，建议设为喷射力的 3–5 倍。",
              "Maximum particle speed (world units/s; 0 = unlimited). Prevents runaway velocities from high pressure settings; recommend 3–5× the ejection velocity.",
              "最大パーティクル速度（ワールド単位/秒、0 は無制限）。圧力過大による速度暴走を防ぎます。噴射速度の 3～5 倍を推奨。")]
-        private float maxSpeed = 20f;
+        private float maxSpeed = 40f;
 
         [Header("Limits")]
         [SerializeField, Min(0), LocalizationTooltip(

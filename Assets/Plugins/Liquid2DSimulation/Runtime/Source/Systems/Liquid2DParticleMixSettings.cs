@@ -29,7 +29,7 @@ namespace Fs.Liquid2D
             "颜色混合速度。0为不混合，1为瞬间混合。",
             "Color mix speed. 0 means no mixing, 1 means instant mixing.",
             "色の混合速度。0は混合しない、1は即座に混合します。")]
-        public float MixColorsSpeed = 0.8f;
+        public float MixColorsSpeed = 0.3f;
         
         [LocalizationTooltip(
             "是否根据粒子运动混合颜色。如果启用，粒子在运动时会更快地混合颜色。",

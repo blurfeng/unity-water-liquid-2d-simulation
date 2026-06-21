@@ -207,7 +207,7 @@ namespace Fs.Liquid2D
     }
 
     /// <summary>
-    /// 压力力：pressure = (density - targetDensity·restDensityScale)·pressureMultiplier；
+    /// 压力力：pressure = (density - targetDensity·targetDensityScale)·pressureMultiplier；
     /// nearPressure = nearDensity·nearPressureMultiplier·(0.5+cohesion)（cohesion 越高越易结团/表面张力）。
     /// 邻居梯度累加后 v += (pressureForce/density)·dt。
     /// Pressure force. Higher cohesion strengthens near-pressure (clumping / surface tension).
@@ -235,7 +235,7 @@ namespace Fs.Liquid2D
         // 由密度求该粒子的压力（含材质静止密度缩放）。 // Pressure from density (with material rest-density scale). // 密度から圧力。
         private float Pressure(float density, int slot)
         {
-            float rho0 = TargetDensity * Materials[TypeId[slot]].RestDensityScale;
+            float rho0 = TargetDensity * Materials[TypeId[slot]].TargetDensityScale;
             return (density - rho0) * PressureMultiplier;
         }
 

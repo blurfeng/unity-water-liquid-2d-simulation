@@ -167,6 +167,26 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 2981897732334380774, guid: 6657c86b4c980274b821df95f20ef894, type: 3}
+      propertyPath: showGizmos
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 2981897732334380774, guid: 6657c86b4c980274b821df95f20ef894, type: 3}
+      propertyPath: drawRenderSize
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2981897732334380774, guid: 6657c86b4c980274b821df95f20ef894, type: 3}
+      propertyPath: drawPhysicsRadius
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2981897732334380774, guid: 6657c86b4c980274b821df95f20ef894, type: 3}
+      propertyPath: gpuReadbackToStoreInfo
+      value: GPU Readback to Store is enabled, can draw gizmo.
+      objectReference: {fileID: 0}
+    - target: {fileID: 5853212532852650967, guid: 6657c86b4c980274b821df95f20ef894, type: 3}
+      propertyPath: displayEnabled
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 8891003256158766862, guid: 6657c86b4c980274b821df95f20ef894, type: 3}
       propertyPath: m_Name
       value: Liquid2DParticleDisplay
@@ -226,6 +246,10 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3616119019485894971, guid: c107a39805142964384382b1ae40a2d9, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8065927890518322416, guid: c107a39805142964384382b1ae40a2d9, type: 3}
+      propertyPath: gpuReadbackToStore
       value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
@@ -489,11 +513,15 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 1236614623622671160, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
       propertyPath: flowRate
-      value: 120
+      value: 180
       objectReference: {fileID: 0}
     - target: {fileID: 1236614623622671160, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
       propertyPath: ejectForce
-      value: 80
+      value: 60
+      objectReference: {fileID: 0}
+    - target: {fileID: 1236614623622671160, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
+      propertyPath: nozzleWidth
+      value: 0.9
       objectReference: {fileID: 0}
     - target: {fileID: 1236614623622671160, guid: 0caa0ea08fbfbb84bab82b5d4583bf72, type: 3}
       propertyPath: swingAngleRange
