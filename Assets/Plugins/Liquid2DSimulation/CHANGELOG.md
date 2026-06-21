@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.7] - 2026-06-22
+### Changed
+- Major release: replaced Unity's physics with a self-developed SPH (dual-density) fluid particle solver. Particles are now pure data (no per-particle GameObject), supporting tens of thousands of particles with CPU (Job System + Burst) and GPU (Compute Shader) modes.
+- Introduced the Liquid2DParticleDescriptor (ScriptableObject) to define particle types, replacing the particle prefab.
+- Added two-way coupling between fluid and rigidbodies (Liquid2DRigidbodyBridge): wash-away and buoyancy/float.
+- Added force fields to apply directional/area forces to particles.
+
 ## [0.9.5] - 2025-11-15
 ### Changed
 - The SpawnOne method for generating liquid particles provides an onSpawned callback to retrieve the spawned particle.
