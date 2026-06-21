@@ -70,17 +70,6 @@ namespace Fs.Liquid2D
         [SerializeField, Range(0.01f, 100f), LocalizationTooltip("喷嘴宽度。", "Nozzle width.", "ノズル幅。")]
         private float nozzleWidth = 1f;
 
-        [SerializeField, Min(0f), LocalizationTooltip(
-            "喷射深度抖动范围（沿喷射方向的随机偏移距离，世界单位）。大于 0 时，每颗粒子在喷射方向上额外随机偏移 [0, 此值]，" +
-            "防止同帧多颗粒子叠在喷嘴同一位置而引起 SPH 压力爆炸。建议设置为光滑核半径（smoothingRadius）的 1–2 倍。",
-            "Spawn depth jitter along the ejection direction (world units). When > 0, each particle is offset by a random " +
-            "distance in [0, this value] along the ejection axis, preventing multiple same-frame particles from stacking " +
-            "at the nozzle and triggering SPH pressure explosions. Recommended: 1–2× the smoothing radius.",
-            "噴射深度ジッター（噴射方向のランダムオフセット距離、ワールド単位）。0 より大きい場合、各粒子が噴射方向に " +
-            "[0, この値] のランダムオフセットを受け、同フレームの粒子がノズル同位置に積み重なり SPH 圧力爆発を起こすのを防ぐ。" +
-            "平滑核半径（smoothingRadius）の 1～2 倍を推奨。")]
-        private float spawnDepthJitter;
-        
         [SerializeField, LocalizationTooltip(
             "流量。每秒喷射的粒子数量。", 
             "Flow rate. Number of particles sprayed per second.", 
@@ -89,7 +78,7 @@ namespace Fs.Liquid2D
 
         [SerializeField, LocalizationTooltip("流量调整系数", "Flow rate adjustment factor", "流量調整係数")]
         private float flowRateFactor = 1f;
-        
+
         [SerializeField, LocalizationTooltip(
              "尺寸随机范围（最小值，最大值）", 
              "Size random range (minimum, maximum)", 
@@ -373,21 +362,23 @@ namespace Fs.Liquid2D
             }
         }
         
-        protected virtual void Update()
+        protected virtual void FixedUpdate()
         {
             // 总开关关闭时暂停，不影响内部状态。 // Master toggle off: pause without touching internal state. // マスタースイッチがオフのとき、内部状態を変えずに一時停止。
             if (!spawningEnabled) return;
 
             // 未在喷射中。 // Not spawning. // 噴射中ではない。
             if (!IsSpawning) return;
-            
+
+            float dt = Time.fixedDeltaTime;
+
             // 延迟启动。 // Delayed start. // 遅延スタート。
             if (_checkDelayStart && !_isDelayedStarted)
             {
                 float currentDelay = _isFirstStart ? firstStartDelay : startDelay;
                 if (currentDelay > 0f)
                 {
-                    _delayTimer += Time.deltaTime;
+                    _delayTimer += dt;
                     if (_delayTimer >= currentDelay)
                     {
                         _isDelayedStarted = true;
@@ -400,33 +391,35 @@ namespace Fs.Liquid2D
                 }
                 return;
             }
-            
+
             // 持续时间检查。 // Duration check. // 持続時間チェック。
             if (_checkDuration && duration > 0f)
             {
-                _durationTimer += Time.deltaTime;
+                _durationTimer += dt;
                 if (_durationTimer >= duration)
                 {
                     StopSpawn();
                     return;
                 }
             }
-            
+
             // 摆动。 // Swing. // スイング。
             if (swingAngleRange > 0f && swingSpeed > 0f)
-            {
-                _swingTime += Time.deltaTime;
-            }
-            
+                _swingTime += dt;
+
             // 喷射粒子。 // Spawn particles. // 粒子を噴射。
             if (_flowRateUse > 0f)
             {
-                _flowTimer += Time.deltaTime;
+                _flowTimer += dt;
+                int spawnCount = 0;
                 while (_flowTimer >= _flowRateInterval)
                 {
                     _flowTimer -= _flowRateInterval;
-                    SpawnOne();
+                    spawnCount++;
                 }
+
+                if (spawnCount > 0)
+                    SpawnBatch(spawnCount);
             }
         }
         
@@ -479,12 +472,7 @@ namespace Fs.Liquid2D
             // 随机获取生成位置。 // Randomly get spawn position. // ランダムに生成位置を取得。
             Vector2 normal = new Vector2(-dir.y, dir.x); // 计算法线 // Calculate normal // 法線を計算
             float offset = UnityEngine.Random.Range(-nozzleWidth * 0.5f, nozzleWidth * 0.5f);
-            // 喷射方向深度抖动：防止同帧多颗粒子堆叠在喷嘴同一位置引发 SPH 压力爆炸。
-            // Ejection-direction depth jitter: prevents multiple same-frame particles from stacking at the nozzle,
-            // which would trigger SPH pressure explosions and scatter particles in random directions.
-            // 噴射方向の深度ジッター：同フレームの粒子がノズル同位置に積み重なって SPH 圧力爆発を起こすのを防ぐ。
-            float depthOffset = spawnDepthJitter > 0f ? UnityEngine.Random.Range(0f, spawnDepthJitter) : 0f;
-            Vector3 spawnPos3 = TransformGet.position + (Vector3)(normal * offset) + (Vector3)(dir * depthOffset);
+            Vector3 spawnPos3 = TransformGet.position + (Vector3)(normal * offset);
             float2 spawnPos = new float2(spawnPos3.x, spawnPos3.y);
 
             // 随机尺寸缩放。 // Random size scale. // ランダムサイズスケール。
@@ -511,6 +499,63 @@ namespace Fs.Liquid2D
             if (maxSpawnCount > 0 && _spawnedCount >= maxSpawnCount)
             {
                 StopSpawn();
+            }
+        }
+
+        /// <summary>
+        /// 批量生成流体粒子。横向位置使用分层采样，保证同批粒子在喷嘴宽度上均匀分布，避免粒子叠加引发 SPH 压力爆炸。
+        /// Spawn a batch of fluid particles. Lateral positions use stratified sampling to guarantee even spread across
+        /// the nozzle width within the batch, preventing particle overlap and SPH pressure explosions.
+        /// 流体粒子をバッチ生成。横方向位置に分層サンプリングを使用し、同バッチ粒子がノズル幅で均等分布することを保証、粒子重なりによる SPH 圧力爆発を防止。
+        /// </summary>
+        private void SpawnBatch(int count)
+        {
+            var sim = Liquid2DSimulation.Instance;
+            if (!sim) return;
+
+            Vector2 dir = GetCurrentEjectDirection();
+            Vector2 normal = new Vector2(-dir.y, dir.x);
+
+            for (int i = 0; i < count; i++)
+            {
+                if (liquidParticles.Count == 0) return;
+                Liquid2DParticleConfig config = liquidParticles.RandomWeight();
+                if (config == null || !config.Descriptor) continue;
+
+                // 分层横向采样：将喷嘴宽度均分为 count 段，粒子 i 在第 i 段内随机采样，保证批次内横向均匀分布。
+                // Stratified lateral sampling: nozzle width is split into count equal segments; particle i samples
+                // within segment i, ensuring even lateral coverage within the batch.
+                // 分層横方向サンプリング：ノズル幅を count 等分し、粒子 i はセグメント i 内でサンプリング。バッチ内の均等横分布を保証。
+                float lateralT = (i + UnityEngine.Random.value) / count;
+                float lateralOffset = (lateralT - 0.5f) * nozzleWidth;
+
+                Vector3 spawnPos3 = TransformGet.position + (Vector3)(normal * lateralOffset);
+                float2 spawnPos = new float2(spawnPos3.x, spawnPos3.y);
+
+                // 随机尺寸缩放。 // Random size scale. // ランダムサイズスケール。
+                float sizeScale = 1f;
+                if (sizeRandomRange.y > sizeRandomRange.x && sizeRandomRange.x > 0f)
+                    sizeScale = UnityEngine.Random.Range(sizeRandomRange.x, sizeRandomRange.y);
+
+                // 喷射力 → 初速度（冲量/质量）。 // Ejection force → initial velocity (impulse/mass). // 噴射力 → 初速度（力積/質量）。
+                float forceEject = _ejectForceUse;
+                if (ejectForceRandomRange.y > ejectForceRandomRange.x && ejectForceRandomRange.x >= 0f)
+                    forceEject *= UnityEngine.Random.Range(ejectForceRandomRange.x, ejectForceRandomRange.y);
+
+                float mass = config.Descriptor.Material != null ? Mathf.Max(0.0001f, config.Descriptor.Material.Mass) : 1f;
+                float2 velocity = new float2(dir.x, dir.y) * (forceEject / mass);
+
+                sim.Spawn(config.Descriptor, spawnPos, velocity, sizeScale, config.Lifetime);
+
+                _spawnedCount++;
+#if UNITY_EDITOR
+                spawnedCount = _spawnedCount;
+#endif
+                if (maxSpawnCount > 0 && _spawnedCount >= maxSpawnCount)
+                {
+                    StopSpawn();
+                    return;
+                }
             }
         }
 

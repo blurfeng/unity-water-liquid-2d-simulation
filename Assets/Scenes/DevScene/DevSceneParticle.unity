@@ -145,7 +145,7 @@ Transform:
   m_GameObject: {fileID: 500100}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 3, z: 0}
+  m_LocalPosition: {x: 0, y: 5.4, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -168,18 +168,18 @@ MonoBehaviour:
   firstStartDelay: 0.5
   startDelay: 3
   duration: 0
-  maxSpawnCount: 6000
+  maxSpawnCount: 0
   spawnedCount: 0
   liquidParticles:
   - Descriptor: {fileID: 11400000, guid: f35c2bc9e2e98fd4387aaeabc88c127f, type: 2}
     Weight: 1
     Lifetime: 0
     IsInit: 0
-  nozzleWidth: 0.01
-  spawnDepthJitter: 0
-  flowRate: 180
+  nozzleWidth: 1
+  flowRate: 300
   flowRateFactor: 1
-  sizeRandomRange: {x: 0.9, y: 1.1}
+  maxSpawnPerStep: 6
+  sizeRandomRange: {x: 1, y: 1}
   ejectForce: 60
   ejectForceFactor: 1
   ejectForceRandomRange: {x: 0.9, y: 1.1}
