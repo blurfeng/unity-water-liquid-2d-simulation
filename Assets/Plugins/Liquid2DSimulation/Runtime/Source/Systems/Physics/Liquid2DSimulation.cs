@@ -17,14 +17,8 @@ namespace Fs.Liquid2D
     [AddComponentMenu("Liquid 2D/Systems/Liquid 2D Simulation")]
     public class Liquid2DSimulation : MonoBehaviour
     {
-        private static Liquid2DSimulation _instance;
-        private static bool _isQuitting;
+        #region Singleton
 
-        /// <summary>
-        /// 运行时单例（懒创建隐藏 GameObject 承载）。编辑模式/退出时返回 null。
-        /// Runtime singleton (lazily creates a hidden GameObject). Returns null in edit mode / on quit.
-        /// ランタイムシングルトン（非表示 GameObject を遅延生成）。
-        /// </summary>
         public static Liquid2DSimulation Instance
         {
             get
@@ -35,6 +29,13 @@ namespace Fs.Liquid2D
                 return _instance;
             }
         }
+
+        private static Liquid2DSimulation _instance;
+        public static bool HasInstance => _instance;
+        private static bool _isQuitting;
+        private void OnApplicationQuit() => _isQuitting = true;
+
+        #endregion
 
         /// <summary>每个 nameTag 组的最大存活粒子数（&lt;=0 不限）。超出回收最旧。 // Max alive particles per nameTag group (&lt;=0 = unlimited). // nameTag グループごとの最大生存数。</summary>
         public static int MaxParticlesPerTag { get; set; }
@@ -52,7 +53,21 @@ namespace Fs.Liquid2D
         /// GetPosition/GetVelocity) work under GPU mode. ⚠ Synchronous stall, severely hurts performance; off by default.
         /// GPU モードで毎フレーム GPU→CPU 全量回読（CPU store 依存機能の互換用）。⚠ 同期ストールで性能大幅低下、既定はオフ。
         /// </summary>
-        public static bool GpuReadbackToStore = false;
+        private static bool _gpuReadbackToStore;
+
+        public static bool GpuReadbackToStore
+        {
+            get
+            {
+#if UNITY_EDITOR
+                // 编辑器模式时，若开启了调试可视化，则强制回读到 CPU store 以兼容 Gizmos 绘制。
+                return _gpuReadbackToStore || (Liquid2DDebugGizmos.HasInstance && Liquid2DDebugGizmos.Instance.ShowGizmos);
+#else
+                return Instance.gpuReadbackToStore;
+#endif
+            }
+            set => _gpuReadbackToStore = value;
+        }
 
         private Liquid2DParticleStore _store;
         private ILiquid2DSolver _solver;
@@ -482,8 +497,6 @@ namespace Fs.Liquid2D
         }
 
         #endregion
-
-        private void OnApplicationQuit() => _isQuitting = true;
 
         private void OnDestroy()
         {

@@ -21,11 +21,33 @@ namespace Fs.Liquid2D
     [AddComponentMenu("Liquid 2D/Gameplay/Liquid 2D Debug Gizmos")]
     public class Liquid2DDebugGizmos : MonoBehaviour
     {
+        #region Singleton
+
+        public static Liquid2DDebugGizmos Instance
+        {
+            get
+            {
+                if (_instance || _isQuitting || !Application.isPlaying) return _instance;
+                var go = new GameObject("[Liquid2DDebugGizmos]") { hideFlags = HideFlags.HideAndDontSave };
+                _instance = go.AddComponent<Liquid2DDebugGizmos>();
+                return _instance;
+            }
+        }
+        private static Liquid2DDebugGizmos _instance;
+        public static bool HasInstance => _instance;
+        private static bool _isQuitting;
+        private void Awake() => _instance = this;
+        private void OnDestroy() { if (_instance == this) _instance = null; }
+        private void OnApplicationQuit() => _isQuitting = true;
+
+        #endregion
+        
         [SerializeField, LocalizationTooltip(
-             "Gizmo 总开关：关闭后所有调试可视化均不绘制。",
-             "Master toggle: when disabled, no debug visualization is drawn at all.",
-             "マスタースイッチ：無効にするとすべてのデバッグ可視化が描画されません。")]
+             "Gizmo 总开关：关闭后所有调试可视化均不绘制。开启后 gpuReadbackToStore 将被自动启用（性能消耗大）",
+             "Master toggle: when disabled, no debug visualization is drawn at all. When enabled, gpuReadbackToStore will be automatically enabled (performance heavy).",
+             "マスタースイッチ：無効にするとすべてのデバッグ可視化が描画されません。 有効にすると gpuReadbackToStore が自動的に有効になります（パフォーマンスに影響します）。")]
         private bool showGizmos = true;
+        public bool ShowGizmos => showGizmos;
 
         [SerializeField, LocalizationTooltip(
              "绘制粒子的物理半径（实际碰撞/邻居半径）。",
@@ -62,13 +84,8 @@ namespace Fs.Liquid2D
              "Total active particle count for the current frame (auto-updated at runtime, read-only, independent of showGizmos).",
              "現在フレームのアクティブ粒子総数（実行時に自動更新、読み取り専用、showGizmos とは無関係）。")]
         private int currentParticleCount;
-
-#if UNITY_EDITOR
         
-#pragma warning disable CS0414 // 字段仅由 Inspector 通过反射读取，编译器看不到该用法。 // Field is read by the Inspector via reflection, invisible to the compiler. // Inspector が反射経由で読み取るためコンパイラには使用が見えない。
-        [SerializeField, TextArea(2, 5)]
-        private string gpuReadbackToStoreInfo;
-#pragma warning restore CS0414
+#if UNITY_EDITOR
         
         private void Update()
         {
@@ -86,16 +103,6 @@ namespace Fs.Liquid2D
         private void OnDrawGizmos()
         {
             if (!showGizmos) return;
-            
-            // 没有回写数据到 CPU Store，无法绘制 gizmo。
-            // No data is written back to the CPU store, cannot draw gizmo.
-            // CPU Store にデータが書き戻されていないため、gizmo を描画できません。
-            if (!Liquid2DSimulation.GpuReadbackToStore)
-            {
-                gpuReadbackToStoreInfo = "GPU Readback to Store is disabled, cannot draw gizmo.";
-                return;
-            }
-            gpuReadbackToStoreInfo = "GPU Readback to Store is enabled, can draw gizmo.";
             
             if (!Application.isPlaying) return;
             if (!drawPhysicsRadius && !drawRenderSize) return;
