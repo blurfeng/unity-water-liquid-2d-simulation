@@ -163,7 +163,7 @@ MonoBehaviour:
   m_RequiresOpaqueTextureOption: 2
   m_CameraType: 0
   m_Cameras: []
-  m_RendererIndex: 2
+  m_RendererIndex: 4
   m_VolumeLayerMask:
     serializedVersion: 2
     m_Bits: 1
@@ -797,11 +797,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6903353142189711327, guid: 20a0295b5e48ad640bfda69cbc99c5e6, type: 3}
       propertyPath: size.x
-      value: 60
+      value: 80
       objectReference: {fileID: 0}
     - target: {fileID: 6903353142189711327, guid: 20a0295b5e48ad640bfda69cbc99c5e6, type: 3}
       propertyPath: size.y
-      value: 30
+      value: 80
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
