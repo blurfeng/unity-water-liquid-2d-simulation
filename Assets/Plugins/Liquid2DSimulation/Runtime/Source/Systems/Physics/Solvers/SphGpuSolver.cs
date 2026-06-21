@@ -160,7 +160,7 @@ namespace Fs.Liquid2D
             if (store == null) return;
 
             _grewThisStep = false;
-            HandleCapacity(store);
+            HandleCapacity(ctx, store);
 
             // 处理生成（含扩容后的全量重传），即使本帧 active 为 0 也要写入。 // Handle spawns (and full re-upload after grow). // 生成処理。
             DispatchSpawns(ctx, store, count);
@@ -281,14 +281,20 @@ namespace Fs.Liquid2D
         }
 
         // 容量级缓冲：扩容时先回读旧缓冲（保状态）再重建并标记全量重传。 // Grow: read back old buffers to preserve state, recreate, mark full re-upload. // 容量バッファ。
-        private void HandleCapacity(Liquid2DParticleStore store)
+        private void HandleCapacity(in Liquid2DSolveContext ctx, Liquid2DParticleStore store)
         {
             int cap = store.Capacity;
             if (cap == _capacity && _positions != null) return;
 
             _grewThisStep = true;
+            // 回读保状态时必须跳过本帧 pending（刚生成、尚未上传到 GPU）的 slot：GPU 上对它们没有有效数据，
+            // store 才是权威，若回读覆盖会把刚生成粒子的真实状态清成 GPU 上的陈旧/清零值（即「凭空黑/透明粒子」根因）。
+            // The readback must skip this frame's pending slots (just spawned, not yet uploaded to GPU): the GPU has no valid
+            // data for them, the store is authoritative. Overwriting would wipe the freshly-spawned state with the GPU's stale/
+            // cleared value — the root cause of "black/transparent particles from nowhere".
+            // 回読時は本フレームの pending（生成直後・未アップロード）slot をスキップ必須。GPU に有効データが無く store が権威。
             if (_positions != null && _capacity > 0)
-                ReadbackResidentToStore(store, _capacity);
+                ReadbackResidentToStore(store, _capacity, ctx.GPUPendingSpawns);
 
             void C(ref ComputeBuffer b, int stride) { b?.Release(); b = new ComputeBuffer(Mathf.Max(1, cap), stride, ComputeBufferType.Structured); }
             C(ref _positions, 8); C(ref _predicted, 8); C(ref _velocities, 8); C(ref _velNext, 8); C(ref _densities, 8);
@@ -327,15 +333,30 @@ namespace Fs.Liquid2D
             _typeId.SetData(_zeroI, 0, 0, cap); _groupId.SetData(_zeroI, 0, 0, cap);
         }
 
-        private void ReadbackResidentToStore(Liquid2DParticleStore store, int oldCap)
+        // pending slot 跳过集合（回读保状态时复用，避免每次扩容分配）。 // Reused pending-slot skip set (avoids alloc per grow). // pending スキップ集合（再利用）。
+        private readonly HashSet<int> _pendingSkip = new HashSet<int>();
+
+        // 把常驻 GPU 缓冲回读到 CPU store（扩容保状态/调试全量回读）。skipPending 非空时跳过其中的 slot——
+        // 它们是本帧刚生成、尚未上传到 GPU 的粒子，store 才是权威，回读会覆盖成 GPU 陈旧/清零值。
+        // Read resident GPU buffers back into the CPU store (grow state-preserve / debug full readback). When skipPending is
+        // non-null its slots are skipped — they are just-spawned particles not yet on the GPU, for which the store is
+        // authoritative; reading back would overwrite them with the GPU's stale/cleared value.
+        // 常駐 GPU バッファを CPU store へ回読。skipPending の slot はスキップ（生成直後・未アップロードで store が権威）。
+        private void ReadbackResidentToStore(Liquid2DParticleStore store, int oldCap, List<int> skipPending = null)
         {
             EnsureArray(ref _pos, oldCap); EnsureArray(ref _vel, oldCap); EnsureArray(ref _col, oldCap); EnsureArray(ref _lastMixA, oldCap);
             _positions.GetData(_pos, 0, 0, oldCap);
             _velocities.GetData(_vel, 0, 0, oldCap);
             _colors.GetData(_col, 0, 0, oldCap);
             _lastMix.GetData(_lastMixA, 0, 0, oldCap);
+
+            _pendingSkip.Clear();
+            if (skipPending != null)
+                for (int i = 0; i < skipPending.Count; i++) _pendingSkip.Add(skipPending[i]);
+
             for (int slot = 0; slot < oldCap; slot++)
             {
+                if (_pendingSkip.Count > 0 && _pendingSkip.Contains(slot)) continue;
                 store.positions[slot] = _pos[slot];
                 store.velocities[slot] = _vel[slot];
                 store.colors[slot] = _col[slot];
