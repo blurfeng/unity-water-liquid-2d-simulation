@@ -1117,7 +1117,7 @@ SpriteRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_MaskInteraction: 0
-  m_Sprite: {fileID: 7482667652216324306, guid: 311925a002f4447b3a28927169b83ea6, type: 3}
+  m_Sprite: {fileID: 7482667652216324306, guid: 78e394043d724814e890d7de7b6ead06, type: 3}
   m_Color: {r: 1, g: 0.7666199, b: 0.4575472, a: 1}
   m_FlipX: 0
   m_FlipY: 0
@@ -1225,7 +1225,7 @@ MonoBehaviour:
   m_RequiresOpaqueTextureOption: 2
   m_CameraType: 0
   m_Cameras: []
-  m_RendererIndex: 3
+  m_RendererIndex: 4
   m_VolumeLayerMask:
     serializedVersion: 2
     m_Bits: 1
@@ -1512,7 +1512,7 @@ SpriteRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_MaskInteraction: 0
-  m_Sprite: {fileID: 7482667652216324306, guid: 311925a002f4447b3a28927169b83ea6, type: 3}
+  m_Sprite: {fileID: 7482667652216324306, guid: 78e394043d724814e890d7de7b6ead06, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
