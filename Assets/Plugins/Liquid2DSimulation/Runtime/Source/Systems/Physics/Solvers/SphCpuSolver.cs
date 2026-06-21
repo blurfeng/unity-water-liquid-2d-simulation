@@ -106,6 +106,7 @@ namespace Fs.Liquid2D
                 NativeArray<float2> outVelSum = new NativeArray<float2>(outLen, Allocator.TempJob, NativeArrayOptions.ClearMemory);
                 NativeArray<int> outBody = new NativeArray<int>(outLen, Allocator.TempJob, NativeArrayOptions.ClearMemory);
                 NativeArray<float2> outContact = new NativeArray<float2>(outLen, Allocator.TempJob, NativeArrayOptions.ClearMemory);
+                NativeArray<float> outNormalY = new NativeArray<float>(outLen, Allocator.TempJob, NativeArrayOptions.ClearMemory);
 
                 h = new SphIntegrateCollideJob
                 {
@@ -116,6 +117,7 @@ namespace Fs.Liquid2D
                     CollisionDamping = p.CollisionDamping, MaxSpeed = p.MaxSpeed,
                     HasColliders = (byte)(hasColliders ? 1 : 0),
                     Accumulate = (byte)(accumulate ? 1 : 0), OutVelSum = outVelSum, OutBody = outBody, OutContact = outContact,
+                    OutNormalY = outNormalY,
                 }.Schedule(count, 64, h);
 
                 // 末子步：在最终位置上重建网格并做一次邻居混色。 // Last substep: rebuild grid on final positions and mix colors. // 末サブステップで混色。
@@ -160,9 +162,11 @@ namespace Fs.Liquid2D
                     // NativeArray wraps a pointer; since ctx is `in` (readonly), copy to a local to call its indexer setter (same underlying buffer).
                     var velSumOut = ctx.ColliderVelSum;
                     var contactOut = ctx.ColliderContact;
+                    var buoyOut = ctx.ColliderBuoyancy;
                     if (accumulate && velSumOut.IsCreated)
                     {
                         bool hasContact = contactOut.IsCreated;
+                        bool hasBuoy = buoyOut.IsCreated;
                         var materials = ctx.Materials;
                         var typeIds = store.typeId;
                         for (int kk = 0; kk < count; kk++)
@@ -171,14 +175,17 @@ namespace Fs.Liquid2D
                             if (body < 0 || body >= velSumOut.Length) continue;
                             // 入射流体速度之和（平均流速=此值/接触数，相对速度阻力用）。 // Sum of incoming fluid velocities (avg = this / contactCount, for drag). // 入射流速の和。
                             velSumOut[body] += outVelSum[kk];
-                            // 接触累积（浮力用）：xy=接触位置之和，z=接触计数，w=接触粒子流体密度之和（平均密度=w/z）。
-                            // Contact accumulation (buoyancy): xy=sum pos, z=count, w=sum of fluid density (avg = w/z).
-                            // 接触累積：xy=位置和、z=接触数、w=流体密度和。
+                            float density = materials[typeIds[ctx.ActiveIndices[kk]]].Density;
+                            // 接触累积（全向，drag 浸没比例 + 力矩质心用）：xy=接触位置之和，z=接触计数，w=接触粒子流体密度之和（平均密度=w/z）。
+                            // Contact accumulation (all directions; drag submersion + torque centroid): xy=sum pos, z=count, w=sum of fluid density (avg = w/z).
+                            // 接触累積（全方向、drag 浸水率 + 力矩質心）：xy=位置和、z=接触数、w=流体密度和。
                             if (hasContact && body < contactOut.Length)
-                            {
-                                float density = materials[typeIds[ctx.ActiveIndices[kk]]].Density;
                                 contactOut[body] += new float4(outContact[kk].x, outContact[kk].y, 1f, density);
-                            }
+                            // 浮力专用累积：仅当接触法线朝下（n.y<0，粒子在物体下方、向上托起物体）才计入，x=下方接触数、y=下方密度和。
+                            // Buoyancy-only accumulation: counted only when the contact normal points down (n.y<0, particle below the body). x=count, y=density sum.
+                            // 浮力専用累積：法線が下向き（n.y<0、粒子が物体の下）のみ計上。x=下方接触数、y=密度和。
+                            if (hasBuoy && body < buoyOut.Length && outNormalY[kk] < 0f)
+                                buoyOut[body] += new float2(1f, density);
                         }
                     }
                 }
@@ -188,6 +195,7 @@ namespace Fs.Liquid2D
                 outVelSum.Dispose();
                 outBody.Dispose();
                 outContact.Dispose();
+                outNormalY.Dispose();
             }
         }
 

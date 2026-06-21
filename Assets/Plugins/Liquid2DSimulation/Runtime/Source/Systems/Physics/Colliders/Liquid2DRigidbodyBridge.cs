@@ -128,8 +128,13 @@ namespace Fs.Liquid2D
             if (force.ContactCount <= 0) return; // 无接触 = 不在流体中，无浮力/阻力。 // no contact = not in fluid. // 非接触。
 
             float dt = force.Dt > 1e-6f ? force.Dt : Time.fixedDeltaTime;
-            // 浸没比例（0..1）：接触粒子越多越接近满浸，缩放浮力与阻力。 // Submerged fraction; scales buoyancy and drag. // 浸水率。
+            // 浸没比例（0..1）。阻力/阻尼用「全向接触数」（四周浸没即受阻）；浮力用「物体下方接触数」（仅下方粒子托起物体），
+            // 避免压在物体顶部的粒子产生虚假上浮——这正是「低密度方块被顶部流体一起带飞」问题的根因。
+            // Submerged fraction (0..1). Drag/damping use all-direction contacts; buoyancy uses below-body contacts only (only
+            // particles below lift the body), so particles resting on top don't create spurious lift.
+            // 浸水率。抗力/減衰は全方向接触、浮力は下方接触のみ（上に乗る粒子の偽浮力を防ぐ）。
             float submerged = fullSubmersionContacts > 0f ? Mathf.Clamp01(force.ContactCount / fullSubmersionContacts) : 1f;
+            float submergedBuoyancy = fullSubmersionContacts > 0f ? Mathf.Clamp01(force.BuoyancyContactCount / fullSubmersionContacts) : 1f;
 
             // 施力点：默认质心（只平移不旋转）；applyTorque 时用接触质心（来流偏置一侧 → 力矩，物体翻转/摇摆）。
             // Application point: center of mass by default (translate only); contact centroid when applyTorque (off-center flow → torque).
@@ -158,15 +163,16 @@ namespace Fs.Liquid2D
             if (dragForce.sqrMagnitude > 1e-10f)
                 _rb.AddForceAtPosition(dragForce, applyPoint, ForceMode2D.Force);
 
-            // 浮力（阿基米德）：浮力 = ρ流体 · g · 体积 · 浸没比例；在质心处施加 → 零力矩，物体密度（mass/体积）决定沉浮。
-            // Buoyancy (Archimedes): force = fluidDensity · g · volume · submergedFraction; at the center of mass → no torque,
-            // body density (mass/volume) decides float/sink. ForceMode2D.Force integrates over the fixed step.
-            // 浮力（アルキメデス）：浮力 = ρ流体 · g · 体積 · 浸水率。質心で施加 → 力矩ゼロ、密度で浮沈。
-            if (useBuoyancy && force.FluidDensity > 0f)
+            // 浮力（阿基米德）：浮力 = ρ流体 · g · 体积 · 下方浸没比例；在质心处施加 → 零力矩，物体密度（mass/体积）决定沉浮。
+            // 仅用「物体下方」接触（force.BuoyancyFluidDensity / submergedBuoyancy），故压在顶部的流体不会把物体一起顶起。
+            // Buoyancy (Archimedes): force = fluidDensity · g · volume · belowSubmergedFraction; at the center of mass → no torque,
+            // body density (mass/volume) decides float/sink. Uses below-body contacts only, so fluid on top can't lift the body.
+            // 浮力（アルキメデス）：浮力 = ρ流体 · g · 体積 · 下方浸水率。下方接触のみ使用し、上の流体で持ち上がらない。
+            if (useBuoyancy && force.BuoyancyFluidDensity > 0f)
             {
                 float gMag = Physics2D.gravity.magnitude;
                 Vector2 up = gMag > 1e-6f ? -Physics2D.gravity / gMag : Vector2.up;
-                float buoyForce = force.FluidDensity * gMag * EffectiveVolume() * submerged; // 阿基米德浮力幅值。 // magnitude. // 浮力の大きさ。
+                float buoyForce = force.BuoyancyFluidDensity * gMag * EffectiveVolume() * submergedBuoyancy; // 阿基米德浮力幅值。 // magnitude. // 浮力の大きさ。
                 if (buoyForce > 0f) _rb.AddForce(up * buoyForce, ForceMode2D.Force);
             }
 

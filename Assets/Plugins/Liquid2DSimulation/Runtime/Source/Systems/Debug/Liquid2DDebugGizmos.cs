@@ -65,8 +65,10 @@ namespace Fs.Liquid2D
 
 #if UNITY_EDITOR
         
-        [SerializeField, TextArea(2, 5)] 
+#pragma warning disable CS0414 // 字段仅由 Inspector 通过反射读取，编译器看不到该用法。 // Field is read by the Inspector via reflection, invisible to the compiler. // Inspector が反射経由で読み取るためコンパイラには使用が見えない。
+        [SerializeField, TextArea(2, 5)]
         private string gpuReadbackToStoreInfo;
+#pragma warning restore CS0414
         
         private void Update()
         {

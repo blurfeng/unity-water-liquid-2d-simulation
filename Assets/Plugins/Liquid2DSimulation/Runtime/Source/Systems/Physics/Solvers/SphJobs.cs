@@ -401,6 +401,7 @@ namespace Fs.Liquid2D
         [WriteOnly] public NativeArray<float2> OutVelSum;   // 长度 activeCount，命中动态体时记录入射流体速度（相对速度阻力用）。 // incoming fluid velocity on dynamic hit (relative-velocity drag). // 入射流体速度。
         [WriteOnly] public NativeArray<int> OutBody;        // 长度 activeCount，-1 表示无。 // length activeCount, -1 = none.
         [WriteOnly] public NativeArray<float2> OutContact;  // 长度 activeCount，命中动态体时的接触位置（浮力质心用）。 // contact pos on dynamic hit (buoyancy centroid). // 接触位置。
+        [WriteOnly] public NativeArray<float> OutNormalY;   // 长度 activeCount，最后命中动态体的接触法线 y 分量（n.y<0=粒子在物体下方，浮力方向过滤用）。 // contact normal y of the last dynamic hit (n.y<0 = particle below body; buoyancy direction filter). // 接触法線 y。
 
         public void Execute(int k)
         {
@@ -424,6 +425,7 @@ namespace Fs.Liquid2D
             float2 fluidVel = float2.zero;
             float2 contactPos = float2.zero;
             int hitBody = -1;
+            float hitNormalY = 0f; // 最后命中动态体的接触法线 y（默认 0=不计浮力）。 // contact normal y of last dynamic hit (0 = no buoyancy). // 接触法線 y。
 
             if (HasColliders == 1)
             {
@@ -461,6 +463,7 @@ namespace Fs.Liquid2D
                         fluidVel = vIncoming;
                         contactPos = p;
                         hitBody = col.BodyIndex;
+                        hitNormalY = n.y;
                     }
                 }
             }
@@ -473,6 +476,7 @@ namespace Fs.Liquid2D
                 OutVelSum[k] = fluidVel;
                 OutBody[k] = hitBody;
                 OutContact[k] = contactPos;
+                OutNormalY[k] = hitNormalY;
             }
         }
     }

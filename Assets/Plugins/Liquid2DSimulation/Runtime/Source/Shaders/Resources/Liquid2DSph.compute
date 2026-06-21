@@ -71,15 +71,22 @@ StructuredBuffer<float2> ColliderPoints;
 struct ForceField { float2 center; float radius; float strength; float velocityDamping; float swirlStrength; float gravityAttenuation; float falloff; int mode; int groupId; int matchAll; };
 StructuredBuffer<ForceField> ForceFields;
 
-// 入射流体速度之和（按 body 索引，定点化 × impulseScale）。平均流速=此值/接触数，供桥接器做相对速度阻力（冲走）。 // Sum of incoming fluid velocities per body (fixed-point). Avg = this / contactCount; used by the bridge for relative-velocity drag. // 入射流速の和（×impulseScale）。
-// 注：缓冲名沿用 ImpulseX/Y 以避免改 shader 绑定字符串；语义已是「速度之和」而非冲量。 // Note: buffer names kept as ImpulseX/Y to avoid touching shader-binding strings; semantics are now "velocity sum", not impulse.
-RWStructuredBuffer<int> ImpulseX;
-RWStructuredBuffer<int> ImpulseY;
-// 浮力累积（按 body 索引）：接触数 + 接触位置之和（定点化 × impulseScale）+ 接触流体密度之和（定点化）。 // Buoyancy accumulation per body: contact count + sum of contact positions + sum of contact fluid density (fixed-point). // 浮力累積。
-RWStructuredBuffer<int> ContactCount;
-RWStructuredBuffer<int> CentroidX;
-RWStructuredBuffer<int> CentroidY;
-RWStructuredBuffer<int> DensitySum;
+// 动态体接触累积（合并为单个 UAV，规避 D3D11 每 kernel 8 UAV 上限）。按 body 索引，每体占 ACCUM_STRIDE 个 int 通道，均定点化 × impulseScale。
+// 通道：0=入射流速和 x，1=入射流速和 y，2=全向接触数，3=接触质心和 x，4=接触质心和 y，5=全向接触密度和，6=下方接触数(n.y<0)，7=下方接触密度和。
+// Per-dynamic-body contact accumulation merged into one UAV (works around D3D11's 8-UAV-per-kernel limit). Indexed by body,
+// ACCUM_STRIDE int channels each (fixed-point × impulseScale). Channels: 0=velSum.x, 1=velSum.y, 2=contactCount, 3=centroidSum.x,
+// 4=centroidSum.y, 5=densitySum, 6=buoyCount(n.y<0), 7=buoyDensitySum.
+// 動的体の接触累積を単一 UAV に統合（D3D11 の 8 UAV/kernel 制限回避）。body ごとに ACCUM_STRIDE チャンネル（定点化 × impulseScale）。
+#define ACCUM_STRIDE 8
+#define ACCUM_VEL_X 0
+#define ACCUM_VEL_Y 1
+#define ACCUM_CONTACT 2
+#define ACCUM_CENT_X 3
+#define ACCUM_CENT_Y 4
+#define ACCUM_DENSITY 5
+#define ACCUM_BUOY_N 6
+#define ACCUM_BUOY_DENSITY 7
+RWStructuredBuffer<int> BodyAccum;
 
 // ---- 销毁区域（与 Liquid2DGpuDeadZone 对齐）。形状字段同 GpuCollider，末尾换为 groupId/matchAll。 ----
 // ---- Dead zones (matches Liquid2DGpuDeadZone). Shape fields mirror GpuCollider, ending with groupId/matchAll. ----
@@ -142,12 +149,11 @@ float DerivSpikyPow3(float dst, float coef) { if (dst > h) return 0; float v = h
 //   "integer modulus may be much slower, try using uints if possible" —— 这是性能提示，非错误。
 //   此处刻意保留有符号 int 取模（含负值 `+tableSize` 修正），以与 CPU 侧 Liquid2DHashGrid.Hash 逐位一致，
 //   保证 CPU/GPU 两种求解器落入相同的哈希桶（"同算法"前提）。改成 uint 取模会改变负哈希值的桶号、与 CPU 分叉，故不要改。
-// Note: the compiler warns "integer modulus may be much slower" on the signed `hsh % tableSize` below — a perf hint, not an error.
-//   The signed-int modulus (with the negative `+tableSize` fixup) is kept ON PURPOSE so it stays bit-identical to the CPU-side
-//   Liquid2DHashGrid.Hash and both solvers land in the same hash bucket. Switching to uint would diverge from the CPU; do not change.
-// 注：下記の符号付き剰余に対する性能警告は意図的に無視。CPU 側 Liquid2DHashGrid.Hash とビット一致させるため uint に変更しないこと。
+// CPU(SphCpuSolver) と GPU ソルバーは同時に動作しないため、ハッシュ値が一致する必要はない。uint 剰余を使い符号付き剰余警告を回避する。
+// The CPU (SphCpuSolver) and GPU solvers run mutually exclusive, so their hash values need not match. Use uint modulus to avoid the signed-modulus perf warning.
+// CPU(SphCpuSolver)与 GPU 求解器不同时运行，散列值无需一致。改用 uint 取模消除有符号取模性能警告。
 int2 CellCoord(float2 p) { return (int2)floor(p * invCellSize); }
-int HashCell(int2 c) { int hsh = (c.x * 73856093) ^ (c.y * 19349663); int m = hsh % tableSize; return m < 0 ? m + tableSize : m; }
+int HashCell(int2 c) { uint hsh = (uint)((c.x * 73856093) ^ (c.y * 19349663)); return (int)(hsh % (uint)tableSize); }
 
 // ============ 碰撞体投影（移植 Liquid2DColliderMath）。 ============
 bool ProjCircle(GpuCollider c, float2 p, float pr, out float2 corr, out float2 n)
@@ -495,8 +501,8 @@ void CopyVelocity(uint3 id : SV_DispatchThreadID)
 void ClearImpulse(uint3 id : SV_DispatchThreadID)
 {
     int b = (int)id.x; if (b >= numBodies) return;
-    ImpulseX[b] = 0; ImpulseY[b] = 0;
-    ContactCount[b] = 0; CentroidX[b] = 0; CentroidY[b] = 0; DensitySum[b] = 0;
+    int accBase = b * ACCUM_STRIDE;
+    [unroll] for (int c = 0; c < ACCUM_STRIDE; c++) BodyAccum[accBase + c] = 0;
 }
 
 [numthreads(NumThreads,1,1)]
@@ -535,16 +541,27 @@ void IntegrateCollide(uint3 id : SV_DispatchThreadID)
         if (mat.friction > 0) { float2 vt = v - dot(v, n) * n; v -= vt * mat.friction; }
         if (accumulateImpulse == 1 && col.dynamic == 1 && col.bodyIndex >= 0)
         {
+            // 合并累积缓冲：每体 ACCUM_STRIDE 个 int 通道（见顶部宏）。 // Merged accumulation: ACCUM_STRIDE int channels per body. // 統合累積バッファ。
+            int accBase = col.bodyIndex * ACCUM_STRIDE;
             // 入射流体速度之和（相对速度阻力用，定点化）。 // Sum of incoming fluid velocities (relative-velocity drag, fixed-point). // 入射流速の和。
-            InterlockedAdd(ImpulseX[col.bodyIndex], (int)(vIncoming.x * impulseScale));
-            InterlockedAdd(ImpulseY[col.bodyIndex], (int)(vIncoming.y * impulseScale));
-            // 浮力累积：接触数 +1，接触位置（定点化）累加，接触流体密度（定点化）累加，供 CPU 求质心/平均密度/缩放浮力。
-            // Buoyancy: +1 contact, accumulate contact pos and fluid density (fixed-point) for CPU centroid/avg-density/scaling.
-            // 浮力累積：接触数・位置・流体密度を累積。
-            InterlockedAdd(ContactCount[col.bodyIndex], 1);
-            InterlockedAdd(CentroidX[col.bodyIndex], (int)(p.x * impulseScale));
-            InterlockedAdd(CentroidY[col.bodyIndex], (int)(p.y * impulseScale));
-            InterlockedAdd(DensitySum[col.bodyIndex], (int)(mat.density * impulseScale));
+            InterlockedAdd(BodyAccum[accBase + ACCUM_VEL_X], (int)(vIncoming.x * impulseScale));
+            InterlockedAdd(BodyAccum[accBase + ACCUM_VEL_Y], (int)(vIncoming.y * impulseScale));
+            // 全向接触累积：接触数 +1，接触位置（定点化）累加，接触流体密度（定点化）累加，供 CPU 求质心/平均密度/缩放阻力。
+            // All-direction contact: +1 contact, accumulate contact pos and fluid density (fixed-point) for CPU centroid/avg-density/drag scaling.
+            // 全方向接触累積：接触数・位置・流体密度を累積。
+            InterlockedAdd(BodyAccum[accBase + ACCUM_CONTACT], 1);
+            InterlockedAdd(BodyAccum[accBase + ACCUM_CENT_X], (int)(p.x * impulseScale));
+            InterlockedAdd(BodyAccum[accBase + ACCUM_CENT_Y], (int)(p.y * impulseScale));
+            InterlockedAdd(BodyAccum[accBase + ACCUM_DENSITY], (int)(mat.density * impulseScale));
+            // 浮力方向过滤：仅当接触法线朝下（n.y<0，粒子在物体下方、向上托起物体）才计入浮力，避免压在顶部的粒子产生虚假上浮。
+            // Buoyancy direction filter: only contacts whose normal points down (n.y<0, particle below the body, pushing it up)
+            // count toward buoyancy, so particles resting on top don't create spurious lift.
+            // 浮力方向フィルタ：法線が下向き（n.y<0、粒子が物体の下で押し上げる）の接触のみ浮力に計上。上に乗る粒子の偽浮力を防ぐ。
+            if (n.y < 0)
+            {
+                InterlockedAdd(BodyAccum[accBase + ACCUM_BUOY_N], 1);
+                InterlockedAdd(BodyAccum[accBase + ACCUM_BUOY_DENSITY], (int)(mat.density * impulseScale));
+            }
         }
     }
 
@@ -626,19 +643,26 @@ bool DZPointInPoly(int start, int count, float2 p)
 // 点是否在销毁区域实心形状内。Circle/Box/Capsule 复用 ProjectCollider（pr=0）；Polygon 走 DeadZonePoints。
 // Whether a point is inside a dead-zone solid shape. Circle/Box/Capsule reuse ProjectCollider (pr=0); Polygon uses DeadZonePoints.
 // 点が破棄領域の実心形状内かどうか。
+// 单一出口模式：result 始终初始化为 false，FXC 可静态确认所有路径均已赋值，消除 D3D11「未初始化变量」警告。
+// Single-exit pattern: result is always initialised to false so FXC can statically confirm all paths assign it, suppressing the D3D11 uninitialised warning.
+// 単一出口パターン：result を常に false で初期化し FXC が全パスでの代入を静的確認できるようにする。
 bool DeadZoneInside(GpuDeadZone dz, float2 p)
 {
+    bool result = false;
     if (dz.shape == 3) // Polygon
     {
-        if (dz.pointCount < 3) return false;
-        return DZPointInPoly(dz.pointStart, dz.pointCount, p);
+        result = (dz.pointCount >= 3) && DZPointInPoly(dz.pointStart, dz.pointCount, p);
     }
-    GpuCollider c = (GpuCollider)0;
-    c.shape = dz.shape; c.center = dz.center; c.size = dz.size; c.rotation = dz.rotation;
-    c.radius = dz.radius; c.pointStart = dz.pointStart; c.pointCount = dz.pointCount;
-    c.dynamic = 0; c.bodyIndex = -1;
-    float2 corr, n;
-    return ProjectCollider(c, p, 0.0f, corr, n); // pr=0 → 点在实心形状内。 // pr=0 → point inside solid shape.
+    else
+    {
+        GpuCollider c = (GpuCollider)0;
+        c.shape = dz.shape; c.center = dz.center; c.size = dz.size; c.rotation = dz.rotation;
+        c.radius = dz.radius; c.pointStart = dz.pointStart; c.pointCount = dz.pointCount;
+        c.dynamic = 0; c.bodyIndex = -1;
+        float2 corr = 0, n = 0;
+        result = ProjectCollider(c, p, 0.0f, corr, n); // pr=0 → 点在实心形状内。 // pr=0 → point inside solid shape.
+    }
+    return result;
 }
 
 // 销毁区域标记：落入区域且组过滤通过的活动粒子置 KillFlags[k]=1（求解后由 CPU 回收 slot）。

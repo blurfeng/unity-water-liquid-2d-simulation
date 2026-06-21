@@ -23,8 +23,21 @@ namespace Fs.Liquid2D
         /// <summary>本帧与该物体接触的流体粒子数（用于浮力/阻力缩放，0 表示未接触）。 // Fluid particles contacting the body this frame (scales buoyancy/drag; 0 = no contact). // 接触粒子数。</summary>
         public int ContactCount;
 
-        /// <summary>接触处的平均流体密度（按接触粒子的材质 Density 求平均，用于阿基米德浮力）。 // Average fluid mass density at contacts (for Archimedes buoyancy). // 接触処の平均流体密度。</summary>
+        /// <summary>接触处的平均流体密度（按全部接触粒子的材质 Density 求平均，用于参考/兼容；阿基米德浮力请改用 <see cref="BuoyancyFluidDensity"/>）。 // Average fluid mass density over all contacts (reference/compat; use BuoyancyFluidDensity for Archimedes buoyancy). // 全接触の平均流体密度（参考・互換）。</summary>
         public float FluidDensity;
+
+        /// <summary>
+        /// 「物体下方」接触的流体粒子数（接触法线 n.y &lt; 0）。仅统计位于物体下方、向上托起物体的接触；压在物体顶部的粒子不计入，从而不产生虚假上浮。
+        /// 接收者据此估算浮力的浸没比例（缩放阿基米德浮力）。
+        /// Count of fluid particles contacting below the body (contact normal n.y &lt; 0). Only contacts below the body (pushing it up)
+        /// are counted; particles resting on top are excluded, so they don't create spurious lift. Receivers use this for the
+        /// buoyancy submerged fraction (scaling Archimedes buoyancy).
+        /// 「物体下方」接触の粒子数（法線 n.y &lt; 0）。上に乗る粒子は除外し偽浮力を防ぐ。浮力の浸水率推定に用いる。
+        /// </summary>
+        public int BuoyancyContactCount;
+
+        /// <summary>「物体下方」接触的平均流体密度（仅下方接触粒子的材质 Density 求平均），用于阿基米德浮力。 // Average fluid density over below-body contacts only, for Archimedes buoyancy. // 下方接触のみの平均流体密度（アルキメデス浮力用）。</summary>
+        public float BuoyancyFluidDensity;
 
         /// <summary>本帧物理步长（秒），便于接收者把力换算为速度变化。 // This frame's physics timestep (s). // 本フレームの物理ステップ（秒）。</summary>
         public float Dt;

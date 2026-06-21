@@ -278,6 +278,7 @@ namespace Fs.Liquid2D
             int bodyCount = math.max(1, _dynamicReceivers.Count);
             var velSum = new NativeArray<float2>(bodyCount, Allocator.TempJob, NativeArrayOptions.ClearMemory);
             var contact = new NativeArray<float4>(bodyCount, Allocator.TempJob, NativeArrayOptions.ClearMemory);
+            var buoyancy = new NativeArray<float2>(bodyCount, Allocator.TempJob, NativeArrayOptions.ClearMemory);
             var forceFields = Liquid2DForceFieldRegistry.BuildBuffer(Allocator.TempJob, GetGroup);
 
             // 销毁区域：扁平化为缓冲，并分配按 active 索引的 killFlags（求解器置位，Step 后回收 slot）。
@@ -297,6 +298,7 @@ namespace Fs.Liquid2D
                 Colliders = colliders,
                 ColliderVelSum = velSum,
                 ColliderContact = contact,
+                ColliderBuoyancy = buoyancy,
                 ForceFields = forceFields,
                 DeadZones = deadZones,
                 DeadZoneCount = deadZoneCount,
@@ -324,7 +326,7 @@ namespace Fs.Liquid2D
                     _activeDirty = true;
                 }
 
-                DispatchBodyForces(velSum, contact, Time.fixedDeltaTime);
+                DispatchBodyForces(velSum, contact, buoyancy, Time.fixedDeltaTime);
 
                 // 回收落入销毁区域的粒子（killFlags 由 CPU/GPU 求解器置位）。 // Recycle particles inside dead zones (killFlags set by CPU/GPU solver). // 破棄領域内の粒子を回収。
                 if (deadZoneCount > 0) ApplyKills(killFlags, count);
@@ -335,6 +337,7 @@ namespace Fs.Liquid2D
                 colliders.Points.Dispose();
                 velSum.Dispose();
                 contact.Dispose();
+                buoyancy.Dispose();
                 if (forceFields.Fields.IsCreated) forceFields.Fields.Dispose();
                 if (deadZones.Zones.IsCreated) deadZones.Zones.Dispose();
                 if (deadZones.Points.IsCreated) deadZones.Points.Dispose();
@@ -374,13 +377,14 @@ namespace Fs.Liquid2D
             return c;
         }
 
-        // 把本帧累积的接触采样（流体速度之和 + 接触位置/数/密度）打包成 Liquid2DBodyForce 派发给各动态体的力接收者（双向耦合）。
-        // 平均流速 = 速度之和 / 接触数，供接收者做相对速度阻力；接触数=0 时无浮力/阻力，跳过。
-        // Pack this frame's contact samples (velocity sum + contact pos/count/density) into Liquid2DBodyForce and dispatch to
-        // each dynamic body's receiver (two-way coupling). Average fluid velocity = velSum / contactCount, for relative-velocity
-        // drag; with no contact there is no buoyancy/drag, so skip.
-        // 本フレームの接触サンプルを Liquid2DBodyForce にまとめ、各動的体のレシーバーへ派遣。平均流速=速度和/接触数。
-        private void DispatchBodyForces(NativeArray<float2> velSum, NativeArray<float4> contact, float dt)
+        // 把本帧累积的接触采样（流体速度之和 + 接触位置/数/密度 + 浮力专用下方接触）打包成 Liquid2DBodyForce 派发给各动态体的力接收者（双向耦合）。
+        // 平均流速 = 速度之和 / 接触数，供接收者做相对速度阻力；接触数=0 时无浮力/阻力，跳过。浮力按「下方接触」单独统计，避免压顶粒子虚假上浮。
+        // Pack this frame's contact samples (velocity sum + contact pos/count/density + buoyancy-only below-contacts) into a
+        // Liquid2DBodyForce and dispatch to each dynamic body's receiver (two-way coupling). Average fluid velocity = velSum /
+        // contactCount, for relative-velocity drag; with no contact there is no buoyancy/drag, so skip. Buoyancy uses the
+        // separate "below contacts" so particles resting on top don't create spurious lift.
+        // 本フレームの接触サンプルを Liquid2DBodyForce にまとめ各動的体へ派遣。浮力は「下方接触」で別集計し、上に乗る粒子の偽浮力を防ぐ。
+        private void DispatchBodyForces(NativeArray<float2> velSum, NativeArray<float4> contact, NativeArray<float2> buoyancy, float dt)
         {
             for (int b = 0; b < _dynamicReceivers.Count && b < velSum.Length; b++)
             {
@@ -395,12 +399,22 @@ namespace Fs.Liquid2D
                 float2 fluidVel = velSum[b] * invCount;
                 float2 center = new float2(con.x, con.y) * invCount;
                 float fluidDensity = con.w * invCount;
+
+                // 浮力专用：仅物体下方接触（n.y<0）参与，避免压在顶部的粒子产生虚假上浮。x=下方接触数，y=下方密度和 → 平均密度=y/x。
+                // Buoyancy-only: only contacts below the body (n.y<0) participate. x=below-count, y=below-density-sum → avg = y/x.
+                // 浮力専用：物体下方の接触（n.y<0）のみ。x=下方接触数、y=下方密度和 → 平均=y/x。
+                float2 buoy = b < buoyancy.Length ? buoyancy[b] : float2.zero;
+                int buoyancyCount = (int)buoy.x;
+                float buoyancyDensity = buoyancyCount > 0 ? buoy.y / buoyancyCount : 0f;
+
                 r.ApplyLiquidForces(new Liquid2DBodyForce
                 {
                     FluidVelocity = fluidVel,
                     ContactCenter = center,
                     ContactCount = contactCount,
                     FluidDensity = fluidDensity,
+                    BuoyancyContactCount = buoyancyCount,
+                    BuoyancyFluidDensity = buoyancyDensity,
                     Dt = dt,
                 });
             }

@@ -80,9 +80,15 @@ namespace Fs.Liquid2D
         // tableSize 级。 // table-level.
         private ComputeBuffer _counts, _cellStart, _cursor;
         // 辅助。 // aux.
-        private ComputeBuffer _materials, _mixDatas, _colliders, _points, _impulseX, _impulseY, _forceFields;
-        // 浮力累积（按 body 索引）：接触数 + 接触位置之和 + 接触流体密度之和（定点化）。 // Buoyancy accumulation per body. // 浮力累積。
-        private ComputeBuffer _contactN, _centroidX, _centroidY, _densitySum;
+        private ComputeBuffer _materials, _mixDatas, _colliders, _points, _forceFields;
+        // 动态体接触累积（合并为单个缓冲，规避 D3D11 每 kernel 8 UAV 上限）：每体 _accumStride 个 int 通道，通道定义见 _accum* 常量与 shader ACCUM_*。
+        // Per-body contact accumulation merged into one buffer (works around D3D11's 8-UAV-per-kernel limit): _accumStride int channels per body.
+        // 動的体の接触累積を単一バッファに統合（D3D11 の 8 UAV 制限回避）。
+        private ComputeBuffer _bodyAccum;
+
+        // 合并累积缓冲的通道布局（与 shader 顶部 ACCUM_* 宏一致）。 // Channel layout of the merged buffer (matches shader ACCUM_* macros). // 統合バッファのチャンネル配置。
+        private const int _accumStride = 8;
+        private const int _accumVelX = 0, _accumVelY = 1, _accumContact = 2, _accumCentX = 3, _accumCentY = 4, _accumDensity = 5, _accumBuoyN = 6, _accumBuoyDensity = 7;
         private ComputeBuffer _deadZones, _deadZonePoints;
         // 生成上传（仅动态状态；静态属性由 store 整块 SetData）。 // spawn upload (dynamic only). // 生成アップロード。
         private ComputeBuffer _upSlots, _upPos, _upVel, _upColor;
@@ -97,7 +103,7 @@ namespace Fs.Liquid2D
         private Liquid2DGpuCollider[] _colA; private Liquid2DGpuMixData[] _mixA; private float2[] _pointsA;
         private Liquid2DGpuForceField[] _ffA;
         private Liquid2DGpuDeadZone[] _dzA; private float2[] _dzPointsA; private int[] _killA;
-        private int[] _impXa, _impYa, _contactNa, _centXa, _centYa, _densSumA;
+        private int[] _accumA;
         private int[] _upSlotsA; private float2[] _upPosA, _upVelA; private float4[] _upColorA;
 
         public SphGpuSolver(ComputeShader cs)
@@ -337,9 +343,7 @@ namespace Fs.Liquid2D
         {
             Ensure(ref _materials, numTypes, 32); Ensure(ref _mixDatas, numTypes, 20);
             Ensure(ref _colliders, Mathf.Max(1, numColliders), 52); Ensure(ref _points, Mathf.Max(1, numPoints), 8);
-            Ensure(ref _impulseX, numBodies, 4); Ensure(ref _impulseY, numBodies, 4);
-            Ensure(ref _contactN, numBodies, 4); Ensure(ref _centroidX, numBodies, 4); Ensure(ref _centroidY, numBodies, 4);
-            Ensure(ref _densitySum, numBodies, 4);
+            Ensure(ref _bodyAccum, numBodies * _accumStride, 4);
             Ensure(ref _forceFields, Mathf.Max(1, numForceFields), 44);
         }
         private void EnsureUploadBuffers(int n)
@@ -407,9 +411,8 @@ namespace Fs.Liquid2D
             Bind("ColorsNext", _colorsNext); Bind("LastMixTime", _lastMix); Bind("Radii", _radii);
             Bind("InvMass", _invMass); Bind("TypeId", _typeId); Bind("GroupId", _groupId);
             Bind("ActiveIndices", _active); Bind("Materials", _materials); Bind("MixDatas", _mixDatas);
-            Bind("Colliders", _colliders); Bind("ColliderPoints", _points); Bind("ImpulseX", _impulseX); Bind("ImpulseY", _impulseY);
-            Bind("ContactCount", _contactN); Bind("CentroidX", _centroidX); Bind("CentroidY", _centroidY);
-            Bind("DensitySum", _densitySum);
+            Bind("Colliders", _colliders); Bind("ColliderPoints", _points);
+            Bind("BodyAccum", _bodyAccum);
             Bind("ForceFields", _forceFields);
             Bind("DeadZones", _deadZones); Bind("DeadZonePoints", _deadZonePoints); Bind("KillFlags", _killFlags);
             Bind("BucketOf", _bucketOf); Bind("Counts", _counts); Bind("CellStart", _cellStart);
@@ -444,25 +447,31 @@ namespace Fs.Liquid2D
 
         private void ReadbackImpulse(in Liquid2DSolveContext ctx, int numBodies)
         {
-            // _impulseX/_impulseY 现累积「入射流体速度之和」（缓冲名沿用，语义已改）。 // _impulseX/_impulseY now accumulate the sum of incoming fluid velocities (buffer names kept, semantics changed). // 入射流速の和。
-            var velSumOut = ctx.ColliderVelSum;
-            if (!velSumOut.IsCreated || _impulseX == null) return;
-            EnsureArray(ref _impXa, numBodies); EnsureArray(ref _impYa, numBodies);
-            _impulseX.GetData(_impXa, 0, 0, numBodies);
-            _impulseY.GetData(_impYa, 0, 0, numBodies);
-            for (int b = 0; b < numBodies && b < velSumOut.Length; b++)
-                velSumOut[b] += new float2(_impXa[b] / ImpulseScale, _impYa[b] / ImpulseScale);
+            // 一次性回读合并的接触累积缓冲（每体 _accumStride 个 int 通道），按通道去定点化后分发到 velSum/contact/buoyancy。
+            // Read back the merged accumulation buffer once (_accumStride int channels per body), de-fixed-point and split into velSum/contact/buoyancy.
+            // 統合累積バッファを一括回読し、通道ごとに分配。
+            if (_bodyAccum == null) return;
+            int n = numBodies * _accumStride;
+            EnsureArray(ref _accumA, n);
+            _bodyAccum.GetData(_accumA, 0, 0, n);
 
-            // 浮力接触累积回读：xy=接触位置之和（去定点化），z=接触数，w=接触流体密度之和（去定点化）。 // Buoyancy readback: xy=sum pos, z=count, w=sum fluid density. // 浮力接触回読。
+            var velSumOut = ctx.ColliderVelSum;
             var contactOut = ctx.ColliderContact;
-            if (!contactOut.IsCreated || _contactN == null) return;
-            EnsureArray(ref _contactNa, numBodies); EnsureArray(ref _centXa, numBodies); EnsureArray(ref _centYa, numBodies); EnsureArray(ref _densSumA, numBodies);
-            _contactN.GetData(_contactNa, 0, 0, numBodies);
-            _centroidX.GetData(_centXa, 0, 0, numBodies);
-            _centroidY.GetData(_centYa, 0, 0, numBodies);
-            _densitySum.GetData(_densSumA, 0, 0, numBodies);
-            for (int b = 0; b < numBodies && b < contactOut.Length; b++)
-                contactOut[b] += new float4(_centXa[b] / ImpulseScale, _centYa[b] / ImpulseScale, _contactNa[b], _densSumA[b] / ImpulseScale);
+            var buoyOut = ctx.ColliderBuoyancy;
+            for (int b = 0; b < numBodies; b++)
+            {
+                int ab = b * _accumStride;
+                // 入射流体速度之和（相对速度阻力用）。 // Sum of incoming fluid velocities (relative-velocity drag). // 入射流速の和。
+                if (velSumOut.IsCreated && b < velSumOut.Length)
+                    velSumOut[b] += new float2(_accumA[ab + _accumVelX] / ImpulseScale, _accumA[ab + _accumVelY] / ImpulseScale);
+                // 全向接触：xy=接触位置之和，z=接触数，w=接触流体密度之和。 // All-direction contact: xy=sum pos, z=count, w=sum fluid density. // 全方向接触。
+                if (contactOut.IsCreated && b < contactOut.Length)
+                    contactOut[b] += new float4(_accumA[ab + _accumCentX] / ImpulseScale, _accumA[ab + _accumCentY] / ImpulseScale,
+                        _accumA[ab + _accumContact], _accumA[ab + _accumDensity] / ImpulseScale);
+                // 浮力专用：x=下方接触数（n.y<0），y=下方接触流体密度之和。 // Buoyancy-only: x=below-count, y=sum below-density. // 浮力専用。
+                if (buoyOut.IsCreated && b < buoyOut.Length)
+                    buoyOut[b] += new float2(_accumA[ab + _accumBuoyN], _accumA[ab + _accumBuoyDensity] / ImpulseScale);
+            }
         }
 
         // 回读销毁标记到 ctx.killFlags（按 k 索引，1=该活动粒子待回收）。 // Read kill flags back into ctx.killFlags (indexed by k). // 破棄フラグを回読。
@@ -526,8 +535,8 @@ namespace Fs.Liquid2D
             R(_positions); R(_predicted); R(_velocities); R(_velNext); R(_densities); R(_colors); R(_colorsNext); R(_lastMix);
             R(_radii); R(_invMass); R(_typeId); R(_groupId);
             R(_active); R(_bucketOf); R(_sortedSlots); R(_killFlags); R(_counts); R(_cellStart); R(_cursor);
-            R(_materials); R(_mixDatas); R(_colliders); R(_points); R(_impulseX); R(_impulseY); R(_forceFields);
-            R(_contactN); R(_centroidX); R(_centroidY); R(_densitySum);
+            R(_materials); R(_mixDatas); R(_colliders); R(_points); R(_forceFields);
+            R(_bodyAccum);
             R(_deadZones); R(_deadZonePoints);
             R(_upSlots); R(_upPos); R(_upVel); R(_upColor);
             _positions = null; _active = null;
