@@ -121,7 +121,7 @@ namespace Fs.Liquid2D
              "光滑核半径 h（约 2–4 × 粒子半径）。决定邻居范围与网格 cell 大小。",
              "Smoothing radius h (~2–4 × particle radius). Sets neighbor range and grid cell size.",
              "平滑核半径 h（粒子半径の約 2–4 倍）。近傍範囲とグリッド cell サイズを決定。")]
-        private float smoothingRadius = 0.4f;
+        private float smoothingRadius = 0.35f;
 
         [SerializeField, Min(0.01f), LocalizationTooltip(
              "目标静止密度 ρ0。压力按 (密度-ρ0)·压力系数 计算；越大流体越“紧实”。此处是全局配置，你可在每个材质 Liquid2DParticleMaterial 中单独设置 TargetDensityScale 来为每种材质指定不同的目标静止密度。",

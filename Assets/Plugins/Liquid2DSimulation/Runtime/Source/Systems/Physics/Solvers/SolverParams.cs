@@ -70,15 +70,15 @@ namespace Fs.Liquid2D
         public static SolverParams Default => new SolverParams
         {
             Gravity = new float2(0f, -9.8f),
-            H = 0.4f,
+            H = 0.35f,
             TargetDensity = 55f,
-            PressureMultiplier = 25f,
-            NearPressureMultiplier = 8f,
-            ViscosityStrength = 0.06f,
-            CollisionDamping = 0.4f,
+            PressureMultiplier = 500f,
+            NearPressureMultiplier = 5f,
+            ViscosityStrength = 0.03f,
+            CollisionDamping = 0.95f,
             PredictionFactor = 1f / 120f,
             Substeps = 3,
-            MaxSpeed = 0f,
+            MaxSpeed = 40f,
         };
     }
 }
