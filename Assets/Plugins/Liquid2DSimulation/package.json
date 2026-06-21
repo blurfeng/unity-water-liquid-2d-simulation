@@ -1,6 +1,6 @@
 ﻿{
   "name": "com.blurfeng.liquid-2d-simulation",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "displayName": "Liquid 2D Simulation",
   "description": "A high-performance 2D liquid simulation plugin for Unity, supporting real-time liquid effects and interactions.",
   "unity": "6000.2",

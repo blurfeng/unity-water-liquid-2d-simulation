@@ -97,6 +97,14 @@ namespace Fs.Liquid2D
         private int _capacity;       // 当前容量级缓冲容量。 // current capacity-buffer size.
         private bool _needFullReupload;
         private int _lastCount;
+        private bool _grewThisStep;  // 本步是否发生扩容（供诊断埋点）。 // Whether a grow happened this step (for diagnostics). // 本ステップで扩容したか。
+
+        // 临时诊断开关：开启后每帧回读颜色，定位首个「凭空变黑」的活动粒子并打印其上下文，然后停打。
+        // Temporary diagnostic toggle: when on, reads colours back each frame, logs the first "spontaneously black" active
+        // particle with its context, then stops logging. Leave OFF in production (per-frame readback is a sync stall).
+        // 一時診断スイッチ：オンで毎フレーム色を回読し、最初の「突然黒くなった」粒子の文脈を出力後に停止。
+        public static bool DebugDetectBlackParticle;
+        private bool _blackReported;
 
         // 托管暂存。 // Managed scratch.
         private float2[] _pos, _vel; private float4[] _col; private float[] _lastMixA;
@@ -151,6 +159,7 @@ namespace Fs.Liquid2D
             var store = ctx.Store;
             if (store == null) return;
 
+            _grewThisStep = false;
             HandleCapacity(store);
 
             // 处理生成（含扩容后的全量重传），即使本帧 active 为 0 也要写入。 // Handle spawns (and full re-upload after grow). // 生成処理。
@@ -226,7 +235,41 @@ namespace Fs.Liquid2D
             // 有销毁区域时回读销毁标记（小数组，count 字节级）。 // Read back kill flags when dead zones exist (small array). // 破棄領域がある時のみ回読。
             if (numDeadZones > 0) ReadbackKillFlags(ctx, count);
 
+            if (DebugDetectBlackParticle) DebugScanBlack(ctx, count);
+
             _lastCount = count;
+        }
+
+        // 临时诊断：定位首个「凭空变黑」的活动粒子。回读 GPU 颜色，找到 RGB≈0 且 alpha 可见的活动 slot 即打印其
+        // slot/typeId/颜色/本步是否扩容，然后停止（避免刷屏）。⚠ 每帧 GPU→CPU 回读，仅排障时开启。
+        // Diagnostic: find the first "spontaneously black" active particle. Reads GPU colours, logs the first active slot whose
+        // RGB≈0 with visible alpha (slot/typeId/colour/grew-this-step), then stops. ⚠ Per-frame readback; debugging only.
+        // 診断：突然黒くなった活動粒子を特定し、文脈を出力後に停止。⚠ 毎フレーム回読、排障時のみ。
+        private void DebugScanBlack(in Liquid2DSolveContext ctx, int count)
+        {
+            if (_blackReported || _colors == null || count <= 0 || ctx.Store == null) return;
+            EnsureArray(ref _col, _capacity);
+            _colors.GetData(_col, 0, 0, _capacity);
+            for (int k = 0; k < count; k++)
+            {
+                int slot = ctx.ActiveIndices[k];
+                if (slot < 0 || slot >= _capacity) continue;
+                float4 c = _col[slot];
+                // 可疑 = 不透明的近黑（混色前的污染源）或近透明（清零后未被覆盖的 slot）。正常粒子 alpha≈1 且非黑。
+                // Suspicious = opaque near-black (pre-mix contamination) or near-transparent (post-clear uncovered slot).
+                // Legit particles are alpha≈1 and non-black.
+                bool blackOpaque = c.x < 0.05f && c.y < 0.05f && c.z < 0.05f && c.w > 0.5f;
+                bool nearlyTransparent = c.w < 0.5f;
+                if (blackOpaque || nearlyTransparent)
+                {
+                    int tid = slot < ctx.Store.typeId.Length ? ctx.Store.typeId[slot] : -1;
+                    Debug.LogError($"[SphGpuSolver] 异常粒子定位 suspicious particle: slot={slot} k={k} typeId={tid} color={c} " +
+                                   $"kind={(blackOpaque ? "blackOpaque" : "transparent")} grewThisStep={_grewThisStep} " +
+                                   $"activeCount={count} capacity={_capacity}");
+                    _blackReported = true;
+                    break;
+                }
+            }
         }
 
         private void SortPass(int gP, int gT)
@@ -243,6 +286,7 @@ namespace Fs.Liquid2D
             int cap = store.Capacity;
             if (cap == _capacity && _positions != null) return;
 
+            _grewThisStep = true;
             if (_positions != null && _capacity > 0)
                 ReadbackResidentToStore(store, _capacity);
 
@@ -252,6 +296,35 @@ namespace Fs.Liquid2D
             C(ref _radii, 4); C(ref _invMass, 4); C(ref _typeId, 4); C(ref _groupId, 4);
             _capacity = cap;
             _needFullReupload = true;
+
+            // 新建 ComputeBuffer 的显存内容是未定义的。全量重传只会覆盖「活动」slot；若有活动 slot 因某条边界路径
+            // 未被 ScatterSpawn/重传覆盖，就会读到未初始化显存——表现为「凭空出现颜色≈黑的粒子」并经混色扩散。
+            // 这里把所有逐 slot 缓冲清零，杜绝垃圾值泄漏（随后的全量重传仍会写入活动 slot 的真实数据）。
+            // Freshly created ComputeBuffers contain undefined VRAM. The full re-upload only covers "active" slots; if any
+            // active slot is missed by ScatterSpawn / re-upload via some edge path, it reads uninitialized memory — surfacing
+            // as a near-black particle appearing from nowhere and spreading through colour mixing. Zero every per-slot buffer
+            // here to prevent garbage leaking (the full re-upload below still writes the real data for active slots).
+            // 新規 ComputeBuffer の VRAM は未定義。全 slot バッファをゼロ初期化し、未カバーの活動 slot がゴミ値（≈黒）を
+            // 読むのを防ぎます（活動 slot の実データは後続の全量再アップロードで上書きされます）。
+            ClearSlotBuffers(cap);
+        }
+
+        // 清零的复用零数组（仅 ClearSlotBuffers 使用）。 // Reused zero arrays (ClearSlotBuffers only). // ゼロ配列（再利用）。
+        private float2[] _zero2; private float4[] _zero4; private float[] _zero1; private int[] _zeroI;
+
+        // 把所有逐 slot 容量级缓冲清零，消除新建 ComputeBuffer 的未初始化显存。仅在扩容时调用（低频）。
+        // Zero all per-slot capacity buffers to wipe the uninitialized VRAM of freshly created ComputeBuffers. Called only on grow (rare).
+        // 全 slot 容量バッファをゼロ化。扩容時のみ呼び出し（低頻度）。
+        private void ClearSlotBuffers(int cap)
+        {
+            EnsureArray(ref _zero2, cap); EnsureArray(ref _zero4, cap); EnsureArray(ref _zero1, cap); EnsureArray(ref _zeroI, cap);
+            System.Array.Clear(_zero2, 0, cap); System.Array.Clear(_zero4, 0, cap);
+            System.Array.Clear(_zero1, 0, cap); System.Array.Clear(_zeroI, 0, cap);
+            _positions.SetData(_zero2, 0, 0, cap); _predicted.SetData(_zero2, 0, 0, cap); _velocities.SetData(_zero2, 0, 0, cap);
+            _velNext.SetData(_zero2, 0, 0, cap); _densities.SetData(_zero2, 0, 0, cap);
+            _colors.SetData(_zero4, 0, 0, cap); _colorsNext.SetData(_zero4, 0, 0, cap);
+            _lastMix.SetData(_zero1, 0, 0, cap); _radii.SetData(_zero1, 0, 0, cap); _invMass.SetData(_zero1, 0, 0, cap);
+            _typeId.SetData(_zeroI, 0, 0, cap); _groupId.SetData(_zeroI, 0, 0, cap);
         }
 
         private void ReadbackResidentToStore(Liquid2DParticleStore store, int oldCap)

@@ -515,7 +515,12 @@ namespace Fs.Liquid2D
             liquidOccluderDesc.clearColor = Color.clear;
             TextureHandle liquidOccluderTh = renderGraph.CreateTexture(liquidOccluderDesc);
             
-            bool isHaveOccluder = _occluderFilteringSettings.layerMask != 0;
+            // 判断是否配置了遮挡层：必须看「渲染层」掩码（renderingLayerMask），而不是 GameObject 层掩码（layerMask）。
+            // 后者在构造过滤设置时被设成 ~0（全部），恒不为 0，会导致没配置遮挡时也误判为有遮挡、空跑遮挡 Pass。
+            // Must test the rendering-layer mask, not the GameObject layerMask (set to ~0 in the ctor, so always non-zero,
+            // which would wrongly report "has occluder" and run an empty occluder pass even when none is configured).
+            // 遮挡層の有無は renderingLayerMask で判定する（layerMask は ~0 固定で常に非ゼロ）。
+            bool isHaveOccluder = _occluderFilteringSettings.renderingLayerMask != 0;
             if (isHaveOccluder)
             {
                 using (var builder = renderGraph.AddRasterRenderPass(GetName("liquid 2d Occluder"), out PassData passData))
@@ -1058,13 +1063,16 @@ namespace Fs.Liquid2D
             
             // 阻挡层遮罩。 // Obstructor layer mask. // 阻害レイヤーマスク。
             _settings.ObstructorRenderingLayerMask = isActive ? volumeData.ObstructorRenderingLayerMask : _settingsDefault.ObstructorRenderingLayerMask;
-            if (_obstructorFilteringSettings.layerMask != _settings.ObstructorRenderingLayerMask)
+            // 比较渲染层掩码（renderingLayerMask），而非 GameObject 层掩码（layerMask）。后者恒为 ~0，会导致每帧无谓重建过滤设置。
+            // Compare the rendering-layer mask, not the GameObject layerMask (always ~0, which would rebuild the filtering settings every frame).
+            // GameObject 層ではなく渲染層マスクで比較（layerMask は ~0 固定で毎フレーム無駄に再構築される）。
+            if (_obstructorFilteringSettings.renderingLayerMask != _settings.ObstructorRenderingLayerMask)
             {
                 SetObstructorFilteringSettings();
             }
             // 遮挡层遮罩。 // Occlusion layer mask. // オクルージョンレイヤーマスク。
             _settings.OccluderRenderingLayerMask = isActive ? volumeData.OccluderRenderingLayerMask : _settingsDefault.OccluderRenderingLayerMask;
-            if (_occluderFilteringSettings.layerMask != _settings.OccluderRenderingLayerMask)
+            if (_occluderFilteringSettings.renderingLayerMask != _settings.OccluderRenderingLayerMask)
             {
                 SetOccluderFilteringSettings();
             }
