@@ -220,7 +220,7 @@ bool ProjPolygon(GpuCollider c, float2 p, float pr, out float2 corr, out float2 
     int s = c.pointStart; float minDistSq = 1e30f; float2 best = p;
     for (int i = 0; i < nn; i++)
     {
-        float2 a = ColliderPoints[s + i]; float2 b = ColliderPoints[s + ((i + 1) % nn)];
+        float2 a = ColliderPoints[s + i]; float2 b = ColliderPoints[s + (int)((uint)(i + 1) % (uint)nn)];
         float2 cp = ClosestOnSeg(a, b, p); float dsq = dot(p - cp, p - cp);
         if (dsq < minDistSq) { minDistSq = dsq; best = cp; }
     }
@@ -324,7 +324,7 @@ void ExternalForces(uint3 id : SV_DispatchThreadID)
 
         float dst = sqrt(sqrDst);
         float centreT = 1.0f - dst / r;
-        float profile = ff.mode == 1 ? 1.0f : (ff.falloff == 1.0f ? centreT : pow(centreT, ff.falloff));
+        float profile = ff.mode == 1 ? 1.0f : (ff.falloff == 1.0f ? centreT : pow(abs(centreT), ff.falloff));
 
         float2 dir = dst > 1e-6f ? offset / dst : float2(0, 0);
         float2 perp = float2(-dir.y, dir.x);
@@ -633,7 +633,7 @@ bool DeadZoneInside(GpuDeadZone dz, float2 p)
         if (dz.pointCount < 3) return false;
         return DZPointInPoly(dz.pointStart, dz.pointCount, p);
     }
-    GpuCollider c;
+    GpuCollider c = (GpuCollider)0;
     c.shape = dz.shape; c.center = dz.center; c.size = dz.size; c.rotation = dz.rotation;
     c.radius = dz.radius; c.pointStart = dz.pointStart; c.pointCount = dz.pointCount;
     c.dynamic = 0; c.bodyIndex = -1;
