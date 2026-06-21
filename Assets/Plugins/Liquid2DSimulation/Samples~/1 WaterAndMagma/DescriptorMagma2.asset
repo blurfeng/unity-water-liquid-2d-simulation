@@ -10,30 +10,31 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 4419959a35074fd479d67081a726a448, type: 3}
-  m_Name: WaterDescriptor
+  m_Name: DescriptorMagma2
   m_EditorClassIdentifier: 
-  Radius: 0.3
-  RenderScale: 2
+  Radius: 0.2
+  RenderScale: 1.2
   DefaultLifetime: 0
   RenderSettings:
-    Sprite: {fileID: 21300000, guid: 474aa5d06b976c5449aa374d5c77d9aa, type: 3}
+    Sprite: {fileID: 21300000, guid: d395cef0ea5fee348a6160a686f26c30, type: 3}
     Material: {fileID: 2100000, guid: 7453d47e894769e43b1338caed5ddfeb, type: 2}
-    Color: {r: 0, g: 0.26666668, b: 1, a: 1}
-    NameTag: Water
+    Color: {r: 2.0174966, g: 0.2518134, b: 0, a: 1}
+    NameTag: Magma
   MixSettings:
     MixColors: 0
     MixColorsRadiusRate: 2
     MixColorsSpeed: 0.8
     MixColorsWithMovement: 0
-    MixColorsWithMovementMaxSpeed: 250
+    MixColorsWithMovementMaxSpeed: 100
     MixColorsWhenStationary: 0
     MixColorsWithContactParticlesInternal: 0.1
     MixColorsWithContactParticlesCheckInternal: 0.1
   Material:
-    Mass: 2
-    RestDensityScale: 1
-    Viscosity: 0.01
-    Cohesion: 0.08
-    Friction: 0
+    Mass: 16
+    TargetDensityScale: 1
+    Viscosity: 0.4
+    Cohesion: 0.2
+    Friction: 0.05
     Restitution: 0
     GravityScale: 1
+    Density: 3
