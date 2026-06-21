@@ -465,6 +465,15 @@ namespace Fs.Liquid2D
             // ---- 创建流体阻挡纹理 // Create fluid obstructor texture // 流体阻挡テクスチャを作成 ---- //
             TextureDesc liquidObstructorDesc = mainDesc;
             liquidObstructorDesc.name = GetName("liquid 2d Obstructor");
+            // 必须先清成透明：本纹理是 RenderGraph 池化纹理，若不清会残留上一个 Pass（常是流体粒子图）的内容，
+            // 其 alpha 会被效果 Shader 当成阻挡物画成黑块（且跟随流体运动）。mainDesc.clearBuffer 为背景图保留内容而设为 false，这里需覆盖。
+            // Must clear to transparent: this is a pooled RenderGraph texture; without clearing it retains a previous pass's
+            // content (often the fluid particle texture), whose alpha is treated as an obstructor and drawn black (moving with
+            // the fluid). mainDesc.clearBuffer is false to keep the background's content, so override it here.
+            // 透明にクリアする必要があります：プール化テクスチャのため、クリアしないと前のPass（多くは流体粒子図）の内容が残り、
+            // その alpha が阻害物として黒く描画されます（流体に追従）。mainDesc.clearBuffer は背景保持のため false なのでここで上書きします。
+            liquidObstructorDesc.clearBuffer = true;
+            liquidObstructorDesc.clearColor = Color.clear;
             TextureHandle liquidObstructorTh = renderGraph.CreateTexture(liquidObstructorDesc);
 
             using (var builder = renderGraph.AddRasterRenderPass(GetName("liquid 2d Obstructor"), out PassData passData))
@@ -481,9 +490,9 @@ namespace Fs.Liquid2D
                 builder.UseRendererList(passData.ObstructorRendererListHandle);
                 
                 builder.SetRenderFunc(
-                    (PassData data, RasterGraphContext context) => 
+                    (PassData data, RasterGraphContext context) =>
                     {
-                        // context.cmd.ClearRenderTarget(RTClearFlags.Color, Color.clear, 1, 0);
+                        // 清屏由 liquidObstructorDesc.clearBuffer 处理。 // Clearing is handled by liquidObstructorDesc.clearBuffer. // クリアは liquidObstructorDesc.clearBuffer が処理します。
                         context.cmd.DrawRendererList(data.ObstructorRendererListHandle);
                     }
                 );
@@ -499,6 +508,11 @@ namespace Fs.Liquid2D
             // ---- 创建流体遮挡纹理 // Create fluid occluder texture // 流体オクルーダーテクスチャを作成 ---- //
             TextureDesc liquidOccluderDesc = mainDesc;
             liquidOccluderDesc.name = GetName("liquid 2d Occluder");
+            // 同阻挡纹理：必须先清成透明，否则池化纹理残留内容会被当成遮挡物。
+            // Same as the obstructor texture: must clear to transparent, otherwise pooled residual content is treated as an occluder.
+            // 阻害テクスチャと同様：透明にクリアしないと、プール化テクスチャの残留内容が遮蔽物として扱われます。
+            liquidOccluderDesc.clearBuffer = true;
+            liquidOccluderDesc.clearColor = Color.clear;
             TextureHandle liquidOccluderTh = renderGraph.CreateTexture(liquidOccluderDesc);
             
             bool isHaveOccluder = _occluderFilteringSettings.layerMask != 0;
