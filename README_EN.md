@@ -21,8 +21,8 @@
 </p>
 
 # Liquid 2D Simulation
-Liquid 2D Simulation is a 2D fluid simulation system for `Unity`. It works out of the box and lets you quickly achieve realistic fluid effects.\
-It is powered by a **custom-built fluid particle physics system** (SPH dual-density solver) and **does not rely on Unity's physics system**; with GPU mode it can **easily reach tens of thousands of particles** while staying highly efficient.\
+Liquid 2D Simulation is a 2D fluid simulation system for `Unity`. It works out of the box and lets you quickly achieve realistic fluid effects.  
+It is powered by a **custom-built fluid particle physics system** (SPH dual-density solver) and **does not rely on Unity's physics system**; with GPU mode it can **easily reach tens of thousands of particles** while staying highly efficient.  
 With its rich set of configuration parameters, you can freely create water, lava, oil, foam, sand, and many other fluids with different textures and looks.
 
 ## 🙏 Acknowledgements
@@ -68,12 +68,12 @@ The core algorithm of the fluid physics solver mainly references [SebLague/Fluid
 
 
 ## Introduction
-With this fluid particle system you can quickly simulate 2D fluids, including water, lava, oil, foam, sand, and other media with different textures.\
-The system uses a **custom-built fluid particle solver** (SPH dual-density) and **no longer relies on Unity's physics system**. Particles are pure data with no per-particle GameObject, so it can efficiently simulate large numbers of particles.\
-Solving supports **both CPU and GPU modes**: CPU mode is based on the Job System + Burst; GPU mode uses Compute Shaders with data resident on the GPU, and can **easily reach tens of thousands of particles** while staying efficient (measured at around 22,000 particles still holding roughly 100 FPS in Editor mode).\
-For rendering, the `Render Graph` framework requires only a single main camera and renders the fluid particles via `GPU Instancing`. Compared to the traditional approach of rendering to a separate camera's Render Target, rendering efficiency is greatly improved.\
-The rendering approach produces a fusion effect similar to SDF, expressing the natural look of fluids.\
-In practice, the particle fusion effect is achieved by stacking and clipping the alpha of the particle textures. Compared to a strict SDF method, this achieves a better balance between performance and visual quality, and performance does not degrade as the particle count grows.\
+With this fluid particle system you can quickly simulate 2D fluids, including water, lava, oil, foam, sand, and other media with different textures.  
+The system uses a **custom-built fluid particle solver** (SPH dual-density) and **no longer relies on Unity's physics system**. Particles are pure data with no per-particle GameObject, so it can efficiently simulate large numbers of particles.  
+Solving supports **both CPU and GPU modes**: CPU mode is based on the Job System + Burst; GPU mode uses Compute Shaders with data resident on the GPU, and can **easily reach tens of thousands of particles** while staying efficient (measured at around 22,000 particles still holding roughly 100 FPS in Editor mode).  
+For rendering, the `Render Graph` framework requires only a single main camera and renders the fluid particles via `GPU Instancing`. Compared to the traditional approach of rendering to a separate camera's Render Target, rendering efficiency is greatly improved.  
+The rendering approach produces a fusion effect similar to SDF, expressing the natural look of fluids.  
+In practice, the particle fusion effect is achieved by stacking and clipping the alpha of the particle textures. Compared to a strict SDF method, this achieves a better balance between performance and visual quality, and performance does not degrade as the particle count grows.  
 ![](Documents/mix_1.gif)
 
 ### Features
@@ -95,13 +95,16 @@ In practice, the particle fusion effect is achieved by stacking and clipping the
 - A platform compatible with the shaders
 - GPU solve mode requires platform support for `Compute Shaders`; it automatically falls back to CPU mode when unsupported
 
+### Devices
+Device information used for project development.  
+![](Documents/device.png)
 
 ## 🌳 Branches
 - **main** - The main branch, based on Unity 6.
 - **2022.3** - The Unity 2022.3 branch. If you need to use this system on an older version, check out this branch. It updates more slowly than the main branch.
 
 ## 🌱 Quick Start
-Install the plugin in whatever way you prefer, then you can look at the demo scenes to learn how to use the system.\
+Install the plugin in whatever way you prefer, then you can look at the demo scenes to learn how to use the system.  
 Or follow the steps below one by one.
 ### 1. Install the Plugin
 #### Using UPM
@@ -109,39 +112,39 @@ Or follow the steps below one by one.
 https://github.com/blurfeng/unity-water-liquid-2d-simulation.git?path=Assets/Plugins/Liquid2DSimulation
 ```
 Install the plugin into your project via UPM. If you need the demo scenes, import them as shown below.
-1. Open `Window -> Package Manager`.\
+1. Open `Window -> Package Manager`.  
 ![](Documents/qs_1_1.png)
 
-2. Click the `+` in the top-left corner and select `Install package from git URL...`.\
+2. Click the `+` in the top-left corner and select `Install package from git URL...`.  
 ![](Documents/qs_1_2.png)
 
-3. Paste the URL above and click the `Install` button.\
+3. Paste the URL above and click the `Install` button.  
 ![](Documents/qs_1_3.png)
 
-4. After the installation finishes, you'll see the `Liquid2DSimulation` package under `Packages`. You can import the Samples folder to view the demo scenes.\
+4. After the installation finishes, you'll see the `Liquid2DSimulation` package under `Packages`. You can import the Samples folder to view the demo scenes.  
 ![](Documents/qs_1_4.png)
 
-5. After importing the Samples folder, you'll find the demo scenes under `Assets/Samples/Liquid 2D Simulation/./Samples`.\
+5. After importing the Samples folder, you'll find the demo scenes under `Assets/Samples/Liquid 2D Simulation/./Samples`.  
 ![](Documents/qs_1_5.png)
 
 #### Download Package
-Install the plugin into your project using a package.\
-Download the latest package from the [Releases](https://github.com/blurfeng/unity-water-liquid-2d-simulation/releases) page.\
+Install the plugin into your project using a package.  
+Download the latest package from the [Releases](https://github.com/blurfeng/unity-water-liquid-2d-simulation/releases) page.  
 Then import the package into your project.
 
 > [!TIP]
-> The plugin includes a Samples folder with demo scenes. You can start learning how to use the system directly from there.\
-> Or follow the steps below one by one to add the fluid particle system to your scene.\
+> The plugin includes a Samples folder with demo scenes. You can start learning how to use the system directly from there.  
+> Or follow the steps below one by one to add the fluid particle system to your scene.  
 ![](Documents/qs_2_1.png)
 
 ### 2. Add the Renderer Feature
-The Renderer Feature is already added in the demo scenes.\
-If you want to use this system in your own scene, you need to add the Liquid2D Feature to your current Renderer 2D Data.\
+The Renderer Feature is already added in the demo scenes.  
+If you want to use this system in your own scene, you need to add the Liquid2D Feature to your current Renderer 2D Data.  
 ![](Documents/rf_1.png)
 
 ### 3. Create a Fluid Particle Descriptor
-Fluid particles are defined by a `Liquid2DParticleDescriptor` (a `ScriptableObject`).\
-Right-click in the `Project` window and choose `Create -> Liquid2D -> Particle Descriptor` to create a descriptor asset.\
+Fluid particles are defined by a `Liquid2DParticleDescriptor` (a `ScriptableObject`).  
+Right-click in the `Project` window and choose `Create -> Liquid2D -> Particle Descriptor` to create a descriptor asset.  
 ![](Documents/lp_1.png)
 
 You configure the descriptor's parameters to define the appearance and behavior of the fluid particles:
@@ -154,20 +157,20 @@ You configure the descriptor's parameters to define the appearance and behavior 
 Materials and textures are provided under the plugin's `./Liquid2DSimulation/Resources/Materials/` and `./Liquid2DSimulation/Resources/Textures/` directories, which you can use directly.
 
 ### 4. Create a Particle Spawner
-The particle spawner is responsible for ejecting descriptors into fluid particles at runtime.\
-Create an empty object in the scene and add the `Liquid 2D/Gameplay/Liquid 2D Spawner` component (i.e. `Liquid2DSpawner`).\
-You can also use the `Liquid2DSpawner` prefab under the plugin's `./Liquid2DSimulation/Resources/Prefabs/` directory (located at `Packages/Liquid 2D Simulation/Resources/Prefabs/` when installed via UPM); it's recommended to create a variant from it and then tweak the parameters.\
+The particle spawner is responsible for ejecting descriptors into fluid particles at runtime.  
+Create an empty object in the scene and add the `Liquid 2D/Gameplay/Liquid 2D Spawner` component (i.e. `Liquid2DSpawner`).  
+You can also use the `Liquid2DSpawner` prefab under the plugin's `./Liquid2DSimulation/Resources/Prefabs/` directory (located at `Packages/Liquid 2D Simulation/Resources/Prefabs/` when installed via UPM); it's recommended to create a variant from it and then tweak the parameters.  
 ![](Documents/ls_1.png)
 
-In the `Liquid Particles` list of `Liquid2DSpawner`, add one or more `Liquid2DParticleConfig` entries. Each references a **descriptor** and can specify a **weight** and **lifetime**. When spawning, a descriptor is chosen at random by weight.\
+In the `Liquid Particles` list of `Liquid2DSpawner`, add one or more `Liquid2DParticleConfig` entries. Each references a **descriptor** and can specify a **weight** and **lifetime**. When spawning, a descriptor is chosen at random by weight.  
 For details, see [Particle Spawner Setup Guide](#-particle-spawner-setup-guide).
 
 > [!TIP]
-> At this point, the fluid particle system is already working.\
+> At this point, the fluid particle system is already working.  
 > But you usually also want to: use [Liquid2DCollider](#liquid2dcollider) to block fluid flow, and set up the rendering blocking / occluding layers so the fluid is correctly occluded by scene objects.
 
 ## 🌊 Renderer Feature Setup Guide
-The `Liquid2DFeature` Renderer Feature is used to render the fluid particles and ultimately produce the fluid effect.\
+The `Liquid2DFeature` Renderer Feature is used to render the fluid particles and ultimately produce the fluid effect.  
 The following mainly explains the important features or parameters; for more detailed parameters, check the Tooltips in the Inspector panel.
 
 ### Configure Rendering Layers
@@ -180,97 +183,97 @@ The Liquid Feature uses Rendering Layers to distinguish which objects can block 
 4. On the Liquid2DFeature of the Liquid2DRenderer2D, find `Obstructor Rendering Layer Mask` and select the `LiquidObstructor` layer you just created.
 
 > [!TIP]
-> In the GitHub project, I have the correct Rendering Layer Masks configured.\
-> But when you import the plugin into your project, those Rendering Layers don't exist.\
-> Still, in the demo scenes you'll find that blockers block the fluid particles nicely. This is because the correct Rendering Layer Masks were already configured.\
-> Due to the engine's caching and mechanics, they still work. But in your project, those Rendering Layers don't actually exist.\
-> On the Liquid2DFeature of the demo scene's Liquid2DRenderer2D, the Obstructor Rendering Layer Mask shows as `Unnamed Layer 1`.\
+> In the GitHub project, I have the correct Rendering Layer Masks configured.  
+> But when you import the plugin into your project, those Rendering Layers don't exist.  
+> Still, in the demo scenes you'll find that blockers block the fluid particles nicely. This is because the correct Rendering Layer Masks were already configured.  
+> Due to the engine's caching and mechanics, they still work. But in your project, those Rendering Layers don't actually exist.  
+> On the Liquid2DFeature of the demo scene's Liquid2DRenderer2D, the Obstructor Rendering Layer Mask shows as `Unnamed Layer 1`.  
 > ![](Documents/rl_2.png)
 
 > [!IMPORTANT]
-> The Rendering Layers here only affect the **rendering-level occlusion order** (whether the fluid is drawn in front of or behind objects); they **do not actually block the fluid's flow**.\
+> The Rendering Layers here only affect the **rendering-level occlusion order** (whether the fluid is drawn in front of or behind objects); they **do not actually block the fluid's flow**.  
 > Physically blocking the fluid's flow is done by [Liquid2DCollider](#liquid2dcollider). The two usually need to be used together: use colliders to block the fluid, and use Rendering Layers to make objects correctly occlude or be covered by the fluid.
 
 #### Blocking
-`Blocking` refers to objects that can block the fluid particles at the rendering level, such as baffles, pipes, containers, terrain, etc.\
-You need to configure the layer used for blocking in the `Renderer Feature`'s `ObstructorRenderingLayerMask`.\
+`Blocking` refers to objects that can block the fluid particles at the rendering level, such as baffles, pipes, containers, terrain, etc.  
+You need to configure the layer used for blocking in the `Renderer Feature`'s `ObstructorRenderingLayerMask`.  
 ![](Documents/rl_5.png)
 
-Then, in the `Additional Settings` of the `Sprite Renderer` component of every object in the scene that should block fluid particles, configure the `Rendering Layer Mask`.\
+Then, in the `Additional Settings` of the `Sprite Renderer` component of every object in the scene that should block fluid particles, configure the `Rendering Layer Mask`.  
 ![](Documents/rl_3.png)
 
-Otherwise, you'll find that fluid particles draw over the top of those objects.\
+Otherwise, you'll find that fluid particles draw over the top of those objects.  
 ![](Documents/rl_1.png)
 
-Because the fluid particles are rendered at `RenderPassEvent.AfterRenderingTransparents`, after transparent objects are rendered.\
+Because the fluid particles are rendered at `RenderPassEvent.AfterRenderingTransparents`, after transparent objects are rendered.  
 So if you don't configure the blocking layer correctly, fluid particles will render over both opaque and transparent objects.
 
 #### Occlusion
-`Occlusion` refers to objects that can cover the fluid particles but do not block their flow, such as the front of a glass bottle or the front of terrain.\
-The configuration process for occlusion is similar to blocking.\
-You need to configure the layer used for occlusion in the `Renderer Feature`'s `OccluderRenderingLayerMask`.\
-Then, in the `Additional Settings` of the `Sprite Renderer` component of every object in the scene that should occlude fluid particles, configure the `Rendering Layer Mask`.\
-But occluding objects do not block the fluid particles' flow (via the physics settings); they cover over the top of the fluid particles.\
+`Occlusion` refers to objects that can cover the fluid particles but do not block their flow, such as the front of a glass bottle or the front of terrain.  
+The configuration process for occlusion is similar to blocking.  
+You need to configure the layer used for occlusion in the `Renderer Feature`'s `OccluderRenderingLayerMask`.  
+Then, in the `Additional Settings` of the `Sprite Renderer` component of every object in the scene that should occlude fluid particles, configure the `Rendering Layer Mask`.  
+But occluding objects do not block the fluid particles' flow (via the physics settings); they cover over the top of the fluid particles.  
 ![](Documents/occ_1.gif)
 
 ### Cover Color
 If you set a `Cover Color` and that color's alpha is 1 (here alpha represents cover strength), then this color will completely cover the original color.
 
 ### Opacity
-Through the `Opacity Mode` and `Opacity Value` parameters, you can control the overall opacity of the fluid.\
-Default mode does not change the particles' own transparency. After blurring, the interior color looks more opaque while the edges look more transparent.\
-Multiply mode multiplies the opacity by the particle's own transparency.\
-Replace mode applies the opacity directly to the particles. This also overrides the particle's own transparency as well as the transparency produced by the blur.\
-Using the cover color and opacity settings, you can get a uniform fluid color.\
+Through the `Opacity Mode` and `Opacity Value` parameters, you can control the overall opacity of the fluid.  
+Default mode does not change the particles' own transparency. After blurring, the interior color looks more opaque while the edges look more transparent.  
+Multiply mode multiplies the opacity by the particle's own transparency.  
+Replace mode applies the opacity directly to the particles. This also overrides the particle's own transparency as well as the transparency produced by the blur.  
+Using the cover color and opacity settings, you can get a uniform fluid color.  
 ![](Documents/coverColorAndOpacity_1.png)
 
 ### Blur
-The blur effect makes the fusion between particles more natural.\
-If your particle texture already fuses well on its own, you can turn off the blur to improve performance.\
-The blur's iteration count and offset determine its strength. More iterations and a smaller offset produce a better blur.\
-Because it uses blurring rather than SDF, the particle count does not affect performance.\
+The blur effect makes the fusion between particles more natural.  
+If your particle texture already fuses well on its own, you can turn off the blur to improve performance.  
+The blur's iteration count and offset determine its strength. More iterations and a smaller offset produce a better blur.  
+Because it uses blurring rather than SDF, the particle count does not affect performance.  
 ![](Documents/blur_1.gif)
 #### About Blur and Background
-Because blurring works by sampling and mixing pixels, the background color affects the blur result, ultimately making the fluid edges look close to the background color.\
+Because blurring works by sampling and mixing pixels, the background color affects the blur result, ultimately making the fluid edges look close to the background color.  
 ![](Documents/blur_2.png)
 
-The algorithm can reduce this but cannot fully eliminate it. Therefore, the `blurBgColor` and `blurBgColorIntensity` parameters are provided to adjust the edge color.\
-It's recommended to use a color close to the overall fluid color as the edge color, with intensity set between 0.5 and 0.8 for a more natural result.\
-You can also enable the `ignoreBgColor` parameter to ignore the background color's influence (in practice it cannot be fully ignored), which adds some performance overhead.\
+The algorithm can reduce this but cannot fully eliminate it. Therefore, the `blurBgColor` and `blurBgColorIntensity` parameters are provided to adjust the edge color.  
+It's recommended to use a color close to the overall fluid color as the edge color, with intensity set between 0.5 and 0.8 for a more natural result.  
+You can also enable the `ignoreBgColor` parameter to ignore the background color's influence (in practice it cannot be fully ignored), which adds some performance overhead.  
 If you set a `Cover Color` that fully covers the background color, there will be no fluid edge fusing with the background color, because the particle's own color and the color produced by the blur will be completely covered.
 
 ### Distort
-The distort effect simulates the refraction of the fluid. If the fluid is transparent, you can see the scene behind it being distorted.\
-If the fluid is opaque, you can turn off this effect to improve performance.\
+The distort effect simulates the refraction of the fluid. If the fluid is transparent, you can see the scene behind it being distorted.  
+If the fluid is opaque, you can turn off this effect to improve performance.  
 ![](Documents/distort_1.gif)
 
 ### Edge
-Through the `Edge Intensity` and `Edge Color` parameters, you can control the color and width of the fluid's edge.\
-This can emphasize the fluid's edge to make it more noticeable, simulate a Fresnel edge effect, or create a glowing edge.\
+Through the `Edge Intensity` and `Edge Color` parameters, you can control the color and width of the fluid's edge.  
+This can emphasize the fluid's edge to make it more noticeable, simulate a Fresnel edge effect, or create a glowing edge.  
 ![](Documents/edge_1.gif)
 
 ### Pixel
-By enabling the pixelation effect, you can make the fluid particles appear pixelated.\
-This makes the fluid suitable for pixel-art-style games.\
+By enabling the pixelation effect, you can make the fluid particles appear pixelated.  
+This makes the fluid suitable for pixel-art-style games.  
 ![](Documents/pixel_1.gif)
 #### PixelBg
 PixelBg makes the area covered by the fluid pixelated as well, giving a more unified style.
 
 
 ## 💧 Fluid Particle Setup Guide
-The `Liquid2DParticleDescriptor` descriptor defines all the properties of a category of fluid particle and is the basic building block of the fluid.\
+The `Liquid2DParticleDescriptor` descriptor defines all the properties of a category of fluid particle and is the basic building block of the fluid.  
 The following mainly explains the important features or parameters; for more detailed parameters, check the Tooltips in the Inspector panel.
 
 ### Sprite
-Configuring a suitable Sprite for the fluid particles is very important; it determines the fusion effect of the fluid particles, which ultimately determines the overall visual look of the fluid.\
-The key to the texture lies in the design of its transparency. It's recommended to use an SDF-like texture with high transparency in the center and low transparency at the edges.\
+Configuring a suitable Sprite for the fluid particles is very important; it determines the fusion effect of the fluid particles, which ultimately determines the overall visual look of the fluid.  
+The key to the texture lies in the design of its transparency. It's recommended to use an SDF-like texture with high transparency in the center and low transparency at the edges.  
 If you want softer edges, you can apply a Gaussian blur to the texture. If you want sharper edges, use a hard-edged texture.
 #### Texture Transparency
-The stacking and clipping of transparency between particles is the key to achieving particle fusion.\
-Combined with the blur effect, it can produce a more natural fluid look. Of course, if the texture already fuses well on its own, you can turn off the blur to improve performance.\
-Note that the particle texture doesn't care whether the transparent region extends beyond the texture boundary; extending beyond it actually lets particles fuse sooner.\
-Suppose you use a circular texture whose boundary is transparent; then particles will travel some distance after touching before they start to fuse.\
-But suppose the texture boundary has a transparency of 0.6; then particles will start to fuse as soon as they touch.\
+The stacking and clipping of transparency between particles is the key to achieving particle fusion.  
+Combined with the blur effect, it can produce a more natural fluid look. Of course, if the texture already fuses well on its own, you can turn off the blur to improve performance.  
+Note that the particle texture doesn't care whether the transparent region extends beyond the texture boundary; extending beyond it actually lets particles fuse sooner.  
+Suppose you use a circular texture whose boundary is transparent; then particles will travel some distance after touching before they start to fuse.  
+But suppose the texture boundary has a transparency of 0.6; then particles will start to fuse as soon as they touch.  
 ![](Documents/sp_1.png)
 
 ### Particle Size and Rendering
@@ -278,12 +281,12 @@ In the pure-data model, fluid particles **no longer use Unity colliders**. The s
 - `Radius`: The **physical radius** (world units). It determines the physical spacing between particles, the neighbor-search range, and the packing density, and is the fundamental scale of the SPH solve.
 - `RenderScale`: The **render multiplier**. The visual diameter drawn = `Radius × 2 × RenderScale`.
 
-`RenderScale` is usually set much larger than the physical radius (default 4), so that adjacent particles' textures overlap substantially, producing a smooth metaball fusion effect.\
-If the visual size is too small, you'll see gaps between particles; too large, and the fluid will look overly "gloopy." Adjust it together with the Sprite's transparency design to tune the fusion feel.\
+`RenderScale` is usually set much larger than the physical radius (default 4), so that adjacent particles' textures overlap substantially, producing a smooth metaball fusion effect.  
+If the visual size is too small, you'll see gaps between particles; too large, and the fluid will look overly "gloopy." Adjust it together with the Sprite's transparency design to tune the fusion feel.  
 ![](Documents/co_1.png)
 
 ### Material (Physics)
-The `Material` (`Liquid2DParticleMaterial`) on the descriptor defines the physical behavior of this category of particle. By differentiating the parameters, you can simulate water, lava, foam, sand, and other different media.\
+The `Material` (`Liquid2DParticleMaterial`) on the descriptor defines the physical behavior of this category of particle. By differentiating the parameters, you can simulate water, lava, foam, sand, and other different media.  
 Key parameters (for more details, see the Inspector Tooltips):
 - `Mass`: Mass. Affects the response to forces and the initial ejection speed (initial speed = impulse / mass).
 - `Viscosity`: Viscosity. The larger it is, the thicker and slower-flowing the fluid. Low for water, high for lava.
@@ -294,12 +297,12 @@ Key parameters (for more details, see the Inspector Tooltips):
 - `Density`: The fluid's mass density, **used specifically for Archimedean buoyancy comparison** (an object floats if its density is less than this value). Independent of the packing density.
 - `TargetDensityScale` / `NearPressureMultiplierScale`: Scale the global target density and near-pressure respectively, used to fine-tune a single category of particle's packing tightness and short-range repulsion.
 
-The material has several built-in presets — **Water / Lava / Foam / Sand** — which can serve as a starting point for further tweaking: water has low viscosity and low tension; lava has high viscosity, high mass, and high density; foam has high tension, low gravity or even floats; sand has high friction and zero tension.\
+The material has several built-in presets — **Water / Lava / Foam / Sand** — which can serve as a starting point for further tweaking: water has low viscosity and low tension; lava has high viscosity, high mass, and high density; foam has high tension, low gravity or even floats; sand has high friction and zero tension.  
 ![](Documents/pm_1.png)
 
 ### Mix Colors
-By enabling `Mix Colors` in the descriptor's `MixSettings`, you can let fluid particles of different colors mix their colors.\
-Both particles must have `Mix Colors` enabled to mix when they meet and change their own colors.\
+By enabling `Mix Colors` in the descriptor's `MixSettings`, you can let fluid particles of different colors mix their colors.  
+Both particles must have `Mix Colors` enabled to mix when they meet and change their own colors.  
 ![](Documents/mc_1.gif)
 
 Depending on the configuration, you can control the mixing speed and other behaviors:
@@ -309,7 +312,7 @@ Depending on the configuration, you can control the mixing speed and other behav
 
 ![](Documents/mc_2.png)
 
-> Color mixing is done by the **solver's internal neighbor query** (i.e. reusing the spatial structure already built by the SPH to mix colors between adjacent particles), and **no longer relies on Unity's physics engine contact callbacks**, so there's no longer any need to enable `Reuse Collision Callbacks`.\
+> Color mixing is done by the **solver's internal neighbor query** (i.e. reusing the spatial structure already built by the SPH to mix colors between adjacent particles), and **no longer relies on Unity's physics engine contact callbacks**, so there's no longer any need to enable `Reuse Collision Callbacks`.  
 > The color algorithm used for mixing is controlled globally by `Liquid2DPhysicsConfig`'s `ColorMixMode`, with three options:
 > - `Oklab` (default): Mixing in a perceptually uniform color space, with natural color transitions.
 > - `Ryb`: RYB pigment color-wheel mixing (blue + yellow = green), simulating real pigments.
@@ -325,19 +328,19 @@ On objects that need to block fluid, such as baffles, pipes, containers, and ter
 - `Liquid2DCapsuleCollider`: A capsule, with the fields `length` and `radius`.
 - `Liquid2DPolygonCollider`: A polygon, with the fields `points` and `closed`. `closed = true` is a solid convex polygon; `closed = false` is a double-sided thin-wall polyline, suitable for complex terrain.
 
-The collider's size is affected by the object's scale, and the collider follows when the object moves / rotates.\
-Additionally, `Liquid2DEdgeCollider` / `Liquid2DCustomCollider` / `Liquid2DMeshCollider`, etc. are provided, which can bridge existing Unity collider shapes such as `EdgeCollider2D` / `CustomCollider2D`.\
+The collider's size is affected by the object's scale, and the collider follows when the object moves / rotates.  
+Additionally, `Liquid2DEdgeCollider` / `Liquid2DCustomCollider` / `Liquid2DMeshCollider`, etc. are provided, which can bridge existing Unity collider shapes such as `EdgeCollider2D` / `CustomCollider2D`.  
 ![](Documents/collider_1.png)
 
 > [!TIP]
-> Each collider has an optional `nameTag`: when left empty it applies to **all** particles; when filled in it **only blocks the particle group matching that tag**.\
+> Each collider has an optional `nameTag`: when left empty it applies to **all** particles; when filled in it **only blocks the particle group matching that tag**.  
 > This lets you create effects like "certain fluids can pass through certain objects."
 
 ## 🤝 Two-Way Coupling (Fluid ↔ Rigidbody)
 Fluid can not only be blocked by scene objects but can in turn push the `Rigidbody2D` in the scene, achieving two-way interactions such as wash-away and floating.
 
 ### Liquid2DRigidbodyBridge Component
-On an object with a `Rigidbody2D`, attach a `Liquid2DCollider` (any shape) and a `Liquid2DRigidbodyBridge` component, and that collider becomes a **dynamic collider** that bridges the reaction force applied by the fluid to the rigidbody.\
+On an object with a `Rigidbody2D`, attach a `Liquid2DCollider` (any shape) and a `Liquid2DRigidbodyBridge` component, and that collider becomes a **dynamic collider** that bridges the reaction force applied by the fluid to the rigidbody.  
 ![](Documents/coupling_1.gif)
 
 Main parameters:
@@ -352,12 +355,12 @@ Main parameters:
   - `submergedLinearDrag` / `submergedAngularDrag`: The linear / angular damping when submerged.
 
 > [!TIP]
-> Buoyancy only counts fluid particles in contact **below** the object, to avoid fluid on top "launching" a light object away.\
+> Buoyancy only counts fluid particles in contact **below** the object, to avoid fluid on top "launching" a light object away.  
 > The object's density (`Rigidbody2D`'s mass / volume) compared with the fluid material's `Density` determines whether it floats or sinks.
 
 ## 🧲 Force Fields
-A force field can apply an additional force to fluid particles within its range, used to create attractors, repellers, vortices, drains, and similar effects.\
-Add the `Liquid 2D/Physics/Force Fields/Liquid 2D Radial Force Field` component (`Liquid2DRadialForceField`), which acts continuously centered on the object's position.\
+A force field can apply an additional force to fluid particles within its range, used to create attractors, repellers, vortices, drains, and similar effects.  
+Add the `Liquid 2D/Physics/Force Fields/Liquid 2D Radial Force Field` component (`Liquid2DRadialForceField`), which acts continuously centered on the object's position.  
 ![](Documents/forcefield_1.gif)
 
 Main parameters:
@@ -373,7 +376,7 @@ Main parameters:
 > The plugin also provides `Liquid2DMouseInteractor`, a subclass of the force field that can attract / repel fluid in real time with the mouse, convenient for debugging and interaction.
 
 ## 💀 Dead Zones and Boundaries
-Use the `Liquid 2D/Gameplay/Liquid 2D Dead Zone` component (`Liquid2DDeadZone`) to mark out a region in the scene to **recycle particles**, replacing the old Unity physics trigger approach and preventing particles that flow off-screen from piling up indefinitely.\
+Use the `Liquid 2D/Gameplay/Liquid 2D Dead Zone` component (`Liquid2DDeadZone`) to mark out a region in the scene to **recycle particles**, replacing the old Unity physics trigger approach and preventing particles that flow off-screen from piling up indefinitely.  
 Main parameters:
 - `shape`: The region shape (Box / Circle / Capsule / Polygon), with `size` / `radius` / `length` / `points`.
 - `boundsMode`: `false` destroys particles that **enter** the region; `true` destroys particles that **leave** the region (outside it), which can be used as an active boundary.
@@ -382,7 +385,7 @@ Main parameters:
 Additionally, a `Liquid2DBounds` collider is provided, which can be used as a closed boundary to keep fluid within a certain range.
 
 ## ⛲ Particle Spawner Setup Guide
-The `Liquid2DSpawner` particle spawner is used to generate fluid particles, similar to a water pipe or fountain.\
+The `Liquid2DSpawner` particle spawner is used to generate fluid particles, similar to a water pipe or fountain.  
 The following mainly explains the important features or parameters; for more detailed parameters, check the Tooltips in the Inspector panel.
 
 ### Controlling Ejection
@@ -393,13 +396,13 @@ Through the parameters you can control the flow and force of the ejected particl
 - `sizeRandomRange`: The random range of particle size.
 
 #### Spawn Particle Descriptor List
-You can configure multiple `Liquid2DParticleConfig` entries in `Liquid Particles`, each containing a **descriptor**, a **weight**, and an optional **lifetime** override. Each time a particle is spawned, a descriptor is chosen at random according to the weights.\
+You can configure multiple `Liquid2DParticleConfig` entries in `Liquid Particles`, each containing a **descriptor**, a **weight**, and an optional **lifetime** override. Each time a particle is spawned, a descriptor is chosen at random according to the weights.  
 ![](Documents/ls_2.png)
 
-This lets you use more diverse particles to simulate more complex fluids, such as lava. They are usually a non-uniform mix of red, orange, and yellow particles.\
+This lets you use more diverse particles to simulate more complex fluids, such as lava. They are usually a non-uniform mix of red, orange, and yellow particles.  
 ![](Documents/ls_3.gif)
 
-As for tips on configuring lava, here I set `Cutoff` to 0.14 so that the fluid retains more of the low-transparency parts.\
+As for tips on configuring lava, here I set `Cutoff` to 0.14 so that the fluid retains more of the low-transparency parts.  
 Then enable the `Distort` effect. This way you'll see the near-transparent parts of the lava fluid's edges refract and distort the background, similar to a steaming-hot effect.
 
 ### Swing and Path Movement
@@ -412,7 +415,7 @@ To simulate a moving water pipe / fountain, the spawner supports nozzle swing an
 The following measures help you get the best performance at different scales.
 
 ### Liquid2DPhysicsConfig Component
-The `Liquid2DPhysicsConfig` component (menu `Liquid 2D/Systems/Liquid 2D Physics Config`) centrally manages the solver's global parameters, solve mode, particle cap, physics step, and more, and applies them automatically on `Awake`. Just attach it to any persistent object in the scene.\
+The `Liquid2DPhysicsConfig` component (menu `Liquid 2D/Systems/Liquid 2D Physics Config`) centrally manages the solver's global parameters, solve mode, particle cap, physics step, and more, and applies them automatically on `Awake`. Just attach it to any persistent object in the scene.  
 For more detailed parameter explanations, see the Inspector Tooltip of each field.
 
 ### Choosing CPU / GPU Solve Mode
@@ -421,8 +424,8 @@ The component's `Mode` field decides the solve platform. **Unless you have a cle
 - **CPU mode**: Driven by the Job System + Burst, suitable for platforms that truly cannot use Compute Shaders, or debugging scenarios where you need to reliably read CPU-side particle data.
 
 > [!WARNING]
-> In GPU mode, particle data is resident on the GPU and the **CPU-side data is stale by default**, so functions based on CPU data such as `GetPosition` / `GetVelocity` / debug Gizmos are unreliable.\
-> If you really need to read this data in GPU mode, you can enable `GpuReadbackToStore`, but this incurs a **synchronous GPU→CPU stall** with significant overhead, so **keep it off in production**.\
+> In GPU mode, particle data is resident on the GPU and the **CPU-side data is stale by default**, so functions based on CPU data such as `GetPosition` / `GetVelocity` / debug Gizmos are unreliable.  
+> If you really need to read this data in GPU mode, you can enable `GpuReadbackToStore`, but this incurs a **synchronous GPU→CPU stall** with significant overhead, so **keep it off in production**.  
 > Rendering (the Renderer Feature) reads the GPU buffers directly and is unaffected by this.
 
 ### Particle Count and Key Tuning

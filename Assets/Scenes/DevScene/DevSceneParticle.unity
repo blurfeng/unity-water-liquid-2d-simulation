@@ -1357,7 +1357,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DMouseInteractor
   nameTag: 
   radius: 2
-  strength: 100
+  strength: 200
   velocityDamping: 1
   swirlStrength: 0
   gravityAttenuation: 1
