@@ -296,7 +296,7 @@ namespace Fs.Liquid2D
             int bodyCount = math.max(1, _dynamicReceivers.Count);
             var velSum = new NativeArray<float2>(bodyCount, Allocator.TempJob, NativeArrayOptions.ClearMemory);
             var contact = new NativeArray<float4>(bodyCount, Allocator.TempJob, NativeArrayOptions.ClearMemory);
-            var buoyancy = new NativeArray<float2>(bodyCount, Allocator.TempJob, NativeArrayOptions.ClearMemory);
+            var buoyancy = new NativeArray<float4>(bodyCount, Allocator.TempJob, NativeArrayOptions.ClearMemory);
             var forceFields = Liquid2DForceFieldRegistry.BuildBuffer(Allocator.TempJob, GetGroup);
 
             // 销毁区域：扁平化为缓冲，并分配按 active 索引的 killFlags（求解器置位，Step 后回收 slot）。
@@ -403,7 +403,7 @@ namespace Fs.Liquid2D
         // contactCount, for relative-velocity drag; with no contact there is no buoyancy/drag, so skip. Buoyancy uses the
         // separate "below contacts" so particles resting on top don't create spurious lift.
         // 本フレームの接触サンプルを Liquid2DBodyForce にまとめ各動的体へ派遣。浮力は「下方接触」で別集計し、上に乗る粒子の偽浮力を防ぐ。
-        private void DispatchBodyForces(NativeArray<float2> velSum, NativeArray<float4> contact, NativeArray<float2> buoyancy, float dt)
+        private void DispatchBodyForces(NativeArray<float2> velSum, NativeArray<float4> contact, NativeArray<float4> buoyancy, float dt)
         {
             for (int b = 0; b < _dynamicReceivers.Count && b < velSum.Length; b++)
             {
@@ -419,12 +419,13 @@ namespace Fs.Liquid2D
                 float2 center = new float2(con.x, con.y) * invCount;
                 float fluidDensity = con.w * invCount;
 
-                // 浮力专用：仅物体下方接触（n.y<0）参与，避免压在顶部的粒子产生虚假上浮。x=下方接触数，y=下方密度和 → 平均密度=y/x。
-                // Buoyancy-only: only contacts below the body (n.y<0) participate. x=below-count, y=below-density-sum → avg = y/x.
-                // 浮力専用：物体下方の接触（n.y<0）のみ。x=下方接触数、y=下方密度和 → 平均=y/x。
-                float2 buoy = b < buoyancy.Length ? buoyancy[b] : float2.zero;
+                // 浮力累积：x=浮力接触数，y=浮力接触密度和，z=浮力接触排开体积和（Σπr²）。平均密度=y/x。
+                // Push 用 x（下方接触数）估算浸没比例，Submerge 用 z（真实排开体积）估算，二者由接收者按碰撞模式选择。
+                // Buoyancy accum: x=count, y=density sum, z=displaced area sum (Σπr²). Avg density=y/x. Push uses x, Submerge uses z; receiver picks by mode.
+                // 浮力累積：x=接触数、y=密度和、z=排除面積和。平均密度=y/x。Push は x、Submerge は z を使用。
+                float4 buoy = b < buoyancy.Length ? buoyancy[b] : float4.zero;
                 int buoyancyCount = (int)buoy.x;
-                float buoyancyDensity = buoyancyCount > 0 ? buoy.y / buoyancyCount : 0f;
+                float buoyancyDensity = buoy.x > 1e-6f ? buoy.y / buoy.x : 0f;
 
                 r.ApplyLiquidForces(new Liquid2DBodyForce
                 {
@@ -434,6 +435,8 @@ namespace Fs.Liquid2D
                     FluidDensity = fluidDensity,
                     BuoyancyContactCount = buoyancyCount,
                     BuoyancyFluidDensity = buoyancyDensity,
+                    BuoyancySubmergedVolume = buoy.z,
+                    ShellCoverageVolume = buoy.w,
                     Dt = dt,
                 });
             }

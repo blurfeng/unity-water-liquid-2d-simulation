@@ -60,10 +60,10 @@ namespace Fs.Liquid2D
         private float fullSubmersionContacts = 12f;
 
         [SerializeField, Min(0f), LocalizationTooltip(
-             "浸没线性阻尼。物体接触流体时按此系数衰减线速度，消除抖动、实现稳定漂浮。",
-             "Submerged linear drag. Damps linear velocity by this coefficient while contacting fluid; removes jitter for stable floating.",
-             "浸水時の線形減衰。流体接触中に線速度を減衰し、安定浮遊。")]
-        private float submergedLinearDrag = 1f;
+             "浸没线性阻尼。物体接触流体时按此系数衰减线速度，消除抖动、实现稳定漂浮。覆盖模式漂浮物建议 2~4 以加快收敛、避免上下弹跳。",
+             "Submerged linear drag. Damps linear velocity by this coefficient while contacting fluid; removes jitter for stable floating. For floating bodies in Submerge mode, 2~4 is recommended to converge faster and avoid bobbing.",
+             "浸水時の線形減衰。流体接触中に線速度を減衰し、安定浮遊。水没モードの浮体は 2~4 推奨（収束を速め弾みを防ぐ）。")]
+        private float submergedLinearDrag = 2f;
 
         [SerializeField, Min(0f), LocalizationTooltip(
              "浸没角阻尼。物体接触流体时按此系数衰减角速度，抑制旋转抖动。",
@@ -71,8 +71,15 @@ namespace Fs.Liquid2D
              "浸水時の角減衰。流体接触中に角速度を減衰し、回転の振動を抑えます。")]
         private float submergedAngularDrag = 1f;
 
+        [SerializeField, Range(0f, 1f), LocalizationTooltip(
+             "覆盖模式浸没死区（覆盖率阈值）。物体被流体覆盖的真实面积比例低于此值时，视为「不在流体中」，跳过全部流体力（浮力/阻力/阻尼）→ 在空中擦过零散流体粒子时仍直接自由下落，不被稀疏接触拖慢。需小于你想漂浮的最低密度物体的浸没比例（如想浮起密度 0.1 的物体则须 < 0.1）。",
+             "Submerge-mode submersion deadzone (coverage threshold). When the true covered-area fraction is below this, the body is treated as 'not in fluid' and all fluid forces (buoyancy/drag/damping) are skipped → it still free-falls through scattered fluid particles in the air, not slowed by sparse contact. Keep it below the submerged fraction of the lightest body you want to float (e.g. < 0.1 to float a density-0.1 body).",
+             "水没モードの浸水デッドゾーン（被覆率閾値）。実被覆面積比がこれ未満なら「流体外」とみなし全流体力（浮力/抗力/減衰）をスキップ → 空中で散在粒子を擦っても自由落下。浮かせたい最軽量物体の浸水率より小さく設定（密度0.1を浮かすなら<0.1）。")]
+        private float submergeForceDeadzone = 0.05f;
+
         private Rigidbody2D _rb;
         private float _autoVolume = -1f; // 懒计算缓存（<0 表示未算）。 // lazy cache (<0 = not computed). // 遅延キャッシュ。
+        private int _isSubmerge = -1;    // 子碰撞器是否含淹没模式：-1 未判定，0 否，1 是。 // whether child colliders use Submerge: -1 unknown, 0 no, 1 yes. // 子コライダーが水没モードか。
 
         // 复用的托管暂存（仅自动体积计算用，一次性）。 // Reused scratch for auto-volume (one-shot). // 自動体積用スクラッチ。
         private static readonly List<Liquid2DColliderData> _areaData = new List<Liquid2DColliderData>(8);
@@ -89,6 +96,29 @@ namespace Fs.Liquid2D
             if (bodyVolume > 0f) return bodyVolume;
             if (_autoVolume < 0f) _autoVolume = ComputeAutoVolume();
             return _autoVolume;
+        }
+
+        /// <summary>
+        /// 子碰撞器是否含淹没（Submerge）模式（任一即视为是，缓存）。淹没模式按真实排开体积估算浮力浸没比例，避免浅浸即饱和导致弹跳。
+        /// Whether any child collider uses Submerge mode (cached). Submerge estimates the buoyancy submerged fraction by true
+        /// displaced volume, avoiding the bobbing caused by count-based early saturation.
+        /// 子コライダーが水没モードを含むか（キャッシュ）。水没は真の排除体積で浮力浸水率を推定し、弾みを防ぐ。
+        /// </summary>
+        private bool IsSubmergeBody
+        {
+            get
+            {
+                if (_isSubmerge < 0)
+                {
+                    _isSubmerge = 0;
+                    var cols = GetComponentsInChildren<Liquid2DCollider>(true);
+                    for (int i = 0; i < cols.Length; i++)
+                    {
+                        if (cols[i] && cols[i].ColliderMode == Liquid2DColliderMode.Submerge) { _isSubmerge = 1; break; }
+                    }
+                }
+                return _isSubmerge == 1;
+            }
         }
 
         /// <summary>物体密度（mass / 体积），用于与流体密度比较决定沉浮。 // Body density (mass/volume). // 物体密度。</summary>
@@ -134,7 +164,46 @@ namespace Fs.Liquid2D
             // particles below lift the body), so particles resting on top don't create spurious lift.
             // 浸水率。抗力/減衰は全方向接触、浮力は下方接触のみ（上に乗る粒子の偽浮力を防ぐ）。
             float submerged = fullSubmersionContacts > 0f ? Mathf.Clamp01(force.ContactCount / fullSubmersionContacts) : 1f;
-            float submergedBuoyancy = fullSubmersionContacts > 0f ? Mathf.Clamp01(force.BuoyancyContactCount / fullSubmersionContacts) : 1f;
+            // 浮力浸没比例：Push 用下方接触数 / fullSubmersionContacts；Submerge 物体被流体包裹，用真实排开体积 / 物体体积，
+            // 使浮力随浸入深度线性变化（在密度对应深度处稳定平衡），避免按接触数估算时浅浸即饱和而上下弹跳。
+            // Buoyancy submerged fraction: Push uses below-contacts / fullSubmersionContacts; Submerge (enveloped body) uses true
+            // displaced volume / bodyVolume, so buoyancy scales linearly with depth (stable equilibrium at the density-matched depth),
+            // avoiding the bobbing caused by count-based early saturation.
+            // 浮力浸水率：Push は下方接触数、Submerge は真の排除体積 / 体積（深さに比例、安定平衡）。
+            float submergedBuoyancy;
+            if (IsSubmergeBody)
+            {
+                float vol = EffectiveVolume();
+                submergedBuoyancy = vol > 1e-6f ? Mathf.Clamp01(force.BuoyancySubmergedVolume / vol) : 0f;
+            }
+            else
+            {
+                submergedBuoyancy = fullSubmersionContacts > 0f ? Mathf.Clamp01(force.BuoyancyContactCount / fullSubmersionContacts) : 1f;
+            }
+
+            // drag/阻尼缩放比例。Push 用全向接触数比例；Submerge 用「壳层覆盖率」= 表面外壳层带覆盖面积 / 物体体积——
+            // 只有物体真正被流体包住时壳层才饱满（drag/阻尼正常），空中擦过零散粒子壳层稀疏 → drag/阻尼≈0 → 物体直接自由下落。
+            // 这比按浮力(内部覆盖)缩放更准：物体从空中刚触到水面/落入流体块时，下方内部覆盖会先升高，但四周壳层尚未饱满 → 不会过早受阻。
+            // Drag/damping scale. Push uses the all-direction contact-count fraction; Submerge uses the "shell coverage" = outer-shell band area / body volume —
+            // the shell is full only when the body is truly enveloped (normal drag/damping); grazing scattered particles in the air → sparse shell → ~0 drag/damping → free fall.
+            // This is sharper than scaling by buoyancy (interior coverage): entering fluid from above, interior-below coverage rises first but the surrounding shell isn't full yet → no premature resistance.
+            // drag/減衰スケール。Push は全方向接触数比、Submerge は殻層被覆率（外殻層面積 / 体積）。真に包まれた時のみ殻層が満ちる→空中の疎な接触では抗力≈0→自由落下。
+            float forceScale;
+            if (IsSubmergeBody)
+            {
+                float vol = EffectiveVolume();
+                forceScale = vol > 1e-6f ? Mathf.Clamp01(force.ShellCoverageVolume / vol) : 0f;
+            }
+            else
+            {
+                forceScale = submerged;
+            }
+
+            // 覆盖模式浸没死区：真实覆盖率低于阈值时视为「不在流体中」，跳过全部流体力 → 空中擦过零散粒子仍纯自由落体（A+B 中的 B）。
+            // Submerge submersion deadzone: below the coverage threshold, treat as 'not in fluid' and skip all fluid forces → crisp free fall
+            // through scattered particles in the air (the B in A+B).
+            // 水没デッドゾーン：被覆率が閾値未満なら全流体力をスキップ → 純自由落下。
+            if (IsSubmergeBody && submergedBuoyancy < submergeForceDeadzone) return;
 
             // 施力点：默认质心（只平移不旋转）；applyTorque 时用接触质心（来流偏置一侧 → 力矩，物体翻转/摇摆）。
             // Application point: center of mass by default (translate only); contact centroid when applyTorque (off-center flow → torque).
@@ -152,7 +221,7 @@ namespace Fs.Liquid2D
             // 押し流し = 相対速度抗力：F = 係数 · 浸水率 · (流体速度 − 物体速度)。静止流体で 0、速い流れで押し流す。自己制限的で安定。
             Vector2 fluidVel = new Vector2(force.FluidVelocity.x, force.FluidVelocity.y);
             Vector2 bodyVel = _rb.GetPointVelocity(applyPoint);
-            Vector2 dragForce = dragCoefficient * submerged * (fluidVel - bodyVel);
+            Vector2 dragForce = dragCoefficient * forceScale * (fluidVel - bodyVel);
 
             // 安全钳制：限制单步速度变化（力·dt/质量 ≤ maxSpeedChange），防止偶发尖峰。 // Safety clamp on per-step Δv. // 安全制限。
             if (maxSpeedChange > 0f)
@@ -176,11 +245,17 @@ namespace Fs.Liquid2D
                 if (buoyForce > 0f) _rb.AddForce(up * buoyForce, ForceMode2D.Force);
             }
 
-            // 浸没附加阻尼：在相对速度阻力之外再消除残余抖动、稳定漂浮（不需要可设 0）。按浸没比例缩放。
-            // Extra submerged damping on top of drag to kill residual jitter for stable floating (set 0 if undesired). Scaled by submersion.
-            // 浸水附加減衰：残余の振動を消し安定浮遊（不要なら 0）。浸水率でスケール。
-            if (submergedLinearDrag > 0f) _rb.linearVelocity *= Mathf.Clamp01(1f - submergedLinearDrag * submerged * dt);
-            if (submergedAngularDrag > 0f) _rb.angularVelocity *= Mathf.Clamp01(1f - submergedAngularDrag * submerged * dt);
+            // 浸没附加阻尼（漂浮主稳定器）：消除残余抖动、稳定漂浮。按浸没比例缩放——Submerge 模式用「内部覆盖」浸没比例 submergedBuoyancy
+            // （与浮力同源，部分覆盖阻尼小、完全覆盖阻尼满），这是上一轮调稳漂浮的关键，故阻尼仍用内部覆盖、不改用壳层覆盖，避免漂浮重新抖动；
+            // 空中由死区门控（submergedBuoyancy<死区直接 return）保证不施加。Push 模式仍按全向接触数。
+            // Extra submerged damping (floating's primary stabilizer): kills residual jitter for stable floating. Scaled by submersion — Submerge uses the
+            // "interior coverage" fraction submergedBuoyancy (same source as buoyancy; small when partially covered, full when fully covered). This was the key to
+            // the floating stability tuned earlier, so damping stays on interior coverage (NOT shell) to avoid re-introducing bobbing; in the air the deadzone
+            // (return when submergedBuoyancy < deadzone) already prevents it. Push still scales by all-direction contact count.
+            // 浸水附加減衰（浮遊の主安定器）：Submerge は内部被覆 submergedBuoyancy でスケール（殻層ではない、浮遊安定維持）。空中はデッドゾーンで抑止。Push は全方向接触数。
+            float dampScale = IsSubmergeBody ? submergedBuoyancy : submerged;
+            if (submergedLinearDrag > 0f) _rb.linearVelocity *= Mathf.Clamp01(1f - submergedLinearDrag * dampScale * dt);
+            if (submergedAngularDrag > 0f) _rb.angularVelocity *= Mathf.Clamp01(1f - submergedAngularDrag * dampScale * dt);
         }
     }
 }

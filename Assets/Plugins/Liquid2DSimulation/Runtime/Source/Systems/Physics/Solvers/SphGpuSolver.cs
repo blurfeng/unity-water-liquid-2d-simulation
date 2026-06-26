@@ -88,8 +88,11 @@ namespace Fs.Liquid2D
         private ComputeBuffer _bodyAccum;
 
         // 合并累积缓冲的通道布局（与 shader 顶部 ACCUM_* 宏一致）。 // Channel layout of the merged buffer (matches shader ACCUM_* macros). // 統合バッファのチャンネル配置。
-        private const int _accumStride = 8;
-        private const int _accumVelX = 0, _accumVelY = 1, _accumContact = 2, _accumCentX = 3, _accumCentY = 4, _accumDensity = 5, _accumBuoyN = 6, _accumBuoyDensity = 7;
+        private const int _accumStride = 10;
+        private const int _accumVelX = 0, _accumVelY = 1, _accumContact = 2, _accumCentX = 3, _accumCentY = 4, _accumDensity = 5, _accumBuoyN = 6, _accumBuoyDensity = 7, _accumBuoyVolume = 8, _accumShellVolume = 9;
+
+        // 每动态体「上一帧壳层接触数」（ClearImpulse 快照、IntegrateCollide 读取做物体级在水门控）。常驻显存、无回读。 // Per-body last-frame shell contact count for the in-water gate (snapshot in ClearImpulse, read in IntegrateCollide). GPU-resident, no readback. // 前フレーム殻層接触数（in-water ゲート用）。
+        private ComputeBuffer _bodyInWater;
         private ComputeBuffer _deadZones, _deadZonePoints;
         // 生成上传（仅动态状态；静态属性由 store 整块 SetData）。 // spawn upload (dynamic only). // 生成アップロード。
         private ComputeBuffer _upSlots, _upPos, _upVel, _upColor;
@@ -438,8 +441,9 @@ namespace Fs.Liquid2D
         private void EnsureAuxBuffers(int numTypes, int numColliders, int numPoints, int numBodies, int numForceFields)
         {
             Ensure(ref _materials, numTypes, 36); Ensure(ref _mixDatas, numTypes, 20);
-            Ensure(ref _colliders, Mathf.Max(1, numColliders), 52); Ensure(ref _points, Mathf.Max(1, numPoints), 8);
+            Ensure(ref _colliders, Mathf.Max(1, numColliders), 84); Ensure(ref _points, Mathf.Max(1, numPoints), 8);
             Ensure(ref _bodyAccum, numBodies * _accumStride, 4);
+            Ensure(ref _bodyInWater, numBodies, 4);
             Ensure(ref _forceFields, Mathf.Max(1, numForceFields), 44);
         }
         private void EnsureUploadBuffers(int n)
@@ -509,6 +513,7 @@ namespace Fs.Liquid2D
             Bind("ActiveIndices", _active); Bind("Materials", _materials); Bind("MixDatas", _mixDatas);
             Bind("Colliders", _colliders); Bind("ColliderPoints", _points);
             Bind("BodyAccum", _bodyAccum);
+            Bind("BodyInWater", _bodyInWater);
             Bind("ForceFields", _forceFields);
             Bind("DeadZones", _deadZones); Bind("DeadZonePoints", _deadZonePoints); Bind("KillFlags", _killFlags);
             Bind("BucketOf", _bucketOf); Bind("Counts", _counts); Bind("CellStart", _cellStart);
@@ -564,9 +569,12 @@ namespace Fs.Liquid2D
                 if (contactOut.IsCreated && b < contactOut.Length)
                     contactOut[b] += new float4(_accumA[ab + _accumCentX] / ImpulseScale, _accumA[ab + _accumCentY] / ImpulseScale,
                         _accumA[ab + _accumContact], _accumA[ab + _accumDensity] / ImpulseScale);
-                // 浮力专用：x=下方接触数（n.y<0），y=下方接触流体密度之和。 // Buoyancy-only: x=below-count, y=sum below-density. // 浮力専用。
+                // 浮力 + 壳层覆盖：x=浮力接触数，y=浮力接触流体密度之和，z=浮力排开体积之和（Σ4r²，内部覆盖），w=壳层覆盖体积之和（Σ4r²，drag/阻尼缩放用）。
+                // Buoyancy + shell coverage: x=count, y=sum density, z=Σ4r² (interior, buoyancy), w=Σ4r² (shell, drag/damping scale).
+                // 浮力 + 殻層被覆：x=接触数、y=密度和、z=内部排除体積、w=殻層被覆体積。
                 if (buoyOut.IsCreated && b < buoyOut.Length)
-                    buoyOut[b] += new float2(_accumA[ab + _accumBuoyN], _accumA[ab + _accumBuoyDensity] / ImpulseScale);
+                    buoyOut[b] += new float4(_accumA[ab + _accumBuoyN], _accumA[ab + _accumBuoyDensity] / ImpulseScale,
+                        _accumA[ab + _accumBuoyVolume] / ImpulseScale, _accumA[ab + _accumShellVolume] / ImpulseScale);
             }
         }
 
@@ -632,7 +640,7 @@ namespace Fs.Liquid2D
             R(_radii); R(_invMass); R(_typeId); R(_groupId);
             R(_active); R(_bucketOf); R(_sortedSlots); R(_killFlags); R(_counts); R(_cellStart); R(_cursor);
             R(_materials); R(_mixDatas); R(_colliders); R(_points); R(_forceFields);
-            R(_bodyAccum);
+            R(_bodyAccum); R(_bodyInWater);
             R(_deadZones); R(_deadZonePoints);
             R(_upSlots); R(_upPos); R(_upVel); R(_upColor);
             _positions = null; _active = null;

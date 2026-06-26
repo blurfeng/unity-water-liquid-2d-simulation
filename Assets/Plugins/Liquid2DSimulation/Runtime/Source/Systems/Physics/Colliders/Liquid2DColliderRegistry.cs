@@ -95,6 +95,14 @@ namespace Fs.Liquid2D
                 bool matchAll = string.IsNullOrEmpty(tag);
                 int group = matchAll || groupResolver == null ? 0 : groupResolver(tag);
 
+                byte colMode = (byte)c.ColliderMode;
+                float subCoupling = c.SubmergeCoupling;
+                float subSplash = c.SubmergeSplashStrength;
+                float subSplashThr = c.SubmergeSplashThreshold;
+                float subSplashRange = c.SubmergeSplashRange;
+                float subDensityThr = c.SubmergeFluidDensityThreshold;
+                // 推进碰撞器速度跟踪（每帧一次）；淹没模式据此按运动排开流体。 // Advance collider velocity tracking (once per frame); Submerge mode displaces fluid by this motion. // コライダー速度追跡を進める。
+                float2 colVel = c.ComputeVelocity();
                 for (int j = startIdx; j < _dataScratch.Count; j++)
                 {
                     var d = _dataScratch[j];
@@ -102,6 +110,13 @@ namespace Fs.Liquid2D
                     d.BodyIndex = bodyIdx;
                     d.GroupId = group;
                     d.MatchAll = (byte)(matchAll ? 1 : 0);
+                    d.ColliderMode = colMode;
+                    d.SubmergeCoupling = subCoupling;
+                    d.SubmergeSplashStrength = subSplash;
+                    d.SubmergeSplashThreshold = subSplashThr;
+                    d.SubmergeSplashRange = subSplashRange;
+                    d.SubmergeFluidDensityThreshold = subDensityThr;
+                    d.Velocity = colVel;
                     _dataScratch[j] = d;
                 }
             }

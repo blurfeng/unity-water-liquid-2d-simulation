@@ -46,15 +46,17 @@ namespace Fs.Liquid2D
         public NativeArray<float4> ColliderContact;
 
         /// <summary>
-        /// 动态碰撞体的本帧「浮力专用」接触累积（长度=动态体数）：x=物体下方接触粒子数（接触法线 n.y&lt;0），y=下方接触流体密度之和。
-        /// 仅统计位于物体下方、向上托起物体的接触，使压在物体顶部的粒子不产生虚假上浮。接收者按 x 估算浸没比例缩放浮力、按 y/x 求平均流体密度。
-        /// Per-frame buoyancy-only contact accumulation for dynamic colliders (length = dynamic body count): x = count of contacts
-        /// below the body (contact normal n.y &lt; 0), y = sum of below-contact fluid density. Only contacts below the body (pushing it
-        /// up) are counted, so particles resting on top don't create spurious lift. Receivers use x for the submerged fraction and
-        /// y/x for the average fluid density.
-        /// 動的コライダーの「浮力専用」接触累積：x=物体下方の接触数（法線 n.y&lt;0）、y=下方接触の流体密度の和。上に乗る粒子の偽浮力を防ぐ。
+        /// 动态碰撞体的本帧「浮力 + 壳层覆盖」接触累积（长度=动态体数）：x=浮力接触粒子数，y=浮力接触流体密度之和，z=浮力接触排开体积之和（Σ4r²，内部覆盖），w=壳层覆盖体积之和（Σ4r²，表面外壳层带）。
+        /// Push 模式浮力仅统计物体下方接触（接触法线 n.y&lt;0），使压顶粒子不产生虚假上浮，接收者按 x/fullSubmersionContacts 估算浸没比例（Push 不用 w）；
+        /// Submerge 模式区分「内部覆盖」粒子（计入 z，按 z/物体体积估算浸没比例驱动浮力，真实排开体积避免浅浸饱和弹跳）与「表面外壳层」粒子（计入 w，接收者按 w/物体体积缩放 drag/阻尼，空中稀疏壳层→阻力≈0→自由下落）。两模式均按 y/x 求平均流体密度。
+        /// Per-frame buoyancy + shell-coverage accumulation for dynamic colliders (length = dynamic body count): x = buoyancy contact count,
+        /// y = sum of buoyancy-contact fluid density, z = Σ4r² of interior coverage (buoyancy), w = Σ4r² of the outer-shell band (drag/damping scale).
+        /// Push buoyancy counts only contacts below the body (n.y&lt;0; fraction = x/fullSubmersionContacts; Push ignores w). Submerge separates interior particles
+        /// (into z; fraction = z/bodyVolume drives buoyancy — true displaced volume avoids bang-bang) from outer-shell particles (into w; receiver scales drag/damping by w/bodyVolume,
+        /// so sparse shell in the air → ~0 drag → free fall). Both use y/x for avg density.
+        /// 動的コライダーの「浮力 + 殻層被覆」接触累積：x=浮力接触数、y=密度和、z=内部排除体積（Σ4r²、浮力）、w=外殻層被覆体積（Σ4r²、drag/減衰スケール）。Push は下方接触のみ（w 未使用）、Submerge は内部=z・殻層=w。
         /// </summary>
-        public NativeArray<float2> ColliderBuoyancy;
+        public NativeArray<float4> ColliderBuoyancy;
 
         /// <summary>销毁区域集合（区域内粒子本帧被回收）。 // Dead-zone set (particles inside are recycled this frame). // 破棄領域集合。</summary>
         public Liquid2DDeadZoneBuffer DeadZones;

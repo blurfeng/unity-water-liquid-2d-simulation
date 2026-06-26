@@ -62,8 +62,8 @@ StructuredBuffer<MaterialData> Materials;
 struct MixData { int enabled; float speed; int withMovement; float maxSpeed; float interval; };
 StructuredBuffer<MixData> MixDatas;
 
-// ---- 碰撞体（与 Liquid2DGpuCollider 对齐）。末尾 groupId/matchAll 用于组过滤。 ----
-struct GpuCollider { int shape; float2 center; float2 size; float rotation; float radius; int pointStart; int pointCount; int dynamic; int bodyIndex; int groupId; int matchAll; };
+// ---- 碰撞体（与 Liquid2DGpuCollider 对齐）。末尾 groupId/matchAll 用于组过滤；colliderMode: 0=Push, 1=Submerge；velocity 为碰撞器线速度（淹没模式排开流体用）。 ----
+struct GpuCollider { int shape; float2 center; float2 size; float rotation; float radius; int pointStart; int pointCount; int dynamic; int bodyIndex; int groupId; int matchAll; int colliderMode; float submergeCoupling; float submergeSplashStrength; float submergeSplashThreshold; float submergeSplashRange; float submergeFluidDensityThreshold; float2 velocity; };
 StructuredBuffer<GpuCollider> Colliders;
 StructuredBuffer<float2> ColliderPoints;
 
@@ -72,12 +72,12 @@ struct ForceField { float2 center; float radius; float strength; float velocityD
 StructuredBuffer<ForceField> ForceFields;
 
 // 动态体接触累积（合并为单个 UAV，规避 D3D11 每 kernel 8 UAV 上限）。按 body 索引，每体占 ACCUM_STRIDE 个 int 通道，均定点化 × impulseScale。
-// 通道：0=入射流速和 x，1=入射流速和 y，2=全向接触数，3=接触质心和 x，4=接触质心和 y，5=全向接触密度和，6=下方接触数(n.y<0)，7=下方接触密度和。
+// 通道：0=入射流速和 x，1=入射流速和 y，2=全向接触数，3=接触质心和 x，4=接触质心和 y，5=全向接触密度和，6=浮力接触数，7=浮力接触密度和，8=浮力接触排开体积和(Σπr²×scale)。
 // Per-dynamic-body contact accumulation merged into one UAV (works around D3D11's 8-UAV-per-kernel limit). Indexed by body,
 // ACCUM_STRIDE int channels each (fixed-point × impulseScale). Channels: 0=velSum.x, 1=velSum.y, 2=contactCount, 3=centroidSum.x,
 // 4=centroidSum.y, 5=densitySum, 6=buoyCount(n.y<0), 7=buoyDensitySum.
 // 動的体の接触累積を単一 UAV に統合（D3D11 の 8 UAV/kernel 制限回避）。body ごとに ACCUM_STRIDE チャンネル（定点化 × impulseScale）。
-#define ACCUM_STRIDE 8
+#define ACCUM_STRIDE 10
 #define ACCUM_VEL_X 0
 #define ACCUM_VEL_Y 1
 #define ACCUM_CONTACT 2
@@ -86,7 +86,14 @@ StructuredBuffer<ForceField> ForceFields;
 #define ACCUM_DENSITY 5
 #define ACCUM_BUOY_N 6
 #define ACCUM_BUOY_DENSITY 7
+#define ACCUM_BUOY_VOLUME 8
+#define ACCUM_SHELL_VOLUME 9
 RWStructuredBuffer<int> BodyAccum;
+// 每动态体「上一帧壳层接触数」（ClearImpulse 清零 BodyAccum 前快照得到）。供 IntegrateCollide 做物体级"在不在水里"门控：
+// 空中一小团 4-5 颗 → 接触数小 → 抑制壳层力（不弹飞）；真正入水 → 接触数大 → 满力。全程驻留显存、无回读。
+// Per-dynamic-body "last frame's shell contact count" (snapshotted in ClearImpulse before zeroing BodyAccum). Used by IntegrateCollide for the body-level in-water gate.
+// 各動的体の前フレーム殻層接触数（ClearImpulse でスナップショット）。in-water ゲート用、GPU 常駐・回読なし。
+RWStructuredBuffer<int> BodyInWater;
 
 // ---- 销毁区域（与 Liquid2DGpuDeadZone 对齐）。形状字段同 GpuCollider，末尾换为 groupId/matchAll。 ----
 // ---- Dead zones (matches Liquid2DGpuDeadZone). Shape fields mirror GpuCollider, ending with groupId/matchAll. ----
@@ -503,6 +510,10 @@ void ClearImpulse(uint3 id : SV_DispatchThreadID)
 {
     int b = (int)id.x; if (b >= numBodies) return;
     int accBase = b * ACCUM_STRIDE;
+    // 清零前先把上一帧的壳层接触数快照到 BodyInWater（驻留显存，供下一帧 IntegrateCollide 做"在不在水里"门控，无回读）。
+    // Before zeroing, snapshot last frame's shell contact count into BodyInWater (GPU-resident; next frame's IntegrateCollide uses it for the in-water gate; no readback).
+    // ゼロ化前に前フレームの殻層接触数を BodyInWater にスナップショット（GPU 常駐、次フレームの in-water ゲート用、回読なし）。
+    BodyInWater[b] = BodyAccum[accBase + ACCUM_CONTACT];
     [unroll] for (int c = 0; c < ACCUM_STRIDE; c++) BodyAccum[accBase + c] = 0;
 }
 
@@ -528,40 +539,95 @@ void IntegrateCollide(uint3 id : SV_DispatchThreadID)
     int gi = GroupId[i];
     MaterialData mat = Materials[TypeId[i]];
     float e = saturate(mat.restitution) * collisionDamping;
+    // 该粒子 SPH 密度相对静止密度的比例（Submerge 壳层力的密度门控用）：孤立水滴≈0.1~0.2、自由水面≈0.5、内部≈1。 // Particle SPH density relative to rest (gate for Submerge shell force): isolated droplet ≈0.1~0.2, surface ≈0.5, interior ≈1. // 静止密度比（Submerge 密度ゲート）。
+    float rho0 = targetDensity * mat.targetDensityScale;
+    float densityRatio = rho0 > 1e-6 ? Densities[i].x / rho0 : 1.0;
 
     for (int ci = 0; ci < numColliders; ci++)
     {
         GpuCollider col = Colliders[ci];
         // 组过滤：matchAll（空 nameTag）作用全部，否则仅作用 groupId 匹配的粒子。 // Group filter. // グループ絞り込み。
         if (col.matchAll == 0 && col.groupId != gi) continue;
+        // Submerge 膨胀探测半径 pr+band（band=1.5×半径）多探一圈，区分表面外壳层与内部覆盖；Push 用真实半径。 // Submerge inflates query radius to pr+band to separate outer shell from interior; Push uses true radius. // Submerge は探知半径を膨張。
+        float band = pr * 1.5;
+        float queryR = col.colliderMode == 0 ? pr : pr + band;
         float2 corr, n;
-        if (!ProjectCollider(col, p, pr, corr, n)) continue;
-        p += corr;
-        float vn = dot(v, n);
-        if (vn < 0) v -= (1.0f + e) * vn * n;
-        if (mat.friction > 0) { float2 vt = v - dot(v, n) * n; v -= vt * mat.friction; }
+        if (!ProjectCollider(col, p, queryR, corr, n)) continue;
+        bool submergeShell = false; // 仅 Submerge：穿透量小=表面外壳层。 // Submerge only: small penetration = outer shell. // Submerge のみ。
+        // 密度门控因子（仅 Submerge）：只对真正水体的粒子施力 + 计入刚体力（孤立低密度水滴→≈0→既不弹飞也不拖慢物体）。Push=1，thr=0 不过滤。 // Density-gate factor (Submerge): force + body-force only on real fluid (isolated droplet→≈0). Push=1, thr=0 disables. // 密度ゲート係数。
+        float densityFactor = 1.0;
+        if (col.colliderMode != 0)
+        {
+            float dthr = col.submergeFluidDensityThreshold;
+            densityFactor = dthr > 1e-4 ? smoothstep(dthr * 0.5, dthr, densityRatio) : 1.0;
+        }
+        // Push：将粒子推出，速度反射+摩擦；Submerge：粒子穿过，仅对表面外壳层粒子施 −velocity 位移力（绕流/水花），内部由 SPH 自然带动。
+        // Push: eject, reflect, friction; Submerge: pass through, only outer-shell particles get the −velocity force, interior carried by SPH.
+        // Push：押し出し；Submerge：外殻層のみ力、内部は SPH。
+        if (col.colliderMode == 0) // Push（默认）：将粒子推出，速度反射+摩擦。 // Push (default): eject, reflect, friction. // 押し出し（デフォルト）。
+        {
+            p += corr;
+            float vn = dot(v, n);
+            if (vn < 0) v -= (1.0f + e) * vn * n;
+            if (mat.friction > 0) { float2 vt = v - dot(v, n) * n; v -= vt * mat.friction; }
+        }
+        else // Submerge：粒子穿过，不修正位置；仅壳层粒子受 −velocity 位移力（耗散耦合 + 高速飞溅）。 // Submerge: pass through; only shell particles get the −velocity force (dissipative coupling + high-speed splash). // 水没：殻層のみ −velocity 力。
+        {
+            submergeShell = length(corr) <= band; // ≤band 为表面外壳层；>band 为内部覆盖。 // ≤band shell; >band interior. // ≤band 殻層。
+            if (submergeShell)
+            {
+                // 物体级"在不在水里"门控：用上一帧壳层接触数。空中一小团 4-5 颗 → 接触数小 → gate≈0 → 不施力（不弹飞）；真正入水 → 大 → 满力。
+                // Body-level in-water gate from last frame's shell contact count: small clump (4-5) → low count → gate≈0 → no force (no fling); truly in water → high → full.
+                // 物体級 in-water ゲート（前フレーム殻層接触数）：小団→≈0→施力なし、入水→満力。
+                float inWaterGate = col.bodyIndex >= 0 ? smoothstep(4.0, 10.0, (float)BodyInWater[col.bodyIndex]) : 1.0;
+                float ff = densityFactor * inWaterGate; // 合并力因子（密度门控 × 在水门控）。 // combined force factor. // 合成係数。
+                float colSpeed = length(col.velocity);
+                // ① 位移耦合（耗散）：把壳层粒子推向碰撞器速度反方向 −velocity（绕过物体回流），随速度从 0 渐入，有界→稳定。乘 ff。 // Displacement coupling: shell toward −velocity, bounded. ×ff. // 変位結合。
+                float gate = col.submergeSplashThreshold > 1e-4 ? saturate(colSpeed / col.submergeSplashThreshold) : (colSpeed > 0 ? 1.0 : 0.0);
+                v += (-col.velocity - v) * (saturate(col.submergeCoupling) * gate * ff);
+                // ② 高速飞溅（瞬态）：超阈值后沿 −velocity 非线性注入产生喷溅（砸水→上溅）。乘 ff。 // High-speed splash along −velocity. ×ff. // 高速飛沫。
+                if (col.submergeSplashStrength > 0 && colSpeed > col.submergeSplashThreshold)
+                {
+                    float t = saturate((colSpeed - col.submergeSplashThreshold) / max(col.submergeSplashRange, 1e-4));
+                    v += -col.velocity * (col.submergeSplashStrength * t * t * ff);
+                }
+            }
+        }
         if (accumulateImpulse == 1 && col.dynamic == 1 && col.bodyIndex >= 0)
         {
             // 合并累积缓冲：每体 ACCUM_STRIDE 个 int 通道（见顶部宏）。 // Merged accumulation: ACCUM_STRIDE int channels per body. // 統合累積バッファ。
             int accBase = col.bodyIndex * ACCUM_STRIDE;
-            // 入射流体速度之和（相对速度阻力用，定点化）。 // Sum of incoming fluid velocities (relative-velocity drag, fixed-point). // 入射流速の和。
-            InterlockedAdd(BodyAccum[accBase + ACCUM_VEL_X], (int)(vIncoming.x * impulseScale));
-            InterlockedAdd(BodyAccum[accBase + ACCUM_VEL_Y], (int)(vIncoming.y * impulseScale));
-            // 全向接触累积：接触数 +1，接触位置（定点化）累加，接触流体密度（定点化）累加，供 CPU 求质心/平均密度/缩放阻力。
-            // All-direction contact: +1 contact, accumulate contact pos and fluid density (fixed-point) for CPU centroid/avg-density/drag scaling.
-            // 全方向接触累積：接触数・位置・流体密度を累積。
-            InterlockedAdd(BodyAccum[accBase + ACCUM_CONTACT], 1);
-            InterlockedAdd(BodyAccum[accBase + ACCUM_CENT_X], (int)(p.x * impulseScale));
-            InterlockedAdd(BodyAccum[accBase + ACCUM_CENT_Y], (int)(p.y * impulseScale));
-            InterlockedAdd(BodyAccum[accBase + ACCUM_DENSITY], (int)(mat.density * impulseScale));
-            // 浮力方向过滤：仅当接触法线朝下（n.y<0，粒子在物体下方、向上托起物体）才计入浮力，避免压在顶部的粒子产生虚假上浮。
-            // Buoyancy direction filter: only contacts whose normal points down (n.y<0, particle below the body, pushing it up)
-            // count toward buoyancy, so particles resting on top don't create spurious lift.
-            // 浮力方向フィルタ：法線が下向き（n.y<0、粒子が物体の下で押し上げる）の接触のみ浮力に計上。上に乗る粒子の偽浮力を防ぐ。
-            if (n.y < 0)
+            // 排开/壳层面积乘密度门控因子：低密度粘着水滴→≈0→不计入浮力/阻尼/drag，物体照常自由下落。 // Displaced/shell area ×density-gate factor: low-density stuck droplets → ≈0 → no buoyancy/damping/drag, body free-falls. // 排除/殻層面積×密度ゲート。
+            int volFixed = (int)(4.0 * pr * pr * impulseScale * densityFactor); // 每粒子排开面积 (2r)²=4r²（定点化、密度加权）。 // per-particle displaced area (fixed-point, density-weighted). // 排除面積（密度加重）。
+            int densFixed = (int)(mat.density * impulseScale);
+
+            // 归类：Push → drag(全部) + 浮力(下方接触)；Submerge 内部覆盖 → 仅浮力；Submerge 壳层 → drag + 壳层覆盖（不计浮力）。
+            // Role: Push → drag(all) + buoyancy(below-contacts); Submerge interior → buoyancy only; Submerge shell → drag + shell coverage (no buoyancy).
+            // 役割：Push、Submerge 内部=浮力のみ、Submerge 殻層=drag+殻層被覆。
+            bool isPush = col.colliderMode == 0;
+            bool interiorSub = !isPush && !submergeShell; // Submerge 内部覆盖。 // Submerge interior. // 内部。
+
+            // 入射流速 + 全向接触（drag 冲走 + 质心 + 缩放）：Push 全部、Submerge 仅壳层；内部覆盖不计入 drag（空中重叠粒子不拖住物体）。
+            // Incoming velocity + all-direction contact (drag + centroid): Push all, Submerge shell only; interior excluded from drag.
+            // 入射流速 + 接触：Push 全部、Submerge 殻層のみ。
+            if (!interiorSub)
+            {
+                InterlockedAdd(BodyAccum[accBase + ACCUM_VEL_X], (int)(vIncoming.x * impulseScale));
+                InterlockedAdd(BodyAccum[accBase + ACCUM_VEL_Y], (int)(vIncoming.y * impulseScale));
+                InterlockedAdd(BodyAccum[accBase + ACCUM_CONTACT], 1);
+                InterlockedAdd(BodyAccum[accBase + ACCUM_CENT_X], (int)(p.x * impulseScale));
+                InterlockedAdd(BodyAccum[accBase + ACCUM_CENT_Y], (int)(p.y * impulseScale));
+                InterlockedAdd(BodyAccum[accBase + ACCUM_DENSITY], densFixed);
+            }
+            // 壳层覆盖（drag/阻尼缩放用，Σ4r²）：仅 Submerge 壳层。 // Shell coverage (Σ4r², for drag/damping scale): Submerge shell only. // 殻層被覆。
+            if (submergeShell)
+                InterlockedAdd(BodyAccum[accBase + ACCUM_SHELL_VOLUME], volFixed);
+            // 浮力：Push 仅下方接触（n.y<0）；Submerge 内部覆盖（被流体包裹，全方向计排开体积）。 // Buoyancy: Push below-contacts (n.y<0); Submerge interior (all-direction displaced volume). // 浮力：Push 下方、Submerge 内部。
+            if ((isPush && n.y < 0) || interiorSub)
             {
                 InterlockedAdd(BodyAccum[accBase + ACCUM_BUOY_N], 1);
-                InterlockedAdd(BodyAccum[accBase + ACCUM_BUOY_DENSITY], (int)(mat.density * impulseScale));
+                InterlockedAdd(BodyAccum[accBase + ACCUM_BUOY_DENSITY], densFixed);
+                InterlockedAdd(BodyAccum[accBase + ACCUM_BUOY_VOLUME], volFixed);
             }
         }
     }

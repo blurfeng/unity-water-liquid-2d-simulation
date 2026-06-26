@@ -39,6 +39,25 @@ namespace Fs.Liquid2D
         /// <summary>「物体下方」接触的平均流体密度（仅下方接触粒子的材质 Density 求平均），用于阿基米德浮力。 // Average fluid density over below-body contacts only, for Archimedes buoyancy. // 下方接触のみの平均流体密度（アルキメデス浮力用）。</summary>
         public float BuoyancyFluidDensity;
 
+        /// <summary>
+        /// 浮力接触粒子的排开体积之和（每粒子格子面积 (2r)²=4r²，2D 面积）。Submerge（淹没）模式下物体被流体包裹，接收者用「此值 / 物体体积」估算浸没比例
+        /// （真实排开体积，避免按接触数估算时浅浸即饱和而上下弹跳）。Push 模式不使用此值（仍按下方接触数估算）。
+        /// Sum of displaced area (per-particle cell area (2r)²=4r², 2D) over buoyancy contacts. In Submerge mode the body is enveloped, so
+        /// receivers use (this / bodyVolume) as the submerged fraction (true displaced volume, avoiding the bobbing caused by count-based
+        /// early saturation). Unused in Push mode (which still uses the below-contact count).
+        /// 浮力接触の排除面積の和（セル面積 (2r)²=4r²）。Submerge では「この値 / 体積」で浸水率を推定（真の排除体積、弾みを防ぐ）。Push では未使用。
+        /// </summary>
+        public float BuoyancySubmergedVolume;
+
+        /// <summary>
+        /// Submerge（淹没）模式下「物体表面外壳层带」流体粒子的覆盖面积之和（每粒子格子面积 (2r)²=4r²）。接收者用「此值 / 物体体积」缩放 drag/阻尼——
+        /// 物体被流体真正包裹时壳层饱满 → 正常受阻；空中只擦过零散粒子时壳层稀疏 → 阻力≈0 → 物体直接自由下落，不被稀疏重叠粒子拖慢。Push 模式不使用此值。
+        /// Sum of covered area (per-particle cell area (2r)²=4r²) of fluid particles in the body's outer-shell band, in Submerge mode. The receiver scales drag/damping by
+        /// (this / bodyVolume): truly enveloped → full shell → normal resistance; grazing scattered particles in the air → sparse shell → ~0 drag → free fall. Unused in Push mode.
+        /// Submerge モードで物体の外殻層帯にある流体粒子の被覆面積の和（セル面積 (2r)²=4r²）。「この値 / 体積」で drag/減衰をスケール（空中の疎な殻層→抗力≈0→自由落下）。Push では未使用。
+        /// </summary>
+        public float ShellCoverageVolume;
+
         /// <summary>本帧物理步长（秒），便于接收者把力换算为速度变化。 // This frame's physics timestep (s). // 本フレームの物理ステップ（秒）。</summary>
         public float Dt;
     }

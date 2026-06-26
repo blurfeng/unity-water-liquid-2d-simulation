@@ -393,6 +393,9 @@ namespace Fs.Liquid2D
         [ReadOnly] public NativeArray<Liquid2DMaterialData> Materials;
         [ReadOnly] public NativeArray<Liquid2DColliderData> Colliders;
         [ReadOnly] public NativeArray<float2> Points;
+        [ReadOnly] public NativeArray<float2> Densities;   // (density, nearDensity)，供 Submerge 壳层力的密度门控。 // for Submerge shell-force density gate. // 密度ゲート用。
+        public float TargetDensity;                        // 静止密度基准（× 材质 TargetDensityScale = 该粒子静止密度）。 // rest-density base. // 静止密度基準。
+        [ReadOnly] public NativeArray<int> BodyPrevInWater; // 每动态体上一帧壳层接触数（物体级在水门控；按 col.BodyIndex 索引）。 // per-body last-frame shell contact count (in-water gate; indexed by col.BodyIndex). // 前フレーム殻層接触数。
         public float DT;
         public float CollisionDamping;
         /// <summary>最大速度限制（0 = 不限制）。 // Max speed clamp (0 = unlimited). // 最大速度制限（0 = 無制限）。</summary>
@@ -403,6 +406,7 @@ namespace Fs.Liquid2D
         [WriteOnly] public NativeArray<int> OutBody;        // 长度 activeCount，-1 表示无。 // length activeCount, -1 = none.
         [WriteOnly] public NativeArray<float2> OutContact;  // 长度 activeCount，命中动态体时的接触位置（浮力质心用）。 // contact pos on dynamic hit (buoyancy centroid). // 接触位置。
         [WriteOnly] public NativeArray<float> OutNormalY;   // 长度 activeCount，最后命中动态体的接触法线 y 分量（n.y<0=粒子在物体下方，浮力方向过滤用）。 // contact normal y of the last dynamic hit (n.y<0 = particle below body; buoyancy direction filter). // 接触法線 y。
+        [WriteOnly] public NativeArray<float> OutDensityFactor; // 长度 activeCount，最后命中动态体的密度门控因子（Submerge 用，规约时缩放排开体积/壳层覆盖；Push=1）。 // density-gate factor of the last dynamic hit (Submerge; reduce scales displaced/shell volume by it; Push=1). // 密度ゲート係数。
 
         public void Execute(int k)
         {
@@ -427,6 +431,7 @@ namespace Fs.Liquid2D
             float2 contactPos = float2.zero;
             int hitBody = -1;
             float hitNormalY = 0f; // 最后命中动态体的接触法线 y（默认 0=不计浮力）。 // contact normal y of last dynamic hit (0 = no buoyancy). // 接触法線 y。
+            float hitDensityFactor = 1f; // 最后命中动态体的密度门控因子（缩放浮力排开体积/壳层覆盖）。 // density-gate factor of last dynamic hit. // 密度ゲート係数。
 
             if (HasColliders == 1)
             {
@@ -434,25 +439,85 @@ namespace Fs.Liquid2D
                 float pr = Radii[i];
                 var mat = Materials[TypeId[i]];
                 float e = saturate(mat.Restitution) * CollisionDamping;
+                // 该粒子 SPH 密度相对静止密度的比例（Submerge 壳层力的密度门控用）：孤立水滴≈0.1~0.2、自由水面≈0.5、内部≈1。 // Particle SPH density / rest (gate for Submerge shell force). // 静止密度比。
+                float rho0 = TargetDensity * mat.TargetDensityScale;
+                float densityRatio = rho0 > 1e-6f ? Densities[i].x / rho0 : 1f;
 
                 for (int ci = 0; ci < Colliders.Length; ci++)
                 {
                     var col = Colliders[ci];
                     // 组过滤：matchAll（空 nameTag）作用全部，否则仅作用 groupId 匹配的粒子。 // Group filter. // グループ絞り込み。
                     if (col.MatchAll == 0 && col.GroupId != gi) continue;
-                    if (!Liquid2DColliderMath.Project(col, Points, p, pr, out float2 corr, out float2 n)) continue;
 
-                    p += corr;
+                    // Submerge 用膨胀探测半径 pr+band（band=1.5×粒子半径）多探出一圈，用于区分「表面外壳层」与「内部覆盖」；Push 用真实半径。
+                    // Submerge inflates the query radius to pr+band (band = 1.5×particle radius) to also catch a ring outside the surface, used to tell the outer shell from interior coverage; Push uses the true radius.
+                    // Submerge は探知半径を pr+band（band=1.5×粒子半径）に膨張し、外側の殻層と内部被覆を区別。Push は実半径。
+                    float band = pr * 1.5f;
+                    float queryR = col.ColliderMode == 0 ? pr : pr + band;
+                    if (!Liquid2DColliderMath.Project(col, Points, p, queryR, out float2 corr, out float2 n)) continue;
 
-                    // 速度反射：去掉指向表面内的法向分量，并按回弹系数反弹。 // Reflect velocity: remove inward normal component, bounce by e. // 速度反射。
-                    float vn = dot(v, n);
-                    if (vn < 0f) v -= (1f + e) * vn * n;
-
-                    // 摩擦：阻尼切向分量。 // Friction: damp tangential component. // 摩擦：接線減衰。
-                    if (mat.Friction > 0f)
+                    // 密度门控因子：仅 Submerge。只对属于真正水体的粒子（高 SPH 密度）施力 + 计入刚体力——孤立低密度水滴 → df≈0 →
+                    // 既不被弹飞、也不计入 drag/浮力/阻尼（不会粘在物体上拖慢下落）。Push 恒为 1。阈值 0 则不过滤。
+                    // Density-gate factor: Submerge only. Force + body-force accumulation act only on real-fluid particles (high SPH density) — isolated low-density droplets → df≈0 →
+                    // neither flung nor counted toward drag/buoyancy/damping (won't stick and slow the body). Push = 1. Threshold 0 disables.
+                    // 密度ゲート係数：Submerge のみ。真の水体粒子のみ施力＋剛体力に計上（孤立滴→df≈0）。Push=1。
+                    float df = 1f;
+                    if (col.ColliderMode != 0)
                     {
-                        float2 vt = v - dot(v, n) * n;
-                        v -= vt * mat.Friction;
+                        float dthr = col.SubmergeFluidDensityThreshold;
+                        df = dthr > 1e-4f ? smoothstep(dthr * 0.5f, dthr, densityRatio) : 1f;
+                    }
+
+                    // submergeShell：仅 Submerge 有意义。穿透量 length(corr) 大=深入表面内(内部覆盖)，小=仅在表面外壳层带。 // Submerge only: large penetration = interior coverage, small = outer shell band. // Submerge のみ：貫通大=内部、小=殻層。
+                    bool submergeShell = false;
+
+                    if (col.ColliderMode == 0) // Push（默认）：将粒子推出碰撞体外，速度反射 + 摩擦。 // Push (default): eject particle, reflect velocity, apply friction. // 押し出し（デフォルト）：位置修正・速度反射・摩擦。
+                    {
+                        p += corr;
+
+                        // 速度反射：去掉指向表面内的法向分量，并按回弹系数反弹。 // Reflect velocity: remove inward normal component, bounce by e. // 速度反射。
+                        float vn = dot(v, n);
+                        if (vn < 0f) v -= (1f + e) * vn * n;
+
+                        // 摩擦：阻尼切向分量。 // Friction: damp tangential component. // 摩擦：接線減衰。
+                        if (mat.Friction > 0f)
+                        {
+                            float2 vt = v - dot(v, n) * n;
+                            v -= vt * mat.Friction;
+                        }
+                    }
+                    else // Submerge：粒子可穿过，不修正位置。仅对「表面外壳层」粒子施加 −Velocity 位移力（绕流/水花），内部覆盖粒子不直接加力、由 SPH 自然带动——流场接近 Push（绕过物体回流）且空中重叠粒子不会拖住物体。 // Submerge: pass through, no position correction. Only the outer-shell particles get the −Velocity displacement force (flow-around/splash); interior particles aren't forced directly and are carried by SPH — flow field resembles Push (circulation around the body) and overlapping particles in air don't drag the body. // 水没：位置修正なし。外殻層粒子のみに −Velocity 力、内部は SPH で自然に運ばれる。
+                    {
+                        // 区分壳层/内部：穿透量 ≤ band 即在表面外壳层带（pr ≤ 表面距 < pr+band）；> band 为内部覆盖（表面距 < pr）。
+                        // Shell vs interior: penetration ≤ band ⇒ outer shell band; > band ⇒ interior coverage.
+                        // 殻層/内部の判別：貫通 ≤ band は外殻層、> band は内部被覆。
+                        submergeShell = length(corr) <= band;
+                        if (submergeShell)
+                        {
+                            // 物体级"在不在水里"门控：用上一帧壳层接触数。空中一小团 4-5 颗 → 接触数小 → gate≈0 → 不施力（不弹飞）；真正入水 → 大 → 满力。
+                            // Body-level in-water gate from last frame's shell contact count: small clump (4-5) → low count → gate≈0 → no force (no fling); truly in water → high → full.
+                            // 物体級 in-water ゲート（前フレーム殻層接触数）：小団→≈0、入水→満力。
+                            float inWaterGate = col.BodyIndex >= 0 && col.BodyIndex < BodyPrevInWater.Length
+                                ? smoothstep(4f, 10f, BodyPrevInWater[col.BodyIndex]) : 1f;
+                            float ff = df * inWaterGate; // 合并力因子（密度门控 × 在水门控）。 // combined force factor. // 合成係数。
+
+                            float colSpeed = length(col.Velocity);
+
+                            // ① 位移耦合（耗散）：把壳层粒子推向碰撞器速度的反方向 −Velocity，让水绕过物体回流（位置交换）。随碰撞器速度从 0 渐入（静止不扰动），有界不过冲 → 稳定。乘 ff。
+                            // ① Displacement coupling (dissipative): push shell particles toward −Velocity so fluid flows around the body. Ramped in by collider speed, bounded. ×ff.
+                            // ① 変位結合（散逸）：殻層粒子を −Velocity へ。×ff。
+                            float gate = col.SubmergeSplashThreshold > 1e-4f ? saturate(colSpeed / col.SubmergeSplashThreshold) : (colSpeed > 0f ? 1f : 0f);
+                            v += (-col.Velocity - v) * (saturate(col.SubmergeCoupling) * gate * ff);
+
+                            // ② 高速飞溅（瞬态）：碰撞器速度超过阈值后，沿 −Velocity 非线性注入产生喷溅（向下砸水→水往上溅）。乘 ff。
+                            // ② High-speed splash (transient): above the threshold, inject extra velocity nonlinearly along −Velocity (slam down → spray up). ×ff.
+                            // ② 高速飛沫（瞬態）：閾値超過時、−Velocity 方向へ非線形に注入。×ff。
+                            if (col.SubmergeSplashStrength > 0f && colSpeed > col.SubmergeSplashThreshold)
+                            {
+                                float t = saturate((colSpeed - col.SubmergeSplashThreshold) / max(col.SubmergeSplashRange, 1e-4f));
+                                v += -col.Velocity * (col.SubmergeSplashStrength * t * t * ff);
+                            }
+                        }
                     }
 
                     if (Accumulate == 1 && col.Dynamic == 1 && col.BodyIndex >= 0)
@@ -464,7 +529,13 @@ namespace Fs.Liquid2D
                         fluidVel = vIncoming;
                         contactPos = p;
                         hitBody = col.BodyIndex;
-                        hitNormalY = n.y;
+                        // 用 hitNormalY 编码该接触的归类（规约阶段据此分发）：Push → 真实法线 y（y<0 才计浮力）；
+                        // Submerge 壳层 → 哨兵 +2（计 drag/质心 + 壳层覆盖，不计浮力）；Submerge 内部 → 哨兵 -2（计浮力排开体积，不计 drag）。
+                        // Encode this contact's role in hitNormalY (the reduce dispatches on it): Push → real normal y (buoyancy only if y<0);
+                        // Submerge shell → sentinel +2 (drag/centroid + shell coverage, no buoyancy); Submerge interior → sentinel -2 (buoyancy displaced-volume, no drag).
+                        // hitNormalY に役割を符号化：Push は実法線 y、Submerge 殻層 +2（drag+殻層被覆）、Submerge 内部 -2（浮力）。
+                        hitNormalY = col.ColliderMode == 0 ? n.y : (submergeShell ? 2f : -2f);
+                        hitDensityFactor = df; // 规约时用其缩放浮力排开体积/壳层覆盖（低密度水滴→≈0→不计入刚体力）。 // reduce scales displaced/shell volume by it. // 密度ゲート。
                     }
                 }
             }
@@ -478,6 +549,7 @@ namespace Fs.Liquid2D
                 OutBody[k] = hitBody;
                 OutContact[k] = contactPos;
                 OutNormalY[k] = hitNormalY;
+                OutDensityFactor[k] = hitDensityFactor;
             }
         }
     }
