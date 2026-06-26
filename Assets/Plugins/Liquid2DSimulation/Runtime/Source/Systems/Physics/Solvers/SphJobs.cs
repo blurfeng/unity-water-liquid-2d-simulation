@@ -395,7 +395,6 @@ namespace Fs.Liquid2D
         [ReadOnly] public NativeArray<float2> Points;
         [ReadOnly] public NativeArray<float2> Densities;   // (density, nearDensity)，供 Submerge 壳层力的密度门控。 // for Submerge shell-force density gate. // 密度ゲート用。
         public float TargetDensity;                        // 静止密度基准（× 材质 TargetDensityScale = 该粒子静止密度）。 // rest-density base. // 静止密度基準。
-        [ReadOnly] public NativeArray<int> BodyPrevInWater; // 每动态体上一帧壳层接触数（物体级在水门控；按 col.BodyIndex 索引）。 // per-body last-frame shell contact count (in-water gate; indexed by col.BodyIndex). // 前フレーム殻層接触数。
         public float DT;
         public float CollisionDamping;
         /// <summary>最大速度限制（0 = 不限制）。 // Max speed clamp (0 = unlimited). // 最大速度制限（0 = 無制限）。</summary>
@@ -406,7 +405,7 @@ namespace Fs.Liquid2D
         [WriteOnly] public NativeArray<int> OutBody;        // 长度 activeCount，-1 表示无。 // length activeCount, -1 = none.
         [WriteOnly] public NativeArray<float2> OutContact;  // 长度 activeCount，命中动态体时的接触位置（浮力质心用）。 // contact pos on dynamic hit (buoyancy centroid). // 接触位置。
         [WriteOnly] public NativeArray<float> OutNormalY;   // 长度 activeCount，最后命中动态体的接触法线 y 分量（n.y<0=粒子在物体下方，浮力方向过滤用）。 // contact normal y of the last dynamic hit (n.y<0 = particle below body; buoyancy direction filter). // 接触法線 y。
-        [WriteOnly] public NativeArray<float> OutDensityFactor; // 长度 activeCount，最后命中动态体的密度门控因子（Submerge 用，规约时缩放排开体积/壳层覆盖；Push=1）。 // density-gate factor of the last dynamic hit (Submerge; reduce scales displaced/shell volume by it; Push=1). // 密度ゲート係数。
+        [WriteOnly] public NativeArray<float> OutDensityFactor; // 长度 activeCount，最后命中动态体的密度门控因子（Submerge 用，规约时缩放浮力排开体积/壳层覆盖；Push=1）。 // density-gate factor of the last dynamic hit (Submerge; reduce scales buoyancy displaced/shell volume by it; Push=1). // 密度ゲート係数。
 
         public void Execute(int k)
         {
@@ -462,10 +461,17 @@ namespace Fs.Liquid2D
                     // neither flung nor counted toward drag/buoyancy/damping (won't stick and slow the body). Push = 1. Threshold 0 disables.
                     // 密度ゲート係数：Submerge のみ。真の水体粒子のみ施力＋剛体力に計上（孤立滴→df≈0）。Push=1。
                     float df = 1f;
+                    // 覆盖率门控（仅 Submerge）：col.SubmergeCoverage = 上一帧本体「内部覆盖率」(0~1，桥接器回填)。只有碰撞器几乎被流体覆盖时才对四周流体施位移/飞溅力；
+                    // 空中飞散的零散流体覆盖率低 → ≈0 → 不施力（不弹飞）。仅门控流体侧四周施力，刚体侧由桥接器自己的覆盖死区把关。静态碰撞器覆盖率=1（不门控）。
+                    // Coverage gate (Submerge only): col.SubmergeCoverage = last frame's interior-coverage fraction (0~1, fed back by the bridge). Apply the surrounding force only when the collider is nearly fully covered;
+                    // scattered airborne fluid → low coverage → ≈0 → no force (no fling). Gates the fluid-side force only; body-side handled by the bridge's coverage deadzone. Static colliders: coverage 1 (no gating).
+                    // 被覆率ゲート（Submerge のみ）：ほぼ全被覆時のみ四周施力。流体側のみゲート、剛体側はブリッジのデッドゾーンで処理。静的は 1。
+                    float coverGate = 1f;
                     if (col.ColliderMode != 0)
                     {
                         float dthr = col.SubmergeFluidDensityThreshold;
                         df = dthr > 1e-4f ? smoothstep(dthr * 0.5f, dthr, densityRatio) : 1f;
+                        coverGate = smoothstep(0.3f, 0.85f, col.SubmergeCoverage); // 覆盖率达高膝点→满力、空中(≈0)→不施力、部分覆盖渐入。膝点对打包率尺度稳健，与 compute 同步。 // high knee → full, air → none; robust knees, in sync with compute. // 膝点は compute と同期。
                     }
 
                     // submergeShell：仅 Submerge 有意义。穿透量 length(corr) 大=深入表面内(内部覆盖)，小=仅在表面外壳层带。 // Submerge only: large penetration = interior coverage, small = outer shell band. // Submerge のみ：貫通大=内部、小=殻層。
@@ -494,12 +500,7 @@ namespace Fs.Liquid2D
                         submergeShell = length(corr) <= band;
                         if (submergeShell)
                         {
-                            // 物体级"在不在水里"门控：用上一帧壳层接触数。空中一小团 4-5 颗 → 接触数小 → gate≈0 → 不施力（不弹飞）；真正入水 → 大 → 满力。
-                            // Body-level in-water gate from last frame's shell contact count: small clump (4-5) → low count → gate≈0 → no force (no fling); truly in water → high → full.
-                            // 物体級 in-water ゲート（前フレーム殻層接触数）：小団→≈0、入水→満力。
-                            float inWaterGate = col.BodyIndex >= 0 && col.BodyIndex < BodyPrevInWater.Length
-                                ? smoothstep(4f, 10f, BodyPrevInWater[col.BodyIndex]) : 1f;
-                            float ff = df * inWaterGate; // 合并力因子（密度门控 × 在水门控）。 // combined force factor. // 合成係数。
+                            float ff = df * coverGate; // 合并力因子（密度门控 × 覆盖率门控，覆盖率门控已在碰撞体级算好）。 // combined force factor (coverage gate computed at collider level). // 合成係数。
 
                             float colSpeed = length(col.Velocity);
 
@@ -529,13 +530,13 @@ namespace Fs.Liquid2D
                         fluidVel = vIncoming;
                         contactPos = p;
                         hitBody = col.BodyIndex;
-                        // 用 hitNormalY 编码该接触的归类（规约阶段据此分发）：Push → 真实法线 y（y<0 才计浮力）；
-                        // Submerge 壳层 → 哨兵 +2（计 drag/质心 + 壳层覆盖，不计浮力）；Submerge 内部 → 哨兵 -2（计浮力排开体积，不计 drag）。
-                        // Encode this contact's role in hitNormalY (the reduce dispatches on it): Push → real normal y (buoyancy only if y<0);
-                        // Submerge shell → sentinel +2 (drag/centroid + shell coverage, no buoyancy); Submerge interior → sentinel -2 (buoyancy displaced-volume, no drag).
-                        // hitNormalY に役割を符号化：Push は実法線 y、Submerge 殻層 +2（drag+殻層被覆）、Submerge 内部 -2（浮力）。
+                        // 用 hitNormalY 编码该接触的归类（规约阶段据此分发）：Push → 真实法线 y（y<0 才计浮力）；Submerge 壳层 → 哨兵 +2（计 drag/质心 + 壳层覆盖，不计浮力）；
+                        // Submerge 内部覆盖 → 哨兵 -2（全方向计浮力排开体积，物体被流体包裹的整体浮力；覆盖率门控由桥接器据排开体积/体积把关空中误浮）。
+                        // Encode this contact's role in hitNormalY (the reduce dispatches on it): Push → real normal y (buoyancy only if y<0); Submerge shell → sentinel +2 (drag/centroid + shell coverage, no buoyancy);
+                        // Submerge interior → sentinel -2 (all-direction buoyancy displaced-volume; whole-body buoyancy for an enveloped body; the coverage gate via displaced-volume/volume guards the airborne case).
+                        // hitNormalY に役割を符号化：Push は実法線 y、Submerge 殻層 +2、Submerge 内部 -2（全方向浮力）。
                         hitNormalY = col.ColliderMode == 0 ? n.y : (submergeShell ? 2f : -2f);
-                        hitDensityFactor = df; // 规约时用其缩放浮力排开体积/壳层覆盖（低密度水滴→≈0→不计入刚体力）。 // reduce scales displaced/shell volume by it. // 密度ゲート。
+                        hitDensityFactor = df; // 规约时用其缩放浮力排开体积/壳层覆盖（低密度水滴→≈0→不计入刚体力）。 // reduce scales displaced/shell volume by it (low-density droplet → ≈0). // 密度ゲート。
                     }
                 }
             }

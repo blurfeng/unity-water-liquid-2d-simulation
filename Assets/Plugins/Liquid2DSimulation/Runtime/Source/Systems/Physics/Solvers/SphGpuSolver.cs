@@ -91,8 +91,6 @@ namespace Fs.Liquid2D
         private const int _accumStride = 10;
         private const int _accumVelX = 0, _accumVelY = 1, _accumContact = 2, _accumCentX = 3, _accumCentY = 4, _accumDensity = 5, _accumBuoyN = 6, _accumBuoyDensity = 7, _accumBuoyVolume = 8, _accumShellVolume = 9;
 
-        // 每动态体「上一帧壳层接触数」（ClearImpulse 快照、IntegrateCollide 读取做物体级在水门控）。常驻显存、无回读。 // Per-body last-frame shell contact count for the in-water gate (snapshot in ClearImpulse, read in IntegrateCollide). GPU-resident, no readback. // 前フレーム殻層接触数（in-water ゲート用）。
-        private ComputeBuffer _bodyInWater;
         private ComputeBuffer _deadZones, _deadZonePoints;
         // 生成上传（仅动态状态；静态属性由 store 整块 SetData）。 // spawn upload (dynamic only). // 生成アップロード。
         private ComputeBuffer _upSlots, _upPos, _upVel, _upColor;
@@ -441,9 +439,8 @@ namespace Fs.Liquid2D
         private void EnsureAuxBuffers(int numTypes, int numColliders, int numPoints, int numBodies, int numForceFields)
         {
             Ensure(ref _materials, numTypes, 36); Ensure(ref _mixDatas, numTypes, 20);
-            Ensure(ref _colliders, Mathf.Max(1, numColliders), 84); Ensure(ref _points, Mathf.Max(1, numPoints), 8);
+            Ensure(ref _colliders, Mathf.Max(1, numColliders), 88); Ensure(ref _points, Mathf.Max(1, numPoints), 8);
             Ensure(ref _bodyAccum, numBodies * _accumStride, 4);
-            Ensure(ref _bodyInWater, numBodies, 4);
             Ensure(ref _forceFields, Mathf.Max(1, numForceFields), 44);
         }
         private void EnsureUploadBuffers(int n)
@@ -513,7 +510,6 @@ namespace Fs.Liquid2D
             Bind("ActiveIndices", _active); Bind("Materials", _materials); Bind("MixDatas", _mixDatas);
             Bind("Colliders", _colliders); Bind("ColliderPoints", _points);
             Bind("BodyAccum", _bodyAccum);
-            Bind("BodyInWater", _bodyInWater);
             Bind("ForceFields", _forceFields);
             Bind("DeadZones", _deadZones); Bind("DeadZonePoints", _deadZonePoints); Bind("KillFlags", _killFlags);
             Bind("BucketOf", _bucketOf); Bind("Counts", _counts); Bind("CellStart", _cellStart);
@@ -640,7 +636,7 @@ namespace Fs.Liquid2D
             R(_radii); R(_invMass); R(_typeId); R(_groupId);
             R(_active); R(_bucketOf); R(_sortedSlots); R(_killFlags); R(_counts); R(_cellStart); R(_cursor);
             R(_materials); R(_mixDatas); R(_colliders); R(_points); R(_forceFields);
-            R(_bodyAccum); R(_bodyInWater);
+            R(_bodyAccum);
             R(_deadZones); R(_deadZonePoints);
             R(_upSlots); R(_upPos); R(_upVel); R(_upColor);
             _positions = null; _active = null;

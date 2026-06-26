@@ -412,7 +412,10 @@ namespace Fs.Liquid2D
 
                 float4 con = b < contact.Length ? contact[b] : float4.zero;
                 int contactCount = (int)con.z;
-                if (contactCount <= 0) continue;
+                // 无接触 = 物体不在流体中：仍派发一个零力包，让接收者重置内部状态（如覆盖率归 0，避免出水后门控残留）；接收者据 ContactCount≤0 早退、不施任何力。
+                // No contact = body not in fluid: still dispatch a zero force so the receiver resets internal state (e.g. coverage → 0, so the gate doesn't linger after leaving water); the receiver early-returns on ContactCount ≤ 0, applying no force.
+                // 非接触＝流体外：ゼロ力を派遣しレシーバーの状態（被覆率を 0 等）をリセット。レシーバーは ContactCount≤0 で早退。
+                if (contactCount <= 0) { r.ApplyLiquidForces(new Liquid2DBodyForce { Dt = dt }); continue; }
 
                 float invCount = 1f / contactCount;
                 float2 fluidVel = velSum[b] * invCount;

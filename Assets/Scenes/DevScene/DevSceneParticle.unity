@@ -135,7 +135,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &500101
 Transform:
   m_ObjectHideFlags: 0
@@ -297,7 +297,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   nameTag: 
   _colliderMode: 0
-  _submergeForce: 10
+  _submergeCoupling: 0.25
+  _submergeSplashStrength: 1
+  _submergeSplashThreshold: 4
+  _submergeSplashRange: 6
+  _submergeFluidDensityThreshold: 0.4
   size: {x: 1, y: 1}
 --- !u!212 &500303
 SpriteRenderer:
@@ -452,7 +456,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   nameTag: 
   _colliderMode: 0
-  _submergeForce: 10
+  _submergeCoupling: 0.25
+  _submergeSplashStrength: 1
+  _submergeSplashThreshold: 4
+  _submergeSplashRange: 6
+  _submergeFluidDensityThreshold: 0.4
   size: {x: 1, y: 1}
 --- !u!212 &500403
 SpriteRenderer:
@@ -607,7 +615,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   nameTag: 
   _colliderMode: 0
-  _submergeForce: 10
+  _submergeCoupling: 0.25
+  _submergeSplashStrength: 1
+  _submergeSplashThreshold: 4
+  _submergeSplashRange: 6
+  _submergeFluidDensityThreshold: 0.4
   size: {x: 1, y: 1}
 --- !u!212 &500503
 SpriteRenderer:
@@ -931,7 +943,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DBounds
   nameTag: 
   _colliderMode: 0
-  _submergeForce: 10
+  _submergeCoupling: 0.25
+  _submergeSplashStrength: 1
+  _submergeSplashThreshold: 4
+  _submergeSplashRange: 6
+  _submergeFluidDensityThreshold: 0.4
   size: {x: 20, y: 10}
 --- !u!4 &596802843
 Transform:
@@ -1056,7 +1072,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DBoxCollider
   nameTag: 
   _colliderMode: 1
-  _submergeForce: 10
+  _submergeCoupling: 0.25
+  _submergeSplashStrength: 1
+  _submergeSplashThreshold: 4
+  _submergeSplashRange: 6
+  _submergeFluidDensityThreshold: 0.4
   size: {x: 1, y: 1}
 --- !u!114 &994501411
 MonoBehaviour:
@@ -1078,6 +1098,7 @@ MonoBehaviour:
   fullSubmersionContacts: 12
   submergedLinearDrag: 1
   submergedAngularDrag: 1
+  submergeForceDeadzone: 0.05
 --- !u!212 &994501412
 SpriteRenderer:
   serializedVersion: 2
@@ -1183,7 +1204,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DMeshCollider
   nameTag: 
   _colliderMode: 0
-  _submergeForce: 10
+  _submergeCoupling: 0.25
+  _submergeSplashStrength: 1
+  _submergeSplashThreshold: 4
+  _submergeSplashRange: 6
+  _submergeFluidDensityThreshold: 0.4
   mesh: {fileID: 10210, guid: 0000000000000000e000000000000000, type: 0}
   closed: 1
 --- !u!4 &1041098852
@@ -1428,7 +1453,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DBoxCollider
   nameTag: 
   _colliderMode: 1
-  _submergeForce: 10
+  _submergeCoupling: 0.25
+  _submergeSplashStrength: 1
+  _submergeSplashThreshold: 4
+  _submergeSplashRange: 6
+  _submergeFluidDensityThreshold: 0.4
   size: {x: 1, y: 1}
 --- !u!114 &1488928529
 MonoBehaviour:
@@ -1450,6 +1479,7 @@ MonoBehaviour:
   fullSubmersionContacts: 12
   submergedLinearDrag: 1
   submergedAngularDrag: 1
+  submergeForceDeadzone: 0.05
 --- !u!50 &1488928530
 Rigidbody2D:
   serializedVersion: 5
@@ -1462,7 +1492,7 @@ Rigidbody2D:
   m_Simulated: 1
   m_UseFullKinematicContacts: 0
   m_UseAutoMass: 0
-  m_Mass: 0.5
+  m_Mass: 0.8
   m_LinearDamping: 0
   m_AngularDamping: 0.05
   m_GravityScale: 1
@@ -1629,7 +1659,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DEdgeCollider
   nameTag: 
   _colliderMode: 0
-  _submergeForce: 10
+  _submergeCoupling: 0.25
+  _submergeSplashStrength: 1
+  _submergeSplashThreshold: 4
+  _submergeSplashRange: 6
+  _submergeFluidDensityThreshold: 0.4
 --- !u!68 &1646027098
 EdgeCollider2D:
   m_ObjectHideFlags: 0

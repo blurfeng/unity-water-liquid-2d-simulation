@@ -82,5 +82,14 @@ namespace Fs.Liquid2D
         /// </summary>
         /// <param name="force">流体合力数据包。 // fluid force payload. // 流体合力データ。</param>
         void ApplyLiquidForces(in Liquid2DBodyForce force);
+
+        /// <summary>
+        /// 上一帧的「内部覆盖率」(0~1)，表示本动态体被流体包裹的程度（≈1 为几乎全部覆盖）。由 <see cref="Liquid2DColliderRegistry"/> 每帧读取回填给碰撞器，
+        /// 供求解器门控淹没模式「给四周流体施加力」（几乎全覆盖时才施力，避免在空中错误弹飞飞散的零散流体）。默认 1（不门控）。
+        /// Last frame's interior-coverage fraction (0~1): how enveloped this dynamic body is by fluid (≈1 = almost fully covered). Read each frame by <see cref="Liquid2DColliderRegistry"/> and fed back to the collider,
+        /// so the solver gates the Submerge "force on surrounding fluid" (apply only when nearly fully covered, avoiding flinging scattered airborne fluid). Default 1 (no gating).
+        /// 前フレームの内部被覆率（0~1）。<see cref="Liquid2DColliderRegistry"/> が毎フレーム読み取りコライダーへ回填、四周施力のゲートに使用。既定 1。
+        /// </summary>
+        float SubmergeCoverage01 { get; }
     }
 }

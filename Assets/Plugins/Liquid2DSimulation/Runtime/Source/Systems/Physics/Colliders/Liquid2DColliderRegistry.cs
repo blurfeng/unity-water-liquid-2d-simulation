@@ -101,6 +101,10 @@ namespace Fs.Liquid2D
                 float subSplashThr = c.SubmergeSplashThreshold;
                 float subSplashRange = c.SubmergeSplashRange;
                 float subDensityThr = c.SubmergeFluidDensityThreshold;
+                // 上一帧「内部覆盖率」(0~1)，由力接收者（桥接器）回填，用于门控四周施力；静态碰撞器（无接收者）恒 1（不门控）。
+                // Last-frame interior-coverage fraction (0~1) fed back by the force receiver (bridge), to gate the surrounding-fluid force; static colliders (no receiver) stay 1 (no gating).
+                // 前フレーム内部被覆率（0~1）。力レシーバー（ブリッジ）が回填、四周施力のゲート用。静的は 1。
+                float subCoverage = receiver != null ? receiver.SubmergeCoverage01 : 1f;
                 // 推进碰撞器速度跟踪（每帧一次）；淹没模式据此按运动排开流体。 // Advance collider velocity tracking (once per frame); Submerge mode displaces fluid by this motion. // コライダー速度追跡を進める。
                 float2 colVel = c.ComputeVelocity();
                 for (int j = startIdx; j < _dataScratch.Count; j++)
@@ -116,6 +120,7 @@ namespace Fs.Liquid2D
                     d.SubmergeSplashThreshold = subSplashThr;
                     d.SubmergeSplashRange = subSplashRange;
                     d.SubmergeFluidDensityThreshold = subDensityThr;
+                    d.SubmergeCoverage = subCoverage;
                     d.Velocity = colVel;
                     _dataScratch[j] = d;
                 }

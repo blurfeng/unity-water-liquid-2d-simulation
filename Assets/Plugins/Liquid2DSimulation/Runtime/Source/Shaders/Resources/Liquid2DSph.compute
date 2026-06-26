@@ -63,7 +63,7 @@ struct MixData { int enabled; float speed; int withMovement; float maxSpeed; flo
 StructuredBuffer<MixData> MixDatas;
 
 // ---- 碰撞体（与 Liquid2DGpuCollider 对齐）。末尾 groupId/matchAll 用于组过滤；colliderMode: 0=Push, 1=Submerge；velocity 为碰撞器线速度（淹没模式排开流体用）。 ----
-struct GpuCollider { int shape; float2 center; float2 size; float rotation; float radius; int pointStart; int pointCount; int dynamic; int bodyIndex; int groupId; int matchAll; int colliderMode; float submergeCoupling; float submergeSplashStrength; float submergeSplashThreshold; float submergeSplashRange; float submergeFluidDensityThreshold; float2 velocity; };
+struct GpuCollider { int shape; float2 center; float2 size; float rotation; float radius; int pointStart; int pointCount; int dynamic; int bodyIndex; int groupId; int matchAll; int colliderMode; float submergeCoupling; float submergeSplashStrength; float submergeSplashThreshold; float submergeSplashRange; float submergeFluidDensityThreshold; float submergeCoverage; float2 velocity; };
 StructuredBuffer<GpuCollider> Colliders;
 StructuredBuffer<float2> ColliderPoints;
 
@@ -77,6 +77,9 @@ StructuredBuffer<ForceField> ForceFields;
 // ACCUM_STRIDE int channels each (fixed-point × impulseScale). Channels: 0=velSum.x, 1=velSum.y, 2=contactCount, 3=centroidSum.x,
 // 4=centroidSum.y, 5=densitySum, 6=buoyCount(n.y<0), 7=buoyDensitySum.
 // 動的体の接触累積を単一 UAV に統合（D3D11 の 8 UAV/kernel 制限回避）。body ごとに ACCUM_STRIDE チャンネル（定点化 × impulseScale）。
+// 通道 8 = 浮力排开体积和(Σ4r²×scale×densityFactor)：Submerge 为全方向内部覆盖，同时作覆盖率信号回读门控四周施力；Push 为下方接触。通道 9 = 壳层覆盖。
+// Channel 8 = buoyancy displaced volume (Σ4r²): Submerge = all-direction interior coverage, also read back as the coverage signal for the surrounding-force gate; Push = below-contacts. Channel 9 = shell coverage.
+// チャンネル 8 = 浮力排除体積（Submerge は全方向内部被覆、被覆率信号兼用）、9 = 殻層被覆。
 #define ACCUM_STRIDE 10
 #define ACCUM_VEL_X 0
 #define ACCUM_VEL_Y 1
@@ -89,11 +92,6 @@ StructuredBuffer<ForceField> ForceFields;
 #define ACCUM_BUOY_VOLUME 8
 #define ACCUM_SHELL_VOLUME 9
 RWStructuredBuffer<int> BodyAccum;
-// 每动态体「上一帧壳层接触数」（ClearImpulse 清零 BodyAccum 前快照得到）。供 IntegrateCollide 做物体级"在不在水里"门控：
-// 空中一小团 4-5 颗 → 接触数小 → 抑制壳层力（不弹飞）；真正入水 → 接触数大 → 满力。全程驻留显存、无回读。
-// Per-dynamic-body "last frame's shell contact count" (snapshotted in ClearImpulse before zeroing BodyAccum). Used by IntegrateCollide for the body-level in-water gate.
-// 各動的体の前フレーム殻層接触数（ClearImpulse でスナップショット）。in-water ゲート用、GPU 常駐・回読なし。
-RWStructuredBuffer<int> BodyInWater;
 
 // ---- 销毁区域（与 Liquid2DGpuDeadZone 对齐）。形状字段同 GpuCollider，末尾换为 groupId/matchAll。 ----
 // ---- Dead zones (matches Liquid2DGpuDeadZone). Shape fields mirror GpuCollider, ending with groupId/matchAll. ----
@@ -510,10 +508,6 @@ void ClearImpulse(uint3 id : SV_DispatchThreadID)
 {
     int b = (int)id.x; if (b >= numBodies) return;
     int accBase = b * ACCUM_STRIDE;
-    // 清零前先把上一帧的壳层接触数快照到 BodyInWater（驻留显存，供下一帧 IntegrateCollide 做"在不在水里"门控，无回读）。
-    // Before zeroing, snapshot last frame's shell contact count into BodyInWater (GPU-resident; next frame's IntegrateCollide uses it for the in-water gate; no readback).
-    // ゼロ化前に前フレームの殻層接触数を BodyInWater にスナップショット（GPU 常駐、次フレームの in-water ゲート用、回読なし）。
-    BodyInWater[b] = BodyAccum[accBase + ACCUM_CONTACT];
     [unroll] for (int c = 0; c < ACCUM_STRIDE; c++) BodyAccum[accBase + c] = 0;
 }
 
@@ -556,10 +550,17 @@ void IntegrateCollide(uint3 id : SV_DispatchThreadID)
         bool submergeShell = false; // 仅 Submerge：穿透量小=表面外壳层。 // Submerge only: small penetration = outer shell. // Submerge のみ。
         // 密度门控因子（仅 Submerge）：只对真正水体的粒子施力 + 计入刚体力（孤立低密度水滴→≈0→既不弹飞也不拖慢物体）。Push=1，thr=0 不过滤。 // Density-gate factor (Submerge): force + body-force only on real fluid (isolated droplet→≈0). Push=1, thr=0 disables. // 密度ゲート係数。
         float densityFactor = 1.0;
+        // 覆盖率门控（仅 Submerge）：col.submergeCoverage = 上一帧本体「内部覆盖率」(0~1，桥接器回填)。只有碰撞器几乎被流体覆盖时才对四周流体施位移/飞溅力；
+        // 空中飞散的零散流体覆盖率低 → gate≈0 → 不施力（不弹飞）。仅门控流体侧四周施力，刚体侧（浮力/阻力）由桥接器自己的覆盖死区把关，不在此门控。静态碰撞器覆盖率=1（不门控）。
+        // Coverage gate (Submerge only): col.submergeCoverage = last frame's interior-coverage fraction (0~1, fed back by the bridge). Only apply the displacement/splash force on surrounding fluid when the collider is nearly fully covered;
+        // scattered airborne fluid has low coverage → gate≈0 → no force (no fling). Gates the fluid-side force only; body-side (buoyancy/drag) is handled by the bridge's own coverage deadzone. Static colliders: coverage 1 (no gating).
+        // 被覆率ゲート（Submerge のみ）：ほぼ全被覆時のみ四周施力。流体側のみゲート、剛体側はブリッジのデッドゾーンで処理。静的は 1。
+        float coverGate = 1.0;
         if (col.colliderMode != 0)
         {
             float dthr = col.submergeFluidDensityThreshold;
             densityFactor = dthr > 1e-4 ? smoothstep(dthr * 0.5, dthr, densityRatio) : 1.0;
+            coverGate = smoothstep(0.3, 0.85, col.submergeCoverage); // 覆盖率达高膝点→满力、空中(≈0)→不施力、部分覆盖渐入。膝点对打包率尺度稳健，是唯一调参点（太严→调低、太松→调高）。 // high knee → full, air (≈0) → none; robust knees, the single tuning point. // 膝点が唯一の調整点。
         }
         // Push：将粒子推出，速度反射+摩擦；Submerge：粒子穿过，仅对表面外壳层粒子施 −velocity 位移力（绕流/水花），内部由 SPH 自然带动。
         // Push: eject, reflect, friction; Submerge: pass through, only outer-shell particles get the −velocity force, interior carried by SPH.
@@ -576,11 +577,7 @@ void IntegrateCollide(uint3 id : SV_DispatchThreadID)
             submergeShell = length(corr) <= band; // ≤band 为表面外壳层；>band 为内部覆盖。 // ≤band shell; >band interior. // ≤band 殻層。
             if (submergeShell)
             {
-                // 物体级"在不在水里"门控：用上一帧壳层接触数。空中一小团 4-5 颗 → 接触数小 → gate≈0 → 不施力（不弹飞）；真正入水 → 大 → 满力。
-                // Body-level in-water gate from last frame's shell contact count: small clump (4-5) → low count → gate≈0 → no force (no fling); truly in water → high → full.
-                // 物体級 in-water ゲート（前フレーム殻層接触数）：小団→≈0→施力なし、入水→満力。
-                float inWaterGate = col.bodyIndex >= 0 ? smoothstep(4.0, 10.0, (float)BodyInWater[col.bodyIndex]) : 1.0;
-                float ff = densityFactor * inWaterGate; // 合并力因子（密度门控 × 在水门控）。 // combined force factor. // 合成係数。
+                float ff = densityFactor * coverGate; // 合并力因子（密度门控 × 覆盖率门控，覆盖率门控已在碰撞体级算好）。 // combined force factor (coverage gate computed at collider level). // 合成係数。
                 float colSpeed = length(col.velocity);
                 // ① 位移耦合（耗散）：把壳层粒子推向碰撞器速度反方向 −velocity（绕过物体回流），随速度从 0 渐入，有界→稳定。乘 ff。 // Displacement coupling: shell toward −velocity, bounded. ×ff. // 変位結合。
                 float gate = col.submergeSplashThreshold > 1e-4 ? saturate(colSpeed / col.submergeSplashThreshold) : (colSpeed > 0 ? 1.0 : 0.0);
@@ -597,8 +594,8 @@ void IntegrateCollide(uint3 id : SV_DispatchThreadID)
         {
             // 合并累积缓冲：每体 ACCUM_STRIDE 个 int 通道（见顶部宏）。 // Merged accumulation: ACCUM_STRIDE int channels per body. // 統合累積バッファ。
             int accBase = col.bodyIndex * ACCUM_STRIDE;
-            // 排开/壳层面积乘密度门控因子：低密度粘着水滴→≈0→不计入浮力/阻尼/drag，物体照常自由下落。 // Displaced/shell area ×density-gate factor: low-density stuck droplets → ≈0 → no buoyancy/damping/drag, body free-falls. // 排除/殻層面積×密度ゲート。
-            int volFixed = (int)(4.0 * pr * pr * impulseScale * densityFactor); // 每粒子排开面积 (2r)²=4r²（定点化、密度加权）。 // per-particle displaced area (fixed-point, density-weighted). // 排除面積（密度加重）。
+            // 排开/壳层面积乘密度门控：低密度粘着水滴→≈0→不计入浮力/阻尼/drag，物体照常自由下落。 // Displaced/shell area ×density-gate: low-density stuck droplets → ≈0. // 排除/殻層面積×密度ゲート。
+            int volFixed = (int)(4.0 * pr * pr * impulseScale * densityFactor); // 每粒子排开面积 (2r)²=4r²（定点化、密度加权）。 // per-particle displaced area (fixed-point, density-weighted). // 排除面積。
             int densFixed = (int)(mat.density * impulseScale);
 
             // 归类：Push → drag(全部) + 浮力(下方接触)；Submerge 内部覆盖 → 仅浮力；Submerge 壳层 → drag + 壳层覆盖（不计浮力）。
@@ -622,7 +619,9 @@ void IntegrateCollide(uint3 id : SV_DispatchThreadID)
             // 壳层覆盖（drag/阻尼缩放用，Σ4r²）：仅 Submerge 壳层。 // Shell coverage (Σ4r², for drag/damping scale): Submerge shell only. // 殻層被覆。
             if (submergeShell)
                 InterlockedAdd(BodyAccum[accBase + ACCUM_SHELL_VOLUME], volFixed);
-            // 浮力：Push 仅下方接触（n.y<0）；Submerge 内部覆盖（被流体包裹，全方向计排开体积）。 // Buoyancy: Push below-contacts (n.y<0); Submerge interior (all-direction displaced volume). // 浮力：Push 下方、Submerge 内部。
+            // 浮力（排开体积）：Push 仅下方接触（n.y<0）；Submerge 内部覆盖全方向计入=被流体包裹的整体浮力（z 同时作覆盖率信号，桥接器据 z/体积 门控空中误浮）。
+            // Buoyancy (displaced volume): Push below-contacts only (n.y<0); Submerge interior all directions = whole-body buoyancy of an enveloped body (z doubles as the coverage signal; the bridge gates the airborne case by z/volume).
+            // 浮力：Push は下方接触のみ、Submerge 内部は全方向（整体浮力、z は被覆率信号兼用）。
             if ((isPush && n.y < 0) || interiorSub)
             {
                 InterlockedAdd(BodyAccum[accBase + ACCUM_BUOY_N], 1);

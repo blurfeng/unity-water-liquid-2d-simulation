@@ -80,6 +80,10 @@ namespace Fs.Liquid2D
         private Rigidbody2D _rb;
         private float _autoVolume = -1f; // 懒计算缓存（<0 表示未算）。 // lazy cache (<0 = not computed). // 遅延キャッシュ。
         private int _isSubmerge = -1;    // 子碰撞器是否含淹没模式：-1 未判定，0 否，1 是。 // whether child colliders use Submerge: -1 unknown, 0 no, 1 yes. // 子コライダーが水没モードか。
+        private float _lastCoverage01;   // 上一帧内部覆盖率(0~1)，回填给碰撞器门控淹没模式四周施力。 // last-frame interior-coverage fraction (0~1), fed back to gate the Submerge surrounding-fluid force. // 前フレーム内部被覆率。
+
+        /// <inheritdoc/>
+        public float SubmergeCoverage01 => _lastCoverage01;
 
         // 复用的托管暂存（仅自动体积计算用，一次性）。 // Reused scratch for auto-volume (one-shot). // 自動体積用スクラッチ。
         private static readonly List<Liquid2DColliderData> _areaData = new List<Liquid2DColliderData>(8);
@@ -155,9 +159,15 @@ namespace Fs.Liquid2D
         public void ApplyLiquidForces(in Liquid2DBodyForce force)
         {
             if (!_rb) return;
-            if (force.ContactCount <= 0) return; // 无接触 = 不在流体中，无浮力/阻力。 // no contact = not in fluid. // 非接触。
+            if (force.ContactCount <= 0) { _lastCoverage01 = 0f; return; } // 无接触 = 不在流体中，无浮力/阻力，覆盖率归 0。 // no contact = not in fluid; coverage → 0. // 非接触。
 
             float dt = force.Dt > 1e-6f ? force.Dt : Time.fixedDeltaTime;
+
+            // 记录本帧「内部覆盖率」(0~1) = 浮力排开体积（淹没模式为全方向内部覆盖）/ 物体体积，回填给碰撞器供求解器门控淹没模式四周施力（几乎全覆盖才施力）。与浮力浸没比例同源。
+            // Record this frame's interior-coverage fraction (0~1) = buoyancy displaced volume (all-direction interior coverage in Submerge) / body volume, fed back to gate the Submerge surrounding-fluid force. Same source as the buoyancy submerged fraction.
+            // 本フレームの内部被覆率（0~1）= 浮力排除体積（水没は全方向内部被覆）/ 体積を記録、四周施力ゲートに使用。浮力浸水率と同源。
+            float effVol = EffectiveVolume();
+            _lastCoverage01 = effVol > 1e-6f ? Mathf.Clamp01(force.BuoyancySubmergedVolume / effVol) : 0f;
             // 浸没比例（0..1）。阻力/阻尼用「全向接触数」（四周浸没即受阻）；浮力用「物体下方接触数」（仅下方粒子托起物体），
             // 避免压在物体顶部的粒子产生虚假上浮——这正是「低密度方块被顶部流体一起带飞」问题的根因。
             // Submerged fraction (0..1). Drag/damping use all-direction contacts; buoyancy uses below-body contacts only (only

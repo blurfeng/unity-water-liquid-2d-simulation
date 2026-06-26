@@ -4,10 +4,10 @@ namespace Fs.Liquid2D
 {
     /// <summary>
     /// 碰撞体的 GPU 上传结构（与 Liquid2DSph.compute 的 GpuCollider 对齐）。把 <see cref="Liquid2DColliderData"/> 的
-    /// enum/byte 字段转为 int，避免 GPU StructuredBuffer 的字节对齐问题。stride = 84 bytes。
+    /// enum/byte 字段转为 int，避免 GPU StructuredBuffer 的字节对齐问题。stride = 88 bytes。
     /// GPU-upload form of a collider (matches GpuCollider in Liquid2DSph.compute). Converts enum/byte fields of
-    /// <see cref="Liquid2DColliderData"/> to int to avoid GPU StructuredBuffer byte-alignment issues. stride = 84 bytes.
-    /// コライダーの GPU アップロード構造（Liquid2DSph.compute の GpuCollider と整合）。stride = 84 bytes。
+    /// <see cref="Liquid2DColliderData"/> to int to avoid GPU StructuredBuffer byte-alignment issues. stride = 88 bytes.
+    /// コライダーの GPU アップロード構造（Liquid2DSph.compute の GpuCollider と整合）。stride = 88 bytes。
     /// </summary>
     public struct Liquid2DGpuCollider
     {
@@ -28,6 +28,7 @@ namespace Fs.Liquid2D
         public float SubmergeSplashThreshold;
         public float SubmergeSplashRange;
         public float SubmergeFluidDensityThreshold;
+        public float SubmergeCoverage;
         public float2 Velocity;
 
         public static Liquid2DGpuCollider From(in Liquid2DColliderData c) => new Liquid2DGpuCollider
@@ -49,6 +50,7 @@ namespace Fs.Liquid2D
             SubmergeSplashThreshold = c.SubmergeSplashThreshold,
             SubmergeSplashRange = c.SubmergeSplashRange,
             SubmergeFluidDensityThreshold = c.SubmergeFluidDensityThreshold,
+            SubmergeCoverage = c.SubmergeCoverage,
             Velocity = c.Velocity,
         };
     }

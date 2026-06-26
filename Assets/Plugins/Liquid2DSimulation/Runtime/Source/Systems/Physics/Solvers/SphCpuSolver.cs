@@ -24,9 +24,6 @@ namespace Fs.Liquid2D
         private NativeArray<float2> _velNext;
         private int _capacity;
 
-        // 每动态体「上一帧壳层接触数」（规约后更新、collide job 读取做物体级在水门控）。常驻、纯 CPU、无跨域通讯。 // Per-body last-frame shell contact count for the in-water gate (updated after reduce, read by the collide job). Persistent, CPU-only. // 前フレーム殻層接触数（in-water ゲート）。
-        private NativeArray<int> _prevInWater;
-
         private void EnsureCapacity(int cap)
         {
             if (_capacity >= cap && _densities.IsCreated) return;
@@ -43,14 +40,6 @@ namespace Fs.Liquid2D
 
             var store = ctx.Store;
             EnsureCapacity(store.Capacity);
-
-            // 物体级在水门控用的持久数组（每动态体一个 int），按动态体数确保大小。 // Persistent array for the in-water gate (one int per dynamic body). // in-water ゲート用永続配列。
-            int numBodies = math.max(1, ctx.ColliderVelSum.IsCreated ? ctx.ColliderVelSum.Length : 1);
-            if (!_prevInWater.IsCreated || _prevInWater.Length < numBodies)
-            {
-                if (_prevInWater.IsCreated) _prevInWater.Dispose();
-                _prevInWater = new NativeArray<int>(numBodies, Allocator.Persistent); // 零初始化：起始视为不在水里。 // zero-init = starts "not in water". // ゼロ初期化。
-            }
 
             int substeps = math.max(1, p.Substeps);
             float subDt = dt / substeps;
@@ -127,7 +116,6 @@ namespace Fs.Liquid2D
                     Materials = ctx.Materials,
                     Colliders = ctx.Colliders.Colliders, Points = ctx.Colliders.Points, DT = subDt,
                     Densities = _densities, TargetDensity = p.TargetDensity,
-                    BodyPrevInWater = _prevInWater,
                     CollisionDamping = p.CollisionDamping, MaxSpeed = p.MaxSpeed,
                     HasColliders = (byte)(hasColliders ? 1 : 0),
                     Accumulate = (byte)(accumulate ? 1 : 0), OutVelSum = outVelSum, OutBody = outBody, OutContact = outContact,
@@ -192,13 +180,13 @@ namespace Fs.Liquid2D
                             int slot = ctx.ActiveIndices[kk];
                             float density = materials[typeIds[slot]].Density;
                             float r = radii[slot];
-                            // 归类哨兵（见 collide job）：Submerge 内部=-2（仅浮力）、壳层=+2（仅 drag+壳层覆盖）；Push 为真实法线 y。
-                            // Role sentinel (see collide job): Submerge interior=-2 (buoyancy only), shell=+2 (drag + shell coverage only); Push = real normal y.
-                            // 役割哨兵：Submerge 内部=-2、殻層=+2、Push=実法線 y。
+                            // 归类哨兵（见 collide job）：Submerge 内部覆盖=-2（全方向计浮力，不计 drag）、壳层=+2（仅 drag+壳层覆盖）；Push 为真实法线 y。
+                            // Role sentinel (see collide job): Submerge interior=-2 (all-direction buoyancy, no drag), shell=+2 (drag + shell coverage only); Push = real normal y.
+                            // 役割哨兵：Submerge 内部=-2（全方向浮力）、殻層=+2、Push=実法線 y。
                             float ny = outNormalY[kk];
-                            bool interiorSub = ny == -2f; // Submerge 内部覆盖：只计浮力，不计 drag（避免空中重叠粒子拖住物体）。 // interior: buoyancy only. // 内部：浮力のみ。
+                            bool interiorSub = ny == -2f; // Submerge 内部覆盖：全方向计浮力、不计 drag（避免空中重叠粒子拖住物体）。 // interior: buoyancy only. // 内部：浮力のみ、drag 除外。
                             bool shellSub = ny == 2f;     // Submerge 表面外壳层：计 drag/质心 + 壳层覆盖。 // shell: drag + shell coverage. // 殻層。
-                            // 密度门控因子：缩放排开体积/壳层覆盖（低密度粘着水滴→≈0→不计入浮力/阻尼/drag，物体照常自由下落）。 // density-gate factor scaling displaced/shell volume (low-density stuck droplets → ≈0 → no buoyancy/damping/drag, body free-falls). // 密度ゲート。
+                            // 密度门控因子：缩放浮力排开体积/壳层覆盖（低密度粘着水滴→≈0→不计入浮力/阻尼/drag，物体照常自由下落）。 // density-gate factor scaling buoyancy displaced/shell volume (low-density droplet → ≈0). // 密度ゲート。
                             float df = outDensityFactor[kk];
 
                             // 入射流体速度 + 接触累积（drag 冲走 + 力矩质心）：Push 全部接触、Submerge 仅壳层；内部覆盖不计入 drag。
@@ -210,10 +198,11 @@ namespace Fs.Liquid2D
                                 if (hasContact && body < contactOut.Length)
                                     contactOut[body] += new float4(outContact[kk].x, outContact[kk].y, 1f, density);
                             }
-                            // 浮力累积（排开体积）：Push 仅下方接触（n.y<0）；Submerge 内部覆盖（哨兵 -2，<0 通过门控）。
-                            // x=接触数、y=密度和、z=排开面积和（每粒子格子面积 (2r)²=4r²，满浸没时≈物体面积）。
-                            // Buoyancy accum (displaced volume): Push below-contacts (n.y<0); Submerge interior (sentinel -2, passes <0). x=count, y=density sum, z=Σ4r².
-                            // 浮力累積：Push 下方接触、Submerge 内部。x=接触数、y=密度和、z=Σ4r²。
+                            // 浮力累积（排开体积）：Submerge 内部覆盖（哨兵 -2）全方向计入=被流体包裹的整体浮力（z 同时作覆盖率信号，桥接器据 z/体积 门控空中误浮）；Push 仍仅下方接触（真实 n.y<0）。
+                            // 哨兵 -2 与 Push 真实 n.y<0 均通过 `ny<0`；壳层 +2 排除。x=接触数、y=密度和、z=排开面积和(Σ4r²)。
+                            // Buoyancy accum (displaced volume): Submerge interior (sentinel -2) all directions = whole-body buoyancy of an enveloped body (z doubles as the coverage signal; the bridge gates the airborne case by z/volume); Push still below-contacts only (real n.y<0).
+                            // Sentinel -2 and Push real n.y<0 pass `ny<0`; shell +2 excluded. x=count, y=density sum, z=Σ4r².
+                            // 浮力累積：Submerge 内部は全方向（整体浮力、z は被覆率信号兼用）、Push は下方のみ。
                             if (hasBuoy && body < buoyOut.Length && ny < 0f)
                                 buoyOut[body] += new float4(1f, density, 4f * r * r * df, 0f);
                             // 壳层覆盖累积（w 通道，Σ4r²）：Submerge 壳层。桥接器用「壳层覆盖 / 物体体积」缩放 drag/阻尼——
@@ -224,13 +213,6 @@ namespace Fs.Liquid2D
                             if (hasBuoy && body < buoyOut.Length && shellSub)
                                 buoyOut[body] += new float4(0f, 0f, 0f, 4f * r * r * df);
                         }
-
-                        // 更新「上一帧壳层接触数」供下一帧 collide job 做物体级在水门控（contactOut.z = 本帧壳层接触数）。
-                        // Update per-body shell contact count for next frame's in-water gate (contactOut.z = this frame's shell contact count).
-                        // 物体級在水ゲート用の前フレーム殻層接触数を更新。
-                        if (hasContact && _prevInWater.IsCreated)
-                            for (int b = 0; b < velSumOut.Length && b < _prevInWater.Length; b++)
-                                _prevInWater[b] = b < contactOut.Length ? (int)contactOut[b].z : 0;
                     }
                 }
 
@@ -265,7 +247,6 @@ namespace Fs.Liquid2D
         {
             if (_densities.IsCreated) _densities.Dispose();
             if (_velNext.IsCreated) _velNext.Dispose();
-            if (_prevInWater.IsCreated) _prevInWater.Dispose();
             _capacity = 0;
         }
     }

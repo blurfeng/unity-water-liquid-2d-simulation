@@ -107,6 +107,15 @@ namespace Fs.Liquid2D
         public float SubmergeFluidDensityThreshold;
 
         /// <summary>
+        /// 淹没模式：该动态体上一帧的「内部覆盖率」(0~1，由桥接器回填，每帧由 <see cref="Liquid2DColliderRegistry"/> 写入)。表示碰撞器被流体包裹的程度（≈1 为几乎全部覆盖）。
+        /// 求解器据此门控「给四周流体施加位移/飞溅力」——只有碰撞器几乎被流体覆盖（真正在水里）时才施力，避免在空中把四周飞散的零散流体错误弹飞。静态碰撞器（无力接收者）恒为 1。
+        /// Submerge: this dynamic body's last-frame interior-coverage fraction (0~1, fed back by the bridge, written each frame by <see cref="Liquid2DColliderRegistry"/>). How enveloped the collider is by fluid (≈1 = almost fully covered).
+        /// The solver gates the "displacement/splash force on surrounding fluid" by it — force is applied only when the collider is almost fully covered (truly in water), avoiding flinging scattered fluid in the air. Static colliders (no force receiver) stay 1.
+        /// 水没：当該動的体の前フレーム内部被覆率（0~1、ブリッジが回填、毎フレーム <see cref="Liquid2DColliderRegistry"/> が書込み）。≈1 でほぼ全被覆。求解器が四周施力をゲート。静的コライダーは 1。
+        /// </summary>
+        public float SubmergeCoverage;
+
+        /// <summary>
         /// 碰撞器线速度（世界空间），由 <see cref="Liquid2DCollider.ComputeVelocity"/> 每帧计算。淹没模式据此判断碰撞器是否在排开流体。
         /// Collider linear velocity (world space), computed each frame by <see cref="Liquid2DCollider.ComputeVelocity"/>. Submerge mode uses it to decide whether the collider is displacing fluid.
         /// コライダー線速度（ワールド空間）。<see cref="Liquid2DCollider.ComputeVelocity"/> が毎フレーム計算。水没モードで流体排除の判定に使用。
