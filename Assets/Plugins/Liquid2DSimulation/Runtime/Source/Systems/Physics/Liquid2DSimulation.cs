@@ -275,6 +275,34 @@ namespace Fs.Liquid2D
             if (_store.IsAlive(handle)) FreeSlot(handle.Index);
         }
 
+        /// <summary>
+        /// 运行时一键清空所有存活粒子（保留已分配容量与已注册描述符/分组）。清空后所有旧句柄立即失效，渲染当帧即为空。
+        /// 可在主线程任意时机调用（解算 Job 在 FixedUpdate 内已完成）。GPU 模式下会同步把求解器渲染计数归零，避免残影。
+        /// Clears all alive particles at runtime (keeps allocated capacity and registered descriptors/groups). All existing
+        /// handles become stale immediately and rendering shows empty from this frame on. Safe to call any time on the main
+        /// thread (solve jobs complete inside FixedUpdate). In GPU mode it also zeroes the solver's render count to avoid ghosting.
+        /// 実行時に全生存粒子を一括クリアします（確保済み容量と登録済み記述子/グループは保持）。既存ハンドルは即時失効し、
+        /// 当該フレームから描画は空になります。メインスレッドの任意時点で安全（解算 Job は FixedUpdate 内で完了）。
+        /// GPU モードでは残像防止のためソルバーの描画計数も 0 にします。
+        /// </summary>
+        public void ClearAll()
+        {
+            _store.Clear();
+            foreach (var g in _groupSlots.Values)
+            {
+                g.Handles.Clear();
+                g.Head = 0;
+                g.AliveCount = 0;
+            }
+            _gpuPendingSpawns.Clear();
+            _activeCount = 0;
+            _activeDirty = true;
+            // GPU 求解器：渲染计数归零，立即停止残影渲染（CPU 求解器为空操作，与排空早退路径一致）。
+            // GPU solver: zero the render count to stop ghost-rendering immediately (no-op on CPU, mirrors the drained early-out path).
+            // GPU ソルバー：描画計数を 0 にし残像描画を即停止（CPU は空操作、排空早期離脱と同じ）。
+            _solver?.ResetRenderCount();
+        }
+
         // 超出每组上限时按 LRU 淘汰最旧的存活粒子。推进 Head 跳过墓碑（已 Free 或 slot 被复用 → 句柄失效），找到最旧存活者淘汰。
         // Evict the oldest alive particle (LRU) when the per-group cap is exceeded. Advance Head past tombstones (freed or slot-reused → stale handle) to the oldest alive one.
         // グループ上限超過時、最旧の生存粒子を LRU で淘汰。Head を進めて墓碑をスキップ。
@@ -648,10 +676,25 @@ namespace Fs.Liquid2D
         [UnityEditor.InitializeOnLoadMethod]
         private static void RegisterDomainReloadCleanup()
         {
-            UnityEditor.AssemblyReloadEvents.beforeAssemblyReload += () =>
-            {
-                if (_instance) DestroyImmediate(_instance.gameObject);
-            };
+            UnityEditor.AssemblyReloadEvents.beforeAssemblyReload += EditorDestroyInstance;
+        }
+
+        /// <summary>
+        /// 立即销毁运行时单例（触发 OnDestroy 完成 ComputeBuffer / NativeArray 释放）。仅编辑器使用。
+        /// 单例是 HideAndDontSave 对象，退出 Play 模式时不会被引擎自动销毁，会带着上一帧粒子数据残留进编辑模式，
+        /// 导致渲染链路把最后一帧流体反复合成。退出 Play 时主动调用本方法即可清空数据。
+        /// Immediately destroy the runtime singleton (runs OnDestroy to release ComputeBuffer / NativeArray). Editor only.
+        /// The singleton is a HideAndDontSave object that the engine does NOT auto-destroy on exiting Play mode; it would
+        /// linger into edit mode carrying last-frame particle data, so the render chain keeps compositing the final fluid
+        /// frame. Calling this on Play exit clears the data.
+        /// ランタイム単例を即時破棄します（OnDestroy を実行し ComputeBuffer / NativeArray を解放）。エディタ専用。
+        /// 単例は HideAndDontSave オブジェクトで、Play モード終了時にエンジンが自動破棄しないため、前フレームの粒子
+        /// データを保持したまま編集モードへ残留し、描画チェーンが最後の流体フレームを合成し続けます。Play 終了時に
+        /// 本メソッドを呼べばデータを消去できます。
+        /// </summary>
+        internal static void EditorDestroyInstance()
+        {
+            if (_instance) DestroyImmediate(_instance.gameObject);
         }
 #endif
     }

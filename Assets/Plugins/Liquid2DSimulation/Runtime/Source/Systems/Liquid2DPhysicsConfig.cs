@@ -192,6 +192,19 @@ namespace Fs.Liquid2D
              "物理の固定タイムステップ（秒）。エンジン既定は 0.02（50Hz）。")]
         private float fixedTimestep = 0.02f;
 
+        [Header("Editor")]
+        [SerializeField, LocalizationTooltip(
+             "仅编辑器：退出 Play 模式时清空渲染内容，避免停止后画面停留在最后一帧流体上。" +
+             "（模拟单例是 HideAndDontSave 对象，退出 Play 不会被引擎自动销毁，会带着上一帧粒子残留进编辑模式被反复合成；" +
+             "本开关在退出时主动销毁单例并刷新 Game 视图。）不影响运行时与打包。",
+             "Editor only: clear the rendered content when exiting Play mode, so the view does not stay on the last fluid frame after stop. " +
+             "(The simulation singleton is a HideAndDontSave object the engine does NOT auto-destroy on Play exit; it would linger into edit mode " +
+             "carrying last-frame particles and keep getting composited. This switch destroys the singleton on exit and refreshes the Game view.) No effect at runtime or in builds.",
+             "エディタ専用：Play モード終了時に描画内容をクリアし、停止後に画面が最後の流体フレームに留まらないようにします。" +
+             "（シミュレーション単例は HideAndDontSave オブジェクトで、Play 終了時にエンジンが自動破棄せず、前フレームの粒子を保持したまま" +
+             "編集モードへ残留し合成され続けます。本スイッチは終了時に単例を破棄し Game ビューを更新します。）実行時・ビルドには影響しません。")]
+        private bool clearRenderOnExitPlayMode = true;
+
         private void Awake()
         {
             if (applyOnAwake) Apply();
@@ -231,6 +244,42 @@ namespace Fs.Liquid2D
         {
             if (applyOnAwake && Application.isPlaying)
                 Apply();
+        }
+
+        // 退出 Play 模式时清空渲染内容。模拟单例是 HideAndDontSave 对象，退出 Play 不会被引擎自动销毁，会带着
+        // 上一帧粒子数据残留进编辑模式，导致渲染链路把最后一帧流体反复合成（看似“冻结”）。进入编辑模式时主动销毁
+        // 单例（_instance 置空 → Pass 早退不再合成），再强制重绘一次 Game 视图刷新空画面即可清空。
+        // 仅在场景中存在启用了 clearRenderOnExitPlayMode 的本组件时触发。
+        // Clear the rendered content when exiting Play mode. The simulation singleton is a HideAndDontSave object the engine
+        // does NOT auto-destroy on Play exit; it lingers into edit mode carrying last-frame particle data, so the render chain
+        // keeps compositing the final fluid frame ("frozen"). On entering edit mode, destroy the singleton (_instance becomes
+        // null → the Pass early-outs and stops compositing), then force one Game-view repaint to refresh the now-empty result.
+        // Triggered only when a Liquid2DPhysicsConfig with clearRenderOnExitPlayMode enabled exists in the scene.
+        // Play モード終了時に描画内容をクリアします。シミュレーション単例は HideAndDontSave オブジェクトで、Play 終了時に
+        // エンジンが自動破棄せず、前フレームの粒子データを保持したまま編集モードへ残留し、描画チェーンが最後の流体
+        // フレームを合成し続けます（“フリーズ”）。編集モード移行時に単例を破棄（_instance が null → Pass が早期離脱し
+        // 合成停止）し、Game ビューを一度強制再描画して空の結果へ更新すればクリアできます。
+        // clearRenderOnExitPlayMode が有効な本コンポーネントがシーンに存在する場合のみ実行します。
+        [UnityEditor.InitializeOnLoadMethod]
+        private static void RegisterClearRenderOnExitPlayMode()
+        {
+            UnityEditor.EditorApplication.playModeStateChanged += state =>
+            {
+                if (state != UnityEditor.PlayModeStateChange.EnteredEditMode) return;
+
+                var configs = FindObjectsByType<Liquid2DPhysicsConfig>(
+                    FindObjectsInactive.Include, FindObjectsSortMode.None);
+                foreach (var config in configs)
+                {
+                    if (config && config.clearRenderOnExitPlayMode)
+                    {
+                        // 先销毁残留的模拟单例清空数据，再重绘刷新画面。 // Destroy the lingering singleton to clear data, then repaint. // 残留単例を破棄してデータをクリアし、再描画。
+                        Liquid2DSimulation.EditorDestroyInstance();
+                        UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
+                        break;
+                    }
+                }
+            };
         }
 #endif
     }
