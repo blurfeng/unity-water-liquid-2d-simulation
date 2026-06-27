@@ -175,6 +175,11 @@ namespace Fs.Liquid2D
             return id;
         }
 
+        // ⚠ 副作用：这是「查找或注册」——首次见到的 nameTag 会被分配新 groupId 并写入 _nameTagToGroup（非纯查询）。
+        // 由 Spawn 及每帧的注册表 BuildBuffer（碰撞器/力场/销毁区域）调用，故 _nameTagToGroup 会随出现过的不同 nameTag 单调增长（通常很少，不回收）。
+        // ⚠ Side effect: this is "get-or-register" — a first-seen nameTag is assigned a new groupId and written into _nameTagToGroup (not a pure lookup).
+        // Called from Spawn and the per-frame registry BuildBuffer (colliders/force-fields/dead-zones), so _nameTagToGroup grows monotonically with distinct tags seen (usually few; not reclaimed).
+        // ⚠ 副作用：初見の nameTag を登録（純粋な照会ではない）。出現したタグ分だけ単調増加。
         private int GetGroup(string nameTag)
         {
             string key = string.IsNullOrEmpty(nameTag) ? string.Empty : nameTag;

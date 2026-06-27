@@ -167,51 +167,49 @@ namespace Fs.Liquid2D.Utility
                 Debug.LogWarning("对象列表为空，无法进行随机。");
                 return default(T);
             }
-            
-            // 只有一个对象，直接返回。
+
+            // 单元素：唯一候选直接返回，不看权重。权重只用于多候选间分配相对比例，单候选无「相对」可言。
+            // Single item: return the sole candidate directly, ignoring weight — weight only allocates relative proportions among multiple candidates; a lone candidate has no "relative".
+            // 単一要素：唯一の候補をそのまま返す（重みは多候補間の相対比のみ）。
             if (itemArray.Length == 1)
             {
                 return itemArray[0];
             }
-            
-            // 计算权重总和。
+
+            // 多元素：先求权重总和；全零（含负，分布无定义）返回 default；零权重项在累加中永不命中（Weight=0=不选）。
+            // Multiple items: sum weights; all-zero (incl. negative, undefined distribution) → default; a zero-weight item is never hit in the cumulative scan (Weight=0 = never selected).
+            // 複数要素：重み合計を計算、全 0 は default、0 重みは累加で命中しない。
             int weightTotal = 0;
             for (int i = 0; i < itemArray.Length; i++)
             {
                 weightTotal += getWeight(itemArray[i]);
             }
-            
-            // 在权重总和大于 0 的情况下进行随机。
-            if (weightTotal > 0)
+            if (weightTotal <= 0)
             {
-                int randomNum = UnityEngine.Random.Range(1, weightTotal + 1);
-            
-                int cumulative = 0;
-            
-                // 确认 randomNum 命中了哪个区段。这里通过按顺序累加权重来判断命中区段。
-                for (int i = 0; i < itemArray.Length; i++)
+                Debug.LogWarning($"所有权重均为 0（或为负），无可选对象。 WeightTotal: {weightTotal}");
+                return default(T);
+            }
+
+            int randomNum = UnityEngine.Random.Range(1, weightTotal + 1);
+            int cumulative = 0;
+            // 确认 randomNum 命中了哪个区段。这里通过按顺序累加权重来判断命中区段。
+            for (int i = 0; i < itemArray.Length; i++)
+            {
+                cumulative += getWeight(itemArray[i]);
+                if (randomNum <= cumulative)
                 {
-                    cumulative += getWeight(itemArray[i]);
-                    if (randomNum <= cumulative)
-                    {
-                        return itemArray[i];
-                    }
+                    return itemArray[i];
                 }
             }
-            else
-            {
-                Debug.LogWarning($"权重总和必须大于 0。 WeightTotal: {weightTotal}");
-            }
 
+            // 理论不可达：randomNum ∈ [1, weightTotal] 必命中某区段。 // Unreachable: randomNum ∈ [1, weightTotal] always hits a segment. // 到達不能。
             Debug.LogError("权重逻辑错误，返回第一个可用对象。");
-            return itemArray.First();
+            return itemArray[0];
         }
 
-        // 免分配版：按索引遍历 IReadOnlyList，行为与上面的 IEnumerable 版完全一致（单元素直接返回、全零权重回退首个）。
-        // 单元素不校验权重、全零回退首个等边界语义按现状保留；零权重的精确语义在后续清理阶段统一调整。
-        // Allocation-free variant: index the IReadOnlyList; behavior identical to the IEnumerable version above (single item
-        // returned directly, all-zero weights fall back to the first). Edge semantics preserved as-is for now.
-        // 無確保版：IReadOnlyList を索引走査。挙動は IEnumerable 版と同一。
+        // 免分配版：按索引遍历 IReadOnlyList，行为与上面的 IEnumerable 版完全一致（含零权重语义：Weight=0 永不选中、全零返回 default）。
+        // Allocation-free variant: index the IReadOnlyList; behavior identical to the IEnumerable version above (incl. zero-weight semantics: Weight=0 is never selected, all-zero → default).
+        // 無確保版：IReadOnlyList を索引走査。挙動は IEnumerable 版と同一（零重み意味論を含む）。
         private static T WeightInternal<T>(IReadOnlyList<T> items, Func<T, int> getWeight)
         {
             if (items == null) throw new ArgumentNullException(nameof(items));
@@ -224,40 +222,38 @@ namespace Fs.Liquid2D.Utility
                 return default(T);
             }
 
-            // 只有一个对象，直接返回。
+            // 单元素：唯一候选直接返回，不看权重（与 IEnumerable 版一致）。 // Single item: return the sole candidate directly, ignoring weight (matches the IEnumerable version). // 単一要素はそのまま返す。
             if (count == 1)
             {
                 return items[0];
             }
 
-            // 计算权重总和。
+            // 多元素：先求权重总和；全零（含负，分布无定义）返回 default；零权重项在累加中永不命中（Weight=0=不选）。
+            // Multiple items: sum weights; all-zero (incl. negative) → default; a zero-weight item is never hit in the cumulative scan.
+            // 複数要素：重み合計、全 0 は default、0 重みは命中しない。
             int weightTotal = 0;
             for (int i = 0; i < count; i++)
             {
                 weightTotal += getWeight(items[i]);
             }
-
-            // 在权重总和大于 0 的情况下进行随机。
-            if (weightTotal > 0)
+            if (weightTotal <= 0)
             {
-                int randomNum = UnityEngine.Random.Range(1, weightTotal + 1);
-                int cumulative = 0;
+                Debug.LogWarning($"所有权重均为 0（或为负），无可选对象。 WeightTotal: {weightTotal}");
+                return default(T);
+            }
 
-                // 确认 randomNum 命中了哪个区段。按顺序累加权重判断命中区段。
-                for (int i = 0; i < count; i++)
+            int randomNum = UnityEngine.Random.Range(1, weightTotal + 1);
+            int cumulative = 0;
+            for (int i = 0; i < count; i++)
+            {
+                cumulative += getWeight(items[i]);
+                if (randomNum <= cumulative)
                 {
-                    cumulative += getWeight(items[i]);
-                    if (randomNum <= cumulative)
-                    {
-                        return items[i];
-                    }
+                    return items[i];
                 }
             }
-            else
-            {
-                Debug.LogWarning($"权重总和必须大于 0。 WeightTotal: {weightTotal}");
-            }
 
+            // 理论不可达。 // Unreachable. // 到達不能。
             Debug.LogError("权重逻辑错误，返回第一个可用对象。");
             return items[0];
         }

@@ -1227,8 +1227,14 @@ namespace Fs.Liquid2D
 
         /// <summary>
         /// 仅在关键字状态变化时切换，避免每帧冗余的材质变体重算。
+        /// ⚠ 关键字切换的是材质的「全局」状态（非逐 Pass）。_materialEffect / _materialBlur 是本 Pass 持有的实例，
+        /// 单一相机/单一 Feature 下安全；但若多个相机或多个 Liquid2DFeature 以不同设置共享同一材质实例，关键字会互相串扰
+        /// （后写覆盖先写）。每个 Feature 各自 new 一个 Pass（各自材质实例），通常不会共享；自定义复用材质时需注意。
         /// Toggle a shader keyword only when its state changes, avoiding redundant per-frame material variant recomputation.
-        /// キーワード状態が変化したときのみ切り替え、毎フレームの冗長なマテリアルバリアント再計算を回避します。
+        /// ⚠ Keywords are GLOBAL material state (not per-pass). _materialEffect / _materialBlur are this Pass's own instances —
+        /// safe for a single camera/Feature, but if multiple cameras or Liquid2DFeatures with divergent settings shared one
+        /// material instance, keywords would clobber each other (last write wins). Each Feature builds its own Pass (own material), so they normally aren't shared; beware when reusing materials.
+        /// キーワードは材質のグローバル状態。複数カメラ/Feature が同一材質を共有すると相互干渉（後勝ち）。通常は各 Feature が自前の材質を持つ。
         /// </summary>
         private static void SetKeyword(Material material, string keyword, bool enable)
         {

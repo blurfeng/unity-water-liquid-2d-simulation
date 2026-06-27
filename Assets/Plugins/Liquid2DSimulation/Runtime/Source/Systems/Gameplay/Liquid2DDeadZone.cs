@@ -113,6 +113,8 @@ namespace Fs.Liquid2D
         /// </summary>
         public void Fill(ref Liquid2DColliderData data, List<float2> pointsAccum)
         {
+            // Circle/Capsule 仅按 lossyScale.x 缩放（假设 XY 均匀缩放）：非均匀缩放（sx≠sy）下 Y 被忽略，销毁区域形状与可视不符——请保持均匀缩放。Box 正确使用 x 与 y。
+            // Circle/Capsule scale by lossyScale.x only (assume uniform XY scale): under non-uniform scale (sx≠sy) Y is ignored and the kill shape won't match the visual — keep scale uniform. Box correctly uses both x and y. // Circle/Capsule は lossyScale.x のみ（均一前提）。
             Vector3 ls = _cachedTransform.lossyScale;
             float scale = Mathf.Abs(ls.x);
 

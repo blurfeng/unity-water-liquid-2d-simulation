@@ -528,6 +528,15 @@ namespace Fs.Liquid2D
                     spawnCount++;
                 }
 
+                // 单帧生成数钳上限：极高 flowRate 或卡顿后累积的大 _flowTimer 会要求单帧一次性生成过多 → 尖峰/SPH 压力爆炸。
+                // 超出部分直接丢弃 _flowTimer（不结转累加器），避免「追帧式」雪崩。 // Cap per-step spawns; drop the excess accumulator to avoid a catch-up avalanche. // 単フレーム生成数を制限。
+                const int maxSpawnPerStep = 256;
+                if (spawnCount > maxSpawnPerStep)
+                {
+                    spawnCount = maxSpawnPerStep;
+                    _flowTimer = 0f;
+                }
+
                 if (spawnCount > 0)
                     SpawnBatch(spawnCount);
             }
