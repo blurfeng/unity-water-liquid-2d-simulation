@@ -86,6 +86,18 @@ namespace Fs.Liquid2D
                  "Fluid blur background color intensity. 0 means no background color (defaults to current camera scene texture color), 1 means fully display background color.",
                  "流体ブラー背景色の強度。0の場合は背景色を使用しません（デフォルトは現在のカメラシーンテクスチャ色）、1の場合は背景色を完全に表示します。")]
             public float BlurBgColorIntensity;
+
+            /// <summary>逐字段拷贝（写入既有实例，无分配）。新增字段时只需在此补一行。 // Field-by-field copy into the existing instance (no alloc). // 既存インスタンスへ逐次コピー。</summary>
+            public void CopyFrom(BlurSettings src)
+            {
+                Iterations = src.Iterations;
+                BlurSpread = src.BlurSpread;
+                CoreKeepIntensity = src.CoreKeepIntensity;
+                ScaleFactor = src.ScaleFactor;
+                IgnoreBgColor = src.IgnoreBgColor;
+                BlurBgColor = src.BlurBgColor;
+                BlurBgColorIntensity = src.BlurBgColorIntensity;
+            }
         }
 
         /// <summary>
@@ -135,6 +147,18 @@ namespace Fs.Liquid2D
                  "Noise coordinate offset. Used to avoid repetition in noise textures.",
                  "ノイズ座標オフセット。ノイズテクスチャの繰り返しを避けるために使用されます。")]
             public float NoiseCoordOffset = 4f;
+
+            /// <summary>逐字段拷贝（写入既有实例，无分配）。新增字段时只需在此补一行。 // Field-by-field copy into the existing instance (no alloc). // 既存インスタンスへ逐次コピー。</summary>
+            public void CopyFrom(DistortSettings src)
+            {
+                Enable = src.Enable;
+                Magnitude = src.Magnitude;
+                Frequency = src.Frequency;
+                Amplitude = src.Amplitude;
+                DistortSpeed = src.DistortSpeed;
+                DistortTimeFactors = src.DistortTimeFactors;
+                NoiseCoordOffset = src.NoiseCoordOffset;
+            }
         }
 
         /// <summary>
@@ -191,6 +215,16 @@ namespace Fs.Liquid2D
                  "Liquid edge blend type.",
                  "液体エッジブレンドタイプ。")]
             public EdgeBlendType BlendType = EdgeBlendType.BlendSrcAlphaOneMinusSrcAlpha;
+
+            /// <summary>逐字段拷贝（写入既有实例，无分配）。新增字段时只需在此补一行。 // Field-by-field copy into the existing instance (no alloc). // 既存インスタンスへ逐次コピー。</summary>
+            public void CopyFrom(EdgeSettings src)
+            {
+                Enable = src.Enable;
+                EdgeRange = src.EdgeRange;
+                EdgeIntensity = src.EdgeIntensity;
+                EdgeColor = src.EdgeColor;
+                BlendType = src.BlendType;
+            }
         }
         
         /// <summary>
@@ -212,6 +246,14 @@ namespace Fs.Liquid2D
                  "Whether to use pixelated background color. When enabled, background color will be pixelated when fluid is transparent.",
                  "ピクセル化背景色を使用するかどうか。有効にすると、流体が透明な場合に背景色がピクセル化されます。")]
             public bool PixelBg = true;
+
+            /// <summary>逐字段拷贝（写入既有实例，无分配）。新增字段时只需在此补一行。 // Field-by-field copy into the existing instance (no alloc). // 既存インスタンスへ逐次コピー。</summary>
+            public void CopyFrom(PixelSettings src)
+            {
+                Enable = src.Enable;
+                PixelSize = src.PixelSize;
+                PixelBg = src.PixelBg;
+            }
         }
         
         [LocalizationTooltip(
@@ -288,6 +330,30 @@ namespace Fs.Liquid2D
              "流体ピクセル化設定。ピクセル化スタイル効果を生成するために使用されます。")]
         public PixelSettings Pixel = new PixelSettings();
         
+        /// <summary>
+        /// 把 src 的所有字段逐一拷贝到本实例（写入既有的嵌套子对象，不分配新对象）。
+        /// 这是 Liquid2DPass.UpdateSettings 每帧合并 Volume/默认设置的唯一入口——新增配置字段时只需在对应
+        /// CopyFrom 补一行，避免在 Pass 里逐字段三元合并时遗漏（曾导致 Distort.Magnitude 被静默丢弃）。
+        /// Copy every field of src into this instance (writing into the existing nested sub-objects, no allocation).
+        /// Single source of truth for the per-frame Volume/default merge in Liquid2DPass.UpdateSettings; adding a config
+        /// field only needs a line here, preventing the kind of omission that silently dropped Distort.Magnitude.
+        /// src の全フィールドを本インスタンスへ逐次コピー（既存のネスト子オブジェクトに書込み、無確保）。
+        /// </summary>
+        public void CopyFrom(Liquid2DRenderFeatureSettings src)
+        {
+            NameTag = src.NameTag;
+            ObstructorRenderingLayerMask = src.ObstructorRenderingLayerMask;
+            OccluderRenderingLayerMask = src.OccluderRenderingLayerMask;
+            Cutoff = src.Cutoff;
+            OpacityMode = src.OpacityMode;
+            OpacityValue = src.OpacityValue;
+            CoverColor = src.CoverColor;
+            Blur.CopyFrom(src.Blur);
+            Distort.CopyFrom(src.Distort);
+            Edge.CopyFrom(src.Edge);
+            Pixel.CopyFrom(src.Pixel);
+        }
+
         public Liquid2DRenderFeatureSettings Clone()
         {
             // 先序列化再反序列化，得到一个全新的对象。

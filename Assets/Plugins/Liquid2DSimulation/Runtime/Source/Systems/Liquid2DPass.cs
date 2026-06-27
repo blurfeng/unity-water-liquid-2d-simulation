@@ -385,8 +385,15 @@ namespace Fs.Liquid2D
                     // 特定の反復のブラー画像をコア保持画像として選択します。
                     if (coreKeep && i == coreKeepIteration)
                     {
+                        // 必须按 PassBlur 的写入奇偶取第 i 次迭代的结果：偶数迭代写入 blurThRight，奇数迭代写入 blurThLeft。
+                        // 之前固定取 blurThRight，在 coreKeepIteration 为奇数时会取到偏锐的上一级图。与下方最终图选择（line 398）同奇偶。
+                        // Must pick iteration i's actual output by PassBlur's write parity: even iterations write blurThRight,
+                        // odd iterations write blurThLeft. Previously this always read blurThRight, taking a one-level-too-sharp
+                        // image when coreKeepIteration is odd. Same parity as the final-image pick below.
+                        // PassBlur の書込み奇偶に合わせて第 i 反復の結果を取得（偶数→blurThRight、奇数→blurThLeft）。
+                        TextureHandle blurThIterResult = i % 2 == 0 ? blurThRight : blurThLeft;
                         renderGraph.AddBlitPass(
-                            blurThRight, blurThCore, 
+                            blurThIterResult, blurThCore,
                             Vector2.one, Vector2.zero, passName: GetName("Blur: Get Blur Core"));
                     }
                     
@@ -883,18 +890,26 @@ namespace Fs.Liquid2D
 
             // 像素风格化。 // Pixel stylization. // ピクセルスタイリゼーション。
             SetKeyword(data.MaterialEffect, "_PIXEL_ENABLE", data.Settings.Pixel.Enable);
+            // _PIXEL_BG 必须无条件设置：_materialEffect 是持久共享材质，若只在 Pixel.Enable 块内设置，关闭像素化后关键字会残留，
+            // 导致 shader 持续走不透明合成路径而非「显示真实背景」。仅当像素化与背景像素化均开启时启用。
+            // _PIXEL_BG must be set unconditionally: _materialEffect is a persistent shared material; setting it only inside the
+            // Pixel.Enable block would leave the keyword stale-enabled after pixelation is turned off, making the shader take the
+            // opaque composite path instead of showing the real background. Enable only when both pixelation and PixelBg are on.
+            // _PIXEL_BG は無条件に設定（共有材質のキーワード残留を防ぐ）。ピクセル化と背景ピクセル化が両方有効な時のみ有効化。
+            SetKeyword(data.MaterialEffect, "_PIXEL_BG", data.Settings.Pixel.Enable && data.Settings.Pixel.PixelBg);
             if (data.Settings.Pixel.Enable)
             {
-                // 计算像素化尺寸。 // Calculate pixelation size. // ピクセル化サイズを計算します。
-                float aspect = (float)Screen.width / Screen.height; // 屏幕宽高比。 // Screen aspect ratio. // 画面のアスペクト比。
-                int pixelWidthCount = Screen.width / data.Settings.Pixel.PixelSize; // 水平像素块数量。 // Number of horizontal pixel blocks. // 水平ピクセルブロックの数。
+                // 计算像素化尺寸。基于相机渲染目标尺寸（cameraTargetDescriptor），而非 Screen——后者在 RenderTexture 相机、
+                // 分屏视口、URP Render Scale≠1 时与实际渲染目标不一致，会导致像素块大小/宽高比错乱（与模糊纹理 line 348-349 同口径）。
+                // Calculate pixelation size from the camera render-target size (cameraTargetDescriptor), not Screen — Screen
+                // diverges from the actual target for RenderTexture cameras, split-screen viewports, and URP Render Scale != 1,
+                // giving mis-sized / non-square blocks. Mirrors the blur texture sizing at lines 348-349.
+                // ピクセル化サイズは Screen ではなくカメラ描画ターゲット（cameraTargetDescriptor）から計算。
+                var targetDesc = data.CameraData.cameraTargetDescriptor;
+                float aspect = (float)targetDesc.width / targetDesc.height; // 渲染目标宽高比。 // Render-target aspect ratio. // 描画ターゲットのアスペクト比。
+                int pixelWidthCount = targetDesc.width / data.Settings.Pixel.PixelSize; // 水平像素块数量。 // Number of horizontal pixel blocks. // 水平ピクセルブロックの数。
                 Vector2 pixelSize = new Vector2(pixelWidthCount, pixelWidthCount / aspect); // 计算垂直像素块数量。 // Calculate number of vertical pixel blocks. // 垂直ピクセルブロックの数を計算します。
                 mpb.SetVector(ShaderIds.PixelSize, pixelSize); // 传入像素化尺寸。 // Pass in pixelation size. // ピクセル化サイズを渡します。
-
-                // 是否使背景像素化。在水体透明时背景色也会像素化。
-                // Whether to pixelate the background. When the water is transparent, the background color will also be pixelated.
-                // 背景がピクセル化されるかどうか。水が透明な場合、背景色もピクセル化されます。
-                SetKeyword(data.MaterialEffect, "_PIXEL_BG", data.Settings.Pixel.PixelBg);
             }
 
             // 水体扰动纹理和强度。 // Water distortion texture and intensity. // 水の歪みテクスチャと強度。
@@ -1056,64 +1071,28 @@ namespace Fs.Liquid2D
                 && volumeData is { IsActive: true };
 
             // ---- 重载设置。 // Override settings. // 設定をオーバーライド。 ---- //
-            // 2D流体层遮罩。只会渲染设定的流体层的粒子。
-            // 2D Liquid layer mask. Only particles of the set fluid layer will be rendered.
-            // 2D流体レイヤーマスク。設定された流体レイヤーの粒子のみがレンダリングされます。
-            _settings.NameTag = isActive ? volumeData.NameTag : _settingsDefault.NameTag;
-            
-            // 阻挡层遮罩。 // Obstructor layer mask. // 阻害レイヤーマスク。
-            _settings.ObstructorRenderingLayerMask = isActive ? volumeData.ObstructorRenderingLayerMask : _settingsDefault.ObstructorRenderingLayerMask;
-            // 比较渲染层掩码（renderingLayerMask），而非 GameObject 层掩码（layerMask）。后者恒为 ~0，会导致每帧无谓重建过滤设置。
-            // Compare the rendering-layer mask, not the GameObject layerMask (always ~0, which would rebuild the filtering settings every frame).
-            // GameObject 層ではなく渲染層マスクで比較（layerMask は ~0 固定で毎フレーム無駄に再構築される）。
+            // 整体合并：激活则用 Volume 覆盖数据，否则用默认设置。CopyFrom 逐字段拷贝到 _settings 的既有嵌套实例
+            // （无每帧分配），是合并的唯一入口——新增配置字段只需在 CopyFrom 补一行，避免在此逐字段三元合并时遗漏
+            //（此前 Distort.Magnitude 即因漏写而被静默丢弃）。volumeData 继承自 Liquid2DRenderFeatureSettings，故可直接作源。
+            // Whole-object merge: copy from the Volume override when active, else from the default settings. CopyFrom copies
+            // field-by-field into _settings' existing nested instances (no per-frame allocation) and is the single merge entry
+            // point — adding a config field only needs a line in CopyFrom, preventing the per-field omission that silently
+            // dropped Distort.Magnitude. volumeData derives from Liquid2DRenderFeatureSettings, so it is a valid source.
+            // 全体マージ：有効なら Volume 上書き、無効なら既定から CopyFrom で逐次コピー（無確保）。フィールド追加漏れを防ぐ。
+            _settings.CopyFrom(isActive ? volumeData : _settingsDefault);
+
+            // 渲染层掩码变化时重建过滤设置。比较渲染层掩码（renderingLayerMask），而非 GameObject 层掩码（layerMask，恒为 ~0 会每帧无谓重建）。
+            // Rebuild filtering settings when the rendering-layer mask changes. Compare the rendering-layer mask, not the
+            // GameObject layerMask (always ~0, which would rebuild every frame).
+            // 渲染層マスク変化時に過滤設定を再構築（GameObject 層ではなく渲染層マスクで比較）。
             if (_obstructorFilteringSettings.renderingLayerMask != _settings.ObstructorRenderingLayerMask)
             {
                 SetObstructorFilteringSettings();
             }
-            // 遮挡层遮罩。 // Occlusion layer mask. // オクルージョンレイヤーマスク。
-            _settings.OccluderRenderingLayerMask = isActive ? volumeData.OccluderRenderingLayerMask : _settingsDefault.OccluderRenderingLayerMask;
             if (_occluderFilteringSettings.renderingLayerMask != _settings.OccluderRenderingLayerMask)
             {
                 SetOccluderFilteringSettings();
             }
-            
-            _settings.Cutoff = isActive ? volumeData.Cutoff : _settingsDefault.Cutoff;
-            
-            _settings.OpacityMode = isActive ? volumeData.OpacityMode : _settingsDefault.OpacityMode;
-            _settings.OpacityValue = isActive ? volumeData.OpacityValue : _settingsDefault.OpacityValue;
-            _settings.CoverColor = isActive ? volumeData.CoverColor : _settingsDefault.CoverColor;
-            
-            // ---- 边缘设置 // Edge settings // エッジ設定 ---- //
-            _settings.Edge.Enable = isActive ? volumeData.Edge.Enable : _settingsDefault.Edge.Enable;
-            _settings.Edge.EdgeRange = isActive ? volumeData.Edge.EdgeRange : _settingsDefault.Edge.EdgeRange;
-            _settings.Edge.EdgeIntensity = isActive ? volumeData.Edge.EdgeIntensity : _settingsDefault.Edge.EdgeIntensity;
-            _settings.Edge.EdgeColor = isActive ? volumeData.Edge.EdgeColor : _settingsDefault.Edge.EdgeColor;
-            _settings.Edge.BlendType = isActive ? volumeData.Edge.BlendType : _settingsDefault.Edge.BlendType;
-
-            // ---- 模糊设置 // Blur settings // ブラー設定 ---- //
-            _settings.Blur.Iterations = isActive ? volumeData.Blur.Iterations : _settingsDefault.Blur.Iterations;
-            _settings.Blur.BlurSpread = isActive ? volumeData.Blur.BlurSpread : _settingsDefault.Blur.BlurSpread;
-            _settings.Blur.CoreKeepIntensity = isActive ? volumeData.Blur.CoreKeepIntensity : _settingsDefault.Blur.CoreKeepIntensity;
-            _settings.Blur.ScaleFactor = isActive ? volumeData.Blur.ScaleFactor : _settingsDefault.Blur.ScaleFactor;
-            _settings.Blur.IgnoreBgColor = isActive ? volumeData.Blur.IgnoreBgColor : _settingsDefault.Blur.IgnoreBgColor;
-            // 模糊背景色和强度。实际上在 Blur 前作为底图进行混合。默认的底图是当前相机的场景纹理（alpha为0）。
-            // Blur background color and intensity. In fact, it is blended as a base map before Blur. The default base map is the current camera scene texture (alpha is 0).
-            // ブラーバックグラウンドカラーと強度。実際には、Blurの前にベースマップとしてブレンドされます。デフォルトのベースマップは現在のカメラシーンテクスチャ（アルファは0）です。
-            _settings.Blur.BlurBgColor = isActive ? volumeData.Blur.BlurBgColor : _settingsDefault.Blur.BlurBgColor;
-            _settings.Blur.BlurBgColorIntensity = isActive ? volumeData.Blur.BlurBgColorIntensity : _settingsDefault.Blur.BlurBgColorIntensity;
-            
-            // ---- 水体扰动设置 // Water distortion settings // 水の歪み設定 ---- //
-            _settings.Distort.Enable = isActive ? volumeData.Distort.Enable : _settingsDefault.Distort.Enable;
-            _settings.Distort.Frequency = isActive ? volumeData.Distort.Frequency : _settingsDefault.Distort.Frequency;
-            _settings.Distort.Amplitude = isActive ? volumeData.Distort.Amplitude : _settingsDefault.Distort.Amplitude;
-            _settings.Distort.DistortSpeed = isActive ? volumeData.Distort.DistortSpeed : _settingsDefault.Distort.DistortSpeed;
-            _settings.Distort.DistortTimeFactors = isActive ? volumeData.Distort.DistortTimeFactors : _settingsDefault.Distort.DistortTimeFactors;
-            _settings.Distort.NoiseCoordOffset = isActive ? volumeData.Distort.NoiseCoordOffset : _settingsDefault.Distort.NoiseCoordOffset;
-            
-            // ---- 像素化 // Pixelation // ピクセル化 ---- //
-            _settings.Pixel.Enable = isActive ? volumeData.Pixel.Enable : _settingsDefault.Pixel.Enable;
-            _settings.Pixel.PixelSize = isActive ? volumeData.Pixel.PixelSize : _settingsDefault.Pixel.PixelSize;
-            _settings.Pixel.PixelBg = isActive ? volumeData.Pixel.PixelBg : _settingsDefault.Pixel.PixelBg;
         }
 
         #endregion

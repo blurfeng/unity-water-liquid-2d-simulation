@@ -64,6 +64,9 @@ namespace Fs.Liquid2D
         
         public Liquid2DSimulationMode Mode => Liquid2DSimulationMode.Gpu;
 
+        // 渲染层取数计数归零（排空时由 Liquid2DSimulation 提前返回路径调用，避免残影渲染上一批）。 // Zero the render-facing count (called on the drained early-return path to avoid ghost-rendering). // 描画用カウントを 0 に。
+        public void ResetRenderCount() => _lastCount = 0;
+
         private const float ImpulseScale = 256f;
 
         private readonly ComputeShader _cs;
@@ -379,7 +382,9 @@ namespace Fs.Liquid2D
             for (int m = 0; m < n; m++)
             {
                 int slot = full ? ctx.ActiveIndices[m] : ctx.GPUPendingSpawns[m];
-                if (slot < 0 || slot >= store.Capacity) { _upSlotsA[m] = 0; _upPosA[m] = default; _upVelA[m] = default; _upColorA[m] = default; continue; }
+                // 越界用哨兵 -1（ScatterSpawn 顶部 slot<0 直接返回，不写任何缓冲）。绝不能用 0——0 是合法且常被占用的 slot，
+                // 会把 0 号真实粒子清成黑/透明。 // Sentinel -1 (ScatterSpawn early-returns on slot<0). Never 0 — slot 0 is a valid, commonly-occupied slot. // 越界は -1（0 は使用禁止）。
+                if (slot < 0 || slot >= store.Capacity) { _upSlotsA[m] = -1; _upPosA[m] = default; _upVelA[m] = default; _upColorA[m] = default; continue; }
                 _upSlotsA[m] = slot;
                 _upPosA[m] = store.positions[slot];
                 _upVelA[m] = store.velocities[slot];

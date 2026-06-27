@@ -106,5 +106,15 @@ namespace Fs.Liquid2D
         /// 1フレーム進める（内部で substeps によりサブステップ）。
         /// </summary>
         void Step(in Liquid2DSolveContext ctx, in SolverParams p, float dt);
+
+        /// <summary>
+        /// 把渲染层取数用的粒子计数归零。供 <see cref="Liquid2DSimulation"/> 在活动粒子数为 0 而提前返回（不调用 Step）时调用，
+        /// 避免 GPU 求解器的 _lastCount 停留旧值导致排空后仍残影渲染上一批粒子。CPU 求解器为空操作（数据每帧从 store 取）。
+        /// Reset the render-facing particle count to zero. Called by <see cref="Liquid2DSimulation"/> when active count is 0 and
+        /// it early-returns without calling Step, so the GPU solver's _lastCount doesn't keep a stale value and ghost-render the
+        /// last batch after the fluid drains. No-op on the CPU solver (it reads from the store each frame).
+        /// 描画用の粒子数を 0 にリセット。活動数 0 で Step を呼ばず早期 return する際に呼び、排空後の残影描画を防ぐ。
+        /// </summary>
+        void ResetRenderCount();
     }
 }

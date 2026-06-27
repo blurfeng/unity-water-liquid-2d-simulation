@@ -69,7 +69,38 @@ namespace Fs.Liquid2D.Utility
             // 方便实现 IRandomData 接口的对象调用 Weight 方法。
             return WeightInternal(items, item => item.GetWeight());
         }
-        
+
+        // ---- 免分配重载（IReadOnlyList）。直接按索引遍历，避免 IEnumerable 路径每次 items.ToArray() 的 GC 分配。
+        // 调用方持有 List<T> 时，重载解析会自动绑定到这些更具体的 IReadOnlyList 重载（流式/区域喷射器每帧每粒子调用，是 GC 热点）。
+        // Allocation-free overloads (IReadOnlyList): index directly, avoiding the per-call items.ToArray() GC of the IEnumerable
+        // path. With a List<T> argument, overload resolution binds to these more-specific overloads automatically (the streaming/
+        // region spawners call this per particle per frame — a GC hotspot).
+        // 無確保オーバーロード（IReadOnlyList）。索引で直接走査し ToArray の毎回確保を回避（喷射器の GC ホットパス）。----
+
+        /// <summary>通过权重随机获取一个对象（免分配，按索引遍历）。 // Weighted random pick (allocation-free). // 重み付きランダム取得（無確保）。</summary>
+        public static T Weight<T>(IReadOnlyList<T> items, Func<T, int> getWeight)
+        {
+            return WeightInternal(items, getWeight);
+        }
+
+        /// <summary>通过权重随机获取一个对象（免分配，按索引遍历）。 // Weighted random pick (allocation-free). // 重み付きランダム取得（無確保）。</summary>
+        public static T RandomWeight<T>(this IReadOnlyList<T> items, Func<T, int> getWeight)
+        {
+            return WeightInternal(items, getWeight);
+        }
+
+        /// <summary>通过权重随机获取一个对象（免分配，按索引遍历）。 // Weighted random pick (allocation-free). // 重み付きランダム取得（無確保）。</summary>
+        public static T Weight<T>(IReadOnlyList<T> items) where T : IRandomData
+        {
+            return WeightInternal(items, item => item.GetWeight());
+        }
+
+        /// <summary>通过权重随机获取一个对象（免分配，按索引遍历）。 // Weighted random pick (allocation-free). // 重み付きランダム取得（無確保）。</summary>
+        public static T RandomWeight<T>(this IReadOnlyList<T> items) where T : IRandomData
+        {
+            return WeightInternal(items, item => item.GetWeight());
+        }
+
         /// <summary>
         /// 通过权重随机，获取多个对象。
         /// </summary>
@@ -175,7 +206,62 @@ namespace Fs.Liquid2D.Utility
             Debug.LogError("权重逻辑错误，返回第一个可用对象。");
             return itemArray.First();
         }
-        
+
+        // 免分配版：按索引遍历 IReadOnlyList，行为与上面的 IEnumerable 版完全一致（单元素直接返回、全零权重回退首个）。
+        // 单元素不校验权重、全零回退首个等边界语义按现状保留；零权重的精确语义在后续清理阶段统一调整。
+        // Allocation-free variant: index the IReadOnlyList; behavior identical to the IEnumerable version above (single item
+        // returned directly, all-zero weights fall back to the first). Edge semantics preserved as-is for now.
+        // 無確保版：IReadOnlyList を索引走査。挙動は IEnumerable 版と同一。
+        private static T WeightInternal<T>(IReadOnlyList<T> items, Func<T, int> getWeight)
+        {
+            if (items == null) throw new ArgumentNullException(nameof(items));
+            if (getWeight == null) throw new ArgumentNullException(nameof(getWeight));
+
+            int count = items.Count;
+            if (count == 0)
+            {
+                Debug.LogWarning("对象列表为空，无法进行随机。");
+                return default(T);
+            }
+
+            // 只有一个对象，直接返回。
+            if (count == 1)
+            {
+                return items[0];
+            }
+
+            // 计算权重总和。
+            int weightTotal = 0;
+            for (int i = 0; i < count; i++)
+            {
+                weightTotal += getWeight(items[i]);
+            }
+
+            // 在权重总和大于 0 的情况下进行随机。
+            if (weightTotal > 0)
+            {
+                int randomNum = UnityEngine.Random.Range(1, weightTotal + 1);
+                int cumulative = 0;
+
+                // 确认 randomNum 命中了哪个区段。按顺序累加权重判断命中区段。
+                for (int i = 0; i < count; i++)
+                {
+                    cumulative += getWeight(items[i]);
+                    if (randomNum <= cumulative)
+                    {
+                        return items[i];
+                    }
+                }
+            }
+            else
+            {
+                Debug.LogWarning($"权重总和必须大于 0。 WeightTotal: {weightTotal}");
+            }
+
+            Debug.LogError("权重逻辑错误，返回第一个可用对象。");
+            return items[0];
+        }
+
         private static List<T> WeightManyInternal<T>(IEnumerable<T> items, Func<T, int> getWeight, int count)
         {
             if (items == null) throw new ArgumentNullException(nameof(items));

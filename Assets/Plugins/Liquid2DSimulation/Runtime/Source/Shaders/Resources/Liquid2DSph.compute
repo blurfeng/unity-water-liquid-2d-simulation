@@ -296,6 +296,7 @@ void ScatterSpawn(uint3 id : SV_DispatchThreadID)
 {
     int m = (int)id.x; if (m >= numUploads) return;
     int slot = UploadSlots[m];
+    if (slot < 0) return; // 哨兵：越界上传项以 slot=-1 标记，跳过不写任何缓冲（避免误写 slot 0）。 // Sentinel: skip out-of-range entries (slot=-1) so they never clobber a real slot. // 越界（-1）はスキップ。
     float2 pos = UploadPos[m];
     Positions[slot] = pos;
     Predicted[slot] = pos;

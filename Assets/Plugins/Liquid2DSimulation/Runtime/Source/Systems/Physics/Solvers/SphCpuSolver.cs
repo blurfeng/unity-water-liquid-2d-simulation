@@ -19,6 +19,9 @@ namespace Fs.Liquid2D
     {
         public Liquid2DSimulationMode Mode => Liquid2DSimulationMode.Cpu;
 
+        // CPU 求解器无常驻渲染缓冲（渲染层每帧从 store 取数），故为空操作。 // No resident render buffer on CPU (render reads the store each frame); no-op. // CPU は常駐描画バッファ無し、空操作。
+        public void ResetRenderCount() { }
+
         // 按 slot 索引的持久临时缓存（容量随 store 增长）。 // Persistent per-slot scratch (grows with store capacity). // slot 索引の永続スクラッチ。
         private NativeArray<float2> _densities;
         private NativeArray<float2> _velNext;

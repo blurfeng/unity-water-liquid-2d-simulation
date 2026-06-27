@@ -111,6 +111,20 @@ namespace Fs.Liquid2D
 
         private void CreateSolver()
         {
+            // 切换求解器前：若旧求解器是 GPU 常驻求解器，先把 GPU 状态回读到 store。GPU 模式下 CPU store 按设计陈旧
+            // （仅扩容/回读帧同步），若不回读就切到 CPU，新 CPU 求解器会从陈旧 store 推进，导致全体粒子瞬移回旧位置、
+            // 丢失累计速度/混色。ReadbackToStore 已按 Min(_capacity, store.Capacity) 钳制，安全。首次创建时 _solver 为 null，跳过。
+            // Before swapping solvers: if the old one is the resident GPU solver, read its state back into the store. Under GPU
+            // mode the CPU store is intentionally stale (synced only on grow/readback frames); switching to CPU without this read
+            // would advance the new CPU solver from a stale snapshot, teleporting every particle and wiping velocity/mixed color.
+            // ReadbackToStore is clamped to Min(_capacity, store.Capacity). On first creation _solver is null, so this is skipped.
+            // ソルバー切替前に、旧が GPU 常駐なら状態を store へ回読（切替時の粒子瞬間移動と状態喪失を防ぐ）。
+            if (_solver is SphGpuSolver oldGpu && _store != null)
+            {
+                oldGpu.ReadbackToStore(_store);
+                _activeDirty = true;
+            }
+
             _solver?.Dispose();
             _createdMode = Mode;
 
@@ -288,7 +302,9 @@ namespace Fs.Liquid2D
             EnsureMaterials();
             EnsureActiveCapacity();
             int count = RebuildActiveIndices();
-            if (count == 0) { _gpuPendingSpawns.Clear(); return; }
+            // 活动粒子为 0：提前返回不求解，但需把求解器的渲染计数归零，否则 GPU 求解器的 _lastCount 停留旧值，
+            // 排空后仍会残影渲染上一批粒子（CPU 求解器为空操作）。 // Reset render count so a drained GPU fluid doesn't ghost-render. // 排空時の残影防止。
+            if (count == 0) { _gpuPendingSpawns.Clear(); _solver?.ResetRenderCount(); return; }
 
             if (Params.H <= 0f) Params = SolverParams.Default;
 
