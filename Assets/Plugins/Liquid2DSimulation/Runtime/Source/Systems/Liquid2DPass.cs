@@ -217,10 +217,8 @@ namespace Fs.Liquid2D
             public Material MaterialEffect;
             public TextureHandle BlurFinalTh;
 
-#if UNITY_EDITOR
-            // Display Overlay Pass 相关（Editor only）。 // Display Overlay Pass related (Editor only). // Display Overlay Pass 関連（Editor 専用）。
-            public Liquid2DDebugParticleDisplay[] Displays;
-#endif
+            // Display Overlay Pass 相关。 // Display Overlay Pass related. // Display Overlay Pass 関連。
+            public IReadOnlyList<Liquid2DDebugParticleDisplay> Displays;
         }
 
         public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData)
@@ -588,15 +586,17 @@ namespace Fs.Liquid2D
             }
             #endregion
 
-#if UNITY_EDITOR
-            #region Display Overlay（Editor only）// Display Overlay (Editor only) // Display Overlay（Editor 専用）
+            #region Display Overlay // Display Overlay // Display Overlay
 
-            // Effect Pass 之后，将 Liquid2DParticleDisplay 粒子叠加绘制到相机颜色缓冲，使其覆盖在水体效果之上。
-            // After the Effect Pass, draw Liquid2DParticleDisplay particles into the camera colour buffer so they appear above the water effect.
-            // Effect Pass の後、Liquid2DParticleDisplay の粒子を相機カラーバッファに描画し、水体エフェクトの上に重ねます。
-            var activeDisplays = Object.FindObjectsByType<Liquid2DDebugParticleDisplay>(
-                FindObjectsSortMode.None);
-            if (activeDisplays.Length > 0)
+            // Effect Pass 之后，将 Liquid2DDebugParticleDisplay 粒子叠加绘制到相机颜色缓冲，使其覆盖在水体效果之上、
+            // 不被扰动 Shader 干扰（Editor + Build 一致）。实例来自组件自维护的静态注册表，避免每帧 FindObjectsByType 全场景扫描。
+            // After the Effect Pass, draw Liquid2DDebugParticleDisplay particles into the camera colour buffer so they appear
+            // above the water effect, undisturbed by the distortion shader (same for Editor + Build). Instances come from the
+            // component's self-maintained static registry, avoiding a per-frame full-scene FindObjectsByType scan.
+            // Effect Pass の後、Liquid2DDebugParticleDisplay の粒子をカメラカラーバッファに描画し、水体エフェクトの上に重ねます
+            // （歪み Shader の影響を受けない、Editor + Build 共通）。インスタンスは静的レジストリから取得し全シーン走査を回避します。
+            var activeDisplays = Liquid2DDebugParticleDisplay.Instances;
+            if (activeDisplays.Count > 0)
             {
                 using (var builder = renderGraph.AddRasterRenderPass<PassData>(
                     GetName("Particle Display Overlay"), out var passData))
@@ -605,14 +605,13 @@ namespace Fs.Liquid2D
                     builder.SetRenderAttachment(sourceTextureHandle, 0, AccessFlags.Write);
                     builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
                     {
-                        foreach (var d in data.Displays)
-                            d.ExecuteDraw(context.cmd);
+                        for (int i = 0; i < data.Displays.Count; i++)
+                            data.Displays[i].ExecuteDraw(context.cmd);
                     });
                 }
             }
 
             #endregion
-#endif
         }
         
         /// <summary>
