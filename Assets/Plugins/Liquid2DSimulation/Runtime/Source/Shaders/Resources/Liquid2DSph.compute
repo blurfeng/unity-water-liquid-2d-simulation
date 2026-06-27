@@ -495,7 +495,7 @@ void ScanBlockSums(uint3 id : SV_DispatchThreadID)
 void AddBlockOffsets(uint3 id : SV_DispatchThreadID)
 {
     int t = (int)id.x; if (t >= tableSize) return;
-    int v = CellStart[t] + BlockSums[t / SCAN_BLOCK];
+    int v = CellStart[t] + BlockSums[(uint)t / (uint)SCAN_BLOCK];
     CellStart[t] = v;
     Cursor[t] = v;
 }
