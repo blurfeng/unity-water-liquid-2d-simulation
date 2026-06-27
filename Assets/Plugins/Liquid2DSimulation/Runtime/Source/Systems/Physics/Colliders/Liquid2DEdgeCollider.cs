@@ -61,11 +61,17 @@ namespace Fs.Liquid2D
             data.Center = WorldCenter;
             data.PointStart = pointsAccum.Count;
 
+            // 声明提到 #if 之前，两分支只做赋值；否则 #else（打包）分支会读取仅在编辑器分支声明的变量，导致 CS0103 编译错误。
+            // Declare before the #if so both branches only assign; otherwise the #else (player build) branch reads identifiers
+            // declared only in the editor branch — a hard CS0103 compile error.
+            // 宣言を #if の前に出す。さもないと #else（ビルド）分岐がエディター分岐のみで宣言された変数を読み CS0103 になる。
+            Vector2[] pts;
+            float edgeRadius;
 #if UNITY_EDITOR
             // 编辑器中直接读，以响应顶点拖拽和 edgeRadius 修改。 // Read directly in editor to reflect vertex/radius edits live.
             var ec = GetComponent<EdgeCollider2D>();
-            var pts = ec ? ec.points : _cachedPoints;
-            var edgeRadius = ec ? ec.edgeRadius : _cachedEdgeRadius;
+            pts = ec ? ec.points : _cachedPoints;
+            edgeRadius = ec ? ec.edgeRadius : _cachedEdgeRadius;
 #else
             pts = _cachedPoints;
             edgeRadius = _cachedEdgeRadius;

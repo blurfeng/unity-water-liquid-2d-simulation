@@ -66,7 +66,7 @@ namespace Fs.Liquid2D
                 // 编辑器模式时，若开启了调试可视化，则强制回读到 CPU store 以兼容 Gizmos 绘制。
                 return _gpuReadbackToStore || (Liquid2DDebugGizmos.HasInstance && Liquid2DDebugGizmos.Instance.ShowGizmos);
 #else
-                return Instance.gpuReadbackToStore;
+                return _gpuReadbackToStore;
 #endif
             }
             set => _gpuReadbackToStore = value;
