@@ -26,9 +26,19 @@ public class HandlerUI : MonoBehaviour
     private Text _readbackBtnLabel;
     private Text _pauseBtnLabel;
     private Text _slowmoBtnLabel;
+    private Text _fpsCapBtnLabel;
 
     private bool _paused;
     private bool _slowmo;
+
+    // 最大帧率限制档位：索引 0 为 Default（沿用进入场景时的默认设置，含 vSync），-1 为 Unlimited（关 vSync 真正不限帧），其余为固定上限值。
+    private const int _fpsCapDefaultIndex = 0;
+    private static readonly int[] _fpsCapValues = { 0, -1, 30, 60, 120, 144 }; // 索引 0 仅占位（Default 走还原逻辑），-1 = Unlimited。
+    private int _fpsCapIndex;
+
+    // 进入场景时的默认帧率设置，供 Default 档位还原（vSync 可能为开启状态）。
+    private int _defaultVSyncCount;
+    private int _defaultTargetFrameRate;
 
     // FPS 平滑（用未缩放时间，暂停/慢放时仍准确）。
     private float _fpsAccum;
@@ -42,6 +52,12 @@ public class HandlerUI : MonoBehaviour
     private void Start()
     {
         _font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+
+        // 记录进入场景时的默认帧率设置，并把档位初始化为 Default —— 即沿用这套默认模式，不主动改动引擎状态。
+        _defaultVSyncCount = QualitySettings.vSyncCount;
+        _defaultTargetFrameRate = Application.targetFrameRate;
+        _fpsCapIndex = _fpsCapDefaultIndex;
+
         EnsureEventSystem();
 
         var canvas = EnsureCanvas();
@@ -103,6 +119,7 @@ public class HandlerUI : MonoBehaviour
         _sb.Append("Alive : ").Append(aliveCount).Append('\n');
         _sb.Append("Solver: ").Append(Liquid2DSimulation.Mode).Append('\n');
         _sb.Append("Readbk: ").Append(Liquid2DSimulation.GpuReadbackToStore ? "ON" : "OFF").Append('\n');
+        _sb.Append("FpsCap: ").Append(FpsCapText()).Append('\n');
         _sb.Append("Scale : ").Append(Time.timeScale.ToString("0.00"));
         _monitorText.text = _sb.ToString();
     }
@@ -122,6 +139,7 @@ public class HandlerUI : MonoBehaviour
         _slowmoBtnLabel = CreateButton(panel, "Slow-Mo", OnClickSlowMo);
         _modeBtnLabel = CreateButton(panel, "Mode", OnClickMode);
         _readbackBtnLabel = CreateButton(panel, "Readback", OnClickReadback);
+        _fpsCapBtnLabel = CreateButton(panel, "FpsCap", OnClickFpsCap);
 
         CreateSlider(panel, "Flow x", 0f, 3f, 1f, v => { if (spawner) spawner.SetFlowRateFactor(v); });
         CreateSlider(panel, "Eject x", 0f, 3f, 1f, v => { if (spawner) spawner.SetEjectForceFactor(v); });
@@ -172,6 +190,41 @@ public class HandlerUI : MonoBehaviour
         RefreshButtonLabels();
     }
 
+    private void OnClickFpsCap()
+    {
+        _fpsCapIndex = (_fpsCapIndex + 1) % _fpsCapValues.Length;
+        ApplyFpsCap();
+        RefreshButtonLabels();
+    }
+
+    // 应用当前档位的最大帧率限制。
+    // Default 档位还原进入场景时的默认设置；其余档位关闭 vSync 后再设上限（否则 vSync 开启时 targetFrameRate 会被忽略）。
+    private void ApplyFpsCap()
+    {
+        if (_fpsCapIndex == _fpsCapDefaultIndex)
+        {
+            QualitySettings.vSyncCount = _defaultVSyncCount;
+            Application.targetFrameRate = _defaultTargetFrameRate;
+            return;
+        }
+
+        QualitySettings.vSyncCount = 0;
+        Application.targetFrameRate = _fpsCapValues[_fpsCapIndex];
+    }
+
+    private string FpsCapText()
+    {
+        if (_fpsCapIndex == _fpsCapDefaultIndex)
+        {
+            // Default 档位标注其实际含义，便于一眼看出默认模式。
+            if (_defaultVSyncCount > 0) return "Default(VSync)";
+            return _defaultTargetFrameRate <= 0 ? "Default(Unlimited)" : "Default(" + _defaultTargetFrameRate + ")";
+        }
+
+        int cap = _fpsCapValues[_fpsCapIndex];
+        return cap <= 0 ? "Unlimited" : cap.ToString();
+    }
+
     private void RefreshButtonLabels()
     {
         if (_spawnerBtnLabel) _spawnerBtnLabel.text = (spawner && spawner.enabled) ? "Spawner: ON" : "Spawner: OFF";
@@ -179,6 +232,7 @@ public class HandlerUI : MonoBehaviour
         if (_slowmoBtnLabel) _slowmoBtnLabel.text = _slowmo ? "Slow-Mo: ON" : "Slow-Mo: OFF";
         if (_modeBtnLabel) _modeBtnLabel.text = "Mode: " + Liquid2DSimulation.Mode;
         if (_readbackBtnLabel) _readbackBtnLabel.text = Liquid2DSimulation.GpuReadbackToStore ? "Readback: ON" : "Readback: OFF";
+        if (_fpsCapBtnLabel) _fpsCapBtnLabel.text = "FpsCap: " + FpsCapText();
     }
 
     #endregion
