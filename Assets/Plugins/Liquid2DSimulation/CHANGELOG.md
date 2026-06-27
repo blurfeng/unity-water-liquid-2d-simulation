@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.0.8] - 2026-06-27
+### Added
+- Colliders now support Push and Submerge interaction modes. Push shoves fluid particles away (for fluid containers); Submerge lets fluid cover the collider for more natural floating/sinking of objects in water.
+### Changed
+- Updated the demo sample scenes (DevScene, WaterAndMagma).
+### Fixed
+- Fix custom shaders (CombineTwo / GrabAsBg / Clone / Liquid2DParticleGpu) being stripped at build time, causing a black screen in player builds.
+- Fix shader keyword variants (opacity / edge / pixel / distort / occluder / ignore-bg-color) being stripped at build time, causing editor/build visual mismatch (e.g. transparent water turning opaque). Runtime-toggled keywords now use multi_compile.
+- Fix the Volume override for Distort.Magnitude not being merged; refactored Volume merging into a unified CopyFrom entry point (per-field copy into existing nested instances, no per-frame allocation).
+- Fix the core-keep blur picking the wrong texture on odd iteration counts.
+- Fix pixelation breaking under RenderTexture / split-screen / Render Scale by using the camera render target size.
+- Fix the _PIXEL_BG keyword lingering on the shared material after pixelation is turned off.
+- Fix GPU residual particles by resetting the render count to zero when emptied.
+- Fix a GPU→CPU teleport when switching solvers by reading back GPU state before the switch.
+- Fix a latent bug where the ScatterSpawn sentinel could overwrite slot 0.
+- Fix a build compile error.
+
 ## [1.0.7] - 2026-06-22
 ### Changed
 - Major release: replaced Unity's physics with a self-developed SPH (dual-density) fluid particle solver. Particles are now pure data (no per-particle GameObject), supporting tens of thousands of particles with CPU (Job System + Burst) and GPU (Compute Shader) modes.
