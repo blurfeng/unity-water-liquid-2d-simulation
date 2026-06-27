@@ -15,7 +15,7 @@ MonoBehaviour:
   active: 1
   IsActive:
     m_OverrideState: 1
-    m_Value: 1
+    m_Value: 0
   Liquid2DVolumeDataList:
     m_OverrideState: 1
     m_Value:
