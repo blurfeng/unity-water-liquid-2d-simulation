@@ -22,28 +22,34 @@ Shader "Custom/URP/2D/Liquid2DEffect"
             HLSLPROGRAM
             
             // ---- Keywords ------------------------------------- Start
+            // 这些关键字均由 C# 在运行时通过 SetKeyword 切换（材质为运行时 new 创建，非序列化资源），
+            // 因此必须用 multi_compile 保留全部变体，否则打包时 shader_feature 会剥离未被序列化材质引用的变体，
+            // 导致运行时切换关键字失效（表现为打包后与编辑器不一致）。互斥的关键字合并为一组以压缩变体数。
+            // These keywords are toggled at runtime from C# via SetKeyword (materials are runtime-created, not serialized
+            // assets), so they must use multi_compile to keep all variants; shader_feature would strip variants not
+            // referenced by a serialized material at build time, breaking runtime keyword switching (editor/build mismatch).
+            // Mutually-exclusive keywords are grouped to reduce variant count.
+            // これらのキーワードは C# から実行時に SetKeyword で切り替えられる（マテリアルは実行時に new 生成、非シリアライズ）ため、
+            // multi_compile で全バリアントを保持する必要がある。shader_feature だとビルド時に剥離され不整合になる。排他キーワードはグループ化。
+
             // 开启遮挡纹理功能。 // Enable occluder texture feature. // 遮蔽テクスチャ機能を有効化。
-            #pragma shader_feature_local _OCCLUDER_ENABLE
-            
-            // 透明度倍率使用乘法方式。 // Opacity multiplier using multiplication method. // 透明度倍率は乗算方式を使用。
-            #pragma shader_feature_local _OPACITY_MULTIPLY
-            // 透明度倍率使用覆盖方式，而不是乘法方式。 // Opacity multiplier using override method instead of multiplication. // 透明度倍率は乗算ではなく上書き方式を使用。
-            #pragma shader_feature_local _OPACITY_REPLACE
-            
+            #pragma multi_compile_local _ _OCCLUDER_ENABLE
+
+            // 透明度倍率：乘法 / 覆盖。 // Opacity multiplier: multiply / replace. // 透明度倍率：乗算 / 上書き。
+            #pragma multi_compile_local _ _OPACITY_MULTIPLY _OPACITY_REPLACE
+
             // 开启水体扰动。 // Enable water distortion. // 水体の歪みを有効化。
-            #pragma shader_feature_local _DISTORT_ENABLE
+            #pragma multi_compile_local _ _DISTORT_ENABLE
 
             // 开启边缘颜色效果。 // Enable edge color effect. // エッジカラー効果を有効化。
-            #pragma shader_feature_local _EDGE_ENABLE
-            // 边缘颜色使用 SrcAlpha OneMinusSrcAlpha 混合方式。 // Edge color using SrcAlpha OneMinusSrcAlpha blending mode. // エッジカラーはSrcAlpha OneMinusSrcAlphaブレンドモードを使用。
-            #pragma shader_feature_local _EDGE_BLEND_SA_OMSA
-            // 边缘颜色使用lerp混合方式。 // Edge color using lerp blending mode. // エッジカラーはlerpブレンドモードを使用。
-            #pragma shader_feature_local _EDGE_BLEND_LERP
+            #pragma multi_compile_local _ _EDGE_ENABLE
+            // 边缘颜色混合方式：SrcAlpha OneMinusSrcAlpha / lerp。 // Edge color blending: SrcAlpha OneMinusSrcAlpha / lerp. // エッジカラーのブレンド：SrcAlpha OneMinusSrcAlpha / lerp。
+            #pragma multi_compile_local _ _EDGE_BLEND_SA_OMSA _EDGE_BLEND_LERP
 
             // 开启像素化水体效果。 // Enable pixelated water effect. // ピクセル化水体効果を有効化。
-            #pragma shader_feature_local _PIXEL_ENABLE
+            #pragma multi_compile_local _ _PIXEL_ENABLE
             // 开启像素化背景。 // Enable pixelated background. // ピクセル化背景を有効化。
-            #pragma shader_feature_local _PIXEL_BG
+            #pragma multi_compile_local _ _PIXEL_BG
             // ---- Keywords ------------------------------------- End
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"

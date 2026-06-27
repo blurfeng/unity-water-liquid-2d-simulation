@@ -21,8 +21,11 @@ Shader "Custom/URP/2D/Liquid2DBlur"
         
             HLSLPROGRAM
             // ---- Keywords ------------------------------------- Start
+            // 由 C# 运行时 SetKeyword 切换（材质为运行时创建），须用 multi_compile 保留变体，否则打包被剥离失效。
+            // Toggled at runtime from C# via SetKeyword (runtime-created material); must use multi_compile so the variant
+            // survives build stripping. // C# から実行時に切り替えるため multi_compile でバリアントを保持する。
             // 忽略背景色。 // Ignore background color. // 背景色を無視します。
-            #pragma shader_feature_local _IGNORE_BG_COLOR
+            #pragma multi_compile_local _ _IGNORE_BG_COLOR
             // ---- Keywords ------------------------------------- End
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
