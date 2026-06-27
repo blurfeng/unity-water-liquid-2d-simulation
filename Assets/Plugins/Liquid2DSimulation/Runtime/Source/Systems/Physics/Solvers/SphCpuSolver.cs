@@ -112,8 +112,9 @@ namespace Fs.Liquid2D
                     ActiveIndices = ctx.ActiveIndices, VelNext = _velNext, Velocities = store.velocities,
                 }.Schedule(count, 64, h);
 
-                // 积分 + 碰撞（仅末子步累积接触采样）。 // Integrate + collide (accumulate contact samples only on last substep). // 積分 + 衝突。
-                bool accumulate = lastStep && hasColliders;
+                // 积分 + 碰撞（仅末子步、且存在动态体时才累积接触采样）。无动态体时碰撞照常发生，只是不分配 count 大小的
+                // 接触缓冲、不跑串行规约（静态碰撞器无需双向耦合）。 // Accumulate contact samples only on the last substep AND when a dynamic body exists; collision still happens, we just skip the count-sized contact arrays and serial reduce. // 動的体がある時のみ接触採取。
+                bool accumulate = lastStep && hasColliders && ctx.DynamicBodyCount > 0;
                 int outLen = accumulate ? count : 1;
                 NativeArray<float2> outVelSum = new NativeArray<float2>(outLen, Allocator.TempJob, NativeArrayOptions.ClearMemory);
                 NativeArray<int> outBody = new NativeArray<int>(outLen, Allocator.TempJob, NativeArrayOptions.ClearMemory);

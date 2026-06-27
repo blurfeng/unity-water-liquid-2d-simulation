@@ -691,7 +691,12 @@ namespace Fs.Liquid2D
                     var bounds = new Bounds(center, new Vector3(diameter, diameter, diameter));
                     if (!GeometryUtility.TestPlanesAABB(data.FrustumPlanes, bounds)) continue;
 
-                    matrices[count] = Matrix4x4.TRS(center, Quaternion.identity, new Vector3(diameter, diameter, 1f));
+                    // 直接构造「缩放 + 平移」矩阵，跳过 Matrix4x4.TRS 的四元数→矩阵换算（旋转恒为单位）。等价于 TRS(center, identity, (d,d,1))。
+                    // Build the scale+translate matrix directly, skipping the quaternion→matrix work in Matrix4x4.TRS (rotation is always identity). Equivalent to TRS(center, identity, (d,d,1)). // 直接構築（回転は単位）。
+                    Matrix4x4 m = Matrix4x4.identity;
+                    m.m00 = diameter; m.m11 = diameter;
+                    m.m03 = center.x; m.m13 = center.y; m.m23 = center.z;
+                    matrices[count] = m;
                     float4 c = colorArr[slot];
                     colors[count] = new Vector4(c.x, c.y, c.z, c.w);
                     count++;

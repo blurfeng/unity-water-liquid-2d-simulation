@@ -82,7 +82,21 @@ namespace Fs.Liquid2D
 
         // nameTag → groupId（0 为空标签通配）。 // nameTag → groupId (0 = empty-tag wildcard). // nameTag → groupId。
         private readonly Dictionary<string, int> _nameTagToGroup = new Dictionary<string, int>();
-        private readonly Dictionary<int, List<int>> _groupSlots = new Dictionary<int, List<int>>();
+        // 每个 nameTag 组的 slot 簿记。Handles 为追加顺序的句柄队列（带版本，故被 Free 或 slot 被复用的旧条目可经
+        // _store.IsAlive 精确识别为墓碑——仅查 alive 在 slot 复用时会误判）；Head 为最旧待检查下标；AliveCount 为组内存活数。
+        // 仅 EnforceCap 消费（LRU 淘汰最旧）：销毁不再 O(n) 从列表移除，而是留墓碑 + 推进 Head + 周期压缩，使销毁摊还 O(1)。
+        // Per-nameTag group slot bookkeeping. Handles is an append-ordered handle queue (versioned, so freed or slot-reused
+        // stale entries are precisely detected as tombstones via _store.IsAlive — checking alive alone misfires under slot reuse);
+        // Head is the oldest unchecked index; AliveCount is the group's alive count. Consumed only by EnforceCap (LRU eviction):
+        // freeing no longer removes in O(n); it leaves a tombstone, EnforceCap advances Head and CompactGroup reclaims → amortized O(1).
+        // nameTag グループの slot 簿記。Handles は追加順の句柄キュー（バージョン付きで墓碑を精確判定）、Head、AliveCount。
+        private sealed class GroupSlots
+        {
+            public readonly List<Liquid2DParticleHandle> Handles = new List<Liquid2DParticleHandle>();
+            public int Head;        // 最旧待检查句柄在 Handles 中的下标。 // index of the oldest unchecked handle. // 最旧待検査下標。
+            public int AliveCount;  // 组内存活粒子数（不含墓碑）。 // alive particle count in the group (excludes tombstones). // 生存数。
+        }
+        private readonly Dictionary<int, GroupSlots> _groupSlots = new Dictionary<int, GroupSlots>();
 
         private NativeArray<int> _activeIndices;
         private int _activeCount;
@@ -233,15 +247,17 @@ namespace Fs.Liquid2D
             var handle = _store.Allocate(position, velocity, new float4(c.r, c.g, c.b, c.a),
                 radius, mass, typeId, group, lifeEnd, now);
 
-            if (!_groupSlots.TryGetValue(group, out var list))
+            if (!_groupSlots.TryGetValue(group, out var g))
             {
-                list = new List<int>();
-                _groupSlots[group] = list;
+                g = new GroupSlots();
+                _groupSlots[group] = g;
             }
-            list.Add(handle.Index);
+            g.Handles.Add(handle); // 存句柄（带版本）而非裸 slot，以便正确识别墓碑。 // store the versioned handle, not the bare slot. // 句柄を保存。
+            g.AliveCount++;
             _activeDirty = true;
 
-            EnforceCap(list, handle.Index);
+            EnforceCap(g, handle.Index);
+            CompactGroup(g); // 墓碑过多时回收，避免列表随历史生成数无界增长（仅 Spawn 路径，摊还 O(1)）。 // reclaim tombstones to bound growth. // 墓碑回収。
 
             // GPU 常驻模式：记录新 slot，待下次 Step 增量上传。 // GPU resident mode: record new slot for incremental upload. // GPU 常駐：新 slot を記録。
             if (Mode == Liquid2DSimulationMode.Gpu) _gpuPendingSpawns.Add(handle.Index);
@@ -254,23 +270,52 @@ namespace Fs.Liquid2D
             if (_store.IsAlive(handle)) FreeSlot(handle.Index);
         }
 
-        private void EnforceCap(List<int> groupList, int justAddedSlot)
+        // 超出每组上限时按 LRU 淘汰最旧的存活粒子。推进 Head 跳过墓碑（已 Free 或 slot 被复用 → 句柄失效），找到最旧存活者淘汰。
+        // Evict the oldest alive particle (LRU) when the per-group cap is exceeded. Advance Head past tombstones (freed or slot-reused → stale handle) to the oldest alive one.
+        // グループ上限超過時、最旧の生存粒子を LRU で淘汰。Head を進めて墓碑をスキップ。
+        private void EnforceCap(GroupSlots g, int justAddedSlot)
         {
             if (MaxParticlesPerTag <= 0) return;
-            while (groupList.Count > MaxParticlesPerTag)
+            while (g.AliveCount > MaxParticlesPerTag)
             {
-                int oldest = groupList[0];
-                if (oldest == justAddedSlot) break; // 不回收刚生成的。 // never recycle the just-spawned one. // 生成直後は回収しない。
-                FreeSlot(oldest);
+                // 推进 Head 跳过墓碑（句柄不再指向存活粒子）。 // Advance Head past tombstones (handle no longer points to an alive particle). // 墓碑をスキップ。
+                while (g.Head < g.Handles.Count && !_store.IsAlive(g.Handles[g.Head])) g.Head++;
+                if (g.Head >= g.Handles.Count) break; // 无可淘汰的存活者（AliveCount>cap 时理论上不会发生）。 // no alive to evict (shouldn't happen while AliveCount>cap). // 淘汰対象なし。
+                var oldest = g.Handles[g.Head];
+                if (oldest.Index == justAddedSlot) break; // 不回收刚生成的。 // never recycle the just-spawned one. // 生成直後は回収しない。
+                g.Head++;
+                FreeSlot(oldest.Index); // 递减 AliveCount，并 bump version → 该句柄自然成墓碑。 // decrements AliveCount; version bump tombstones the handle. // AliveCount 減 + 墓碑化。
             }
+        }
+
+        // 墓碑回收：墓碑（已死句柄）占比过高时，原地保留存活句柄并保序、重置 Head，避免列表随历史生成数无界增长。
+        // O(list) 但仅在墓碑多时触发，摊还 O(1)。仅 Spawn 后调用——无生成则列表不增长，墓碑留到下次生成时清理（有界）。
+        // Reclaim tombstones: when dead handles dominate, compact alive ones in place (order-preserving) and reset Head, bounding growth.
+        // O(list) but triggered only when tombstones are many → amortized O(1). Called after Spawn only; without spawning the list doesn't grow.
+        // 墓碑回収：墓碑が多い時のみ生存句柄を保序圧縮し Head をリセット（無界成長を防ぐ）。
+        private void CompactGroup(GroupSlots g)
+        {
+            int count = g.Handles.Count;
+            int dead = count - g.AliveCount;
+            if (dead <= 64 || dead < count / 2) return; // 墓碑既不多也不过半，不值得压缩。 // not enough tombstones to bother. // 圧縮不要。
+            var h = g.Handles;
+            int w = 0;
+            for (int r = 0; r < h.Count; r++)
+                if (_store.IsAlive(h[r])) h[w++] = h[r];
+            if (w < h.Count) h.RemoveRange(w, h.Count - w);
+            g.Head = 0;
         }
 
         private void FreeSlot(int slot)
         {
             if (slot < 0) return;
             int group = _store.groupId[slot];
-            if (_groupSlots.TryGetValue(group, out var list)) list.Remove(slot);
-            _store.FreeIndex(slot);
+            // 先按 slot 回收（FreeIndex 校验存活并返回是否真的回收了），仅在真回收时递减组存活数——不再 O(n) 从组列表移除（留墓碑，由 CompactGroup 周期回收）。
+            // Free by slot first (FreeIndex validates alive and returns whether it actually freed); decrement the group's alive
+            // count only on a real free — no O(n) list removal (leaves a tombstone, reclaimed later by CompactGroup).
+            // slot で回収（FreeIndex が存活検証）。真に回収した時のみ組生存数を減算（O(n) 除去なし、墓碑化）。
+            if (!_store.FreeIndex(slot)) return;
+            if (_groupSlots.TryGetValue(group, out var g)) g.AliveCount--;
             _activeDirty = true;
         }
 
@@ -320,7 +365,14 @@ namespace Fs.Liquid2D
             // 破棄領域：バッファに平坦化し、active 索引の killFlags を確保（ソルバーが設定、Step 後に slot 回収）。
             var deadZones = Liquid2DDeadZoneRegistry.BuildBuffer(Allocator.TempJob, GetGroup);
             int deadZoneCount = deadZones.Count;
-            var killFlags = new NativeArray<byte>(math.max(1, count), Allocator.TempJob, NativeArrayOptions.ClearMemory);
+            // 仅有销毁区域时才分配 killFlags（count 大小、每帧 ClearMemory）。无销毁区域时求解器与 ApplyKills 都不会访问它
+            // （均按 deadZoneCount>0 / IsCreated 守卫），传 default 即可；finally 的 IsCreated 守卫照常释放。
+            // Allocate killFlags only when dead zones exist (it's count-sized and ClearMemory'd every frame). With none, neither
+            // the solver nor ApplyKills touches it (both guard on deadZoneCount>0 / IsCreated), so default is fine; the finally's
+            // IsCreated guard handles disposal. // 破棄領域がある時のみ確保（既定で渡し、IsCreated ガードで解放）。
+            var killFlags = deadZoneCount > 0
+                ? new NativeArray<byte>(math.max(1, count), Allocator.TempJob, NativeArrayOptions.ClearMemory)
+                : default;
 
             var ctx = new Liquid2DSolveContext
             {
@@ -357,8 +409,12 @@ namespace Fs.Liquid2D
                 // 任意：GPU モードで毎フレーム回読（Gizmos/クエリ互換用、性能大幅低下）。
                 if (GpuReadbackToStore && _solver is SphGpuSolver gpuSolver)
                 {
+                    // 回读只重写 store 的值（位置/速度/颜色），不改变 slot 活动成员；活动索引表本帧已构建且仍有效，
+                    // 无需再置 _activeDirty（否则渲染期会多做一次 [0,HighWater) 全扫）。Spawn/FreeSlot 仍会自行标脏。
+                    // Readback rewrites store values, not slot membership; the active-index list built this FixedUpdate stays
+                    // valid, so don't re-dirty (it would force a second full [0,HighWater) scan at render time). Spawn/FreeSlot still dirty as needed.
+                    // 回読は値のみで活動メンバーシップは不変。本フレーム構築済みの活動索引表は有効、再 dirty 不要。
                     gpuSolver.ReadbackToStore(_store);
-                    _activeDirty = true;
                 }
 
                 DispatchBodyForces(velSum, contact, buoyancy, Time.fixedDeltaTime);
