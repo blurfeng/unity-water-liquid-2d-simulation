@@ -24,6 +24,11 @@
 #pragma kernel MixColor
 #pragma kernel CopyColor
 #pragma kernel DeadZoneKill
+// 并行前缀和（工作高效多块 Blelloch 扫描，替代串行 PrefixSum）。 // Parallel prefix sum (work-efficient multi-block Blelloch scan, replaces serial PrefixSum). // 並列前缀和。
+#pragma kernel ScanInBlock
+#pragma kernel ScanBlockSums
+#pragma kernel AddBlockOffsets
+#pragma kernel PrefixVerify
 
 static const int NumThreads = 64;
 static const float PI = 3.14159265358979f;
@@ -31,6 +36,12 @@ static const float PI = 3.14159265358979f;
 // Per-particle neighbor scan budget. A healthy fluid stays well below this; caps GPU work when particles cluster pathologically (instability/NaN collapse) to avoid O(N^2) driver timeouts (TDR).
 // 近傍走査の予算上限。異常な凝集時に O(N^2) を防ぎ TDR を回避。
 static const int MaxScan = 128;
+
+// ---- 并行前缀和参数（工作高效 Blelloch，bank-conflict-free）。 // Parallel prefix-sum params (work-efficient Blelloch, bank-conflict-free). // 並列前缀和パラメータ。 ----
+#define SCAN_BLOCK 1024              // 元素/块（须为 2 的幂）。 // elements per block (must be power of two). // ブロック当たり要素数。
+#define SCAN_THREADS 512            // 线程/块 = SCAN_BLOCK/2（每线程处理 2 元素）。 // threads per block = SCAN_BLOCK/2. // スレッド/ブロック。
+#define LOG_NUM_BANKS 5             // groupshared 32 banks（D3D/现代后端）。 // 32 banks. // バンク数 log2。
+#define CONFLICT_FREE_OFFSET(n) ((n) >> LOG_NUM_BANKS)
 
 // ---- 粒子数据（slot 索引，容量 = store.Capacity，跨帧驻留）。 // Particle data (slot-indexed, capacity = store.Capacity, resident). ----
 RWStructuredBuffer<float2> Positions;
@@ -107,6 +118,10 @@ RWStructuredBuffer<int> Counts;     // tableSize
 RWStructuredBuffer<int> CellStart;  // tableSize+1
 RWStructuredBuffer<int> Cursor;     // tableSize
 RWStructuredBuffer<int> SortedSlots;// activeCount，存 slot。 // stores slots.
+// 并行前缀和：BlockSums = numBlocks 个块总和（上扫后）→ 块全局偏移（块和扫描后）。 // per-block totals → exclusive block offsets. // ブロック和→オフセット。
+RWStructuredBuffer<int> BlockSums;
+// 对拍校验输出[4]（仅编辑器调度）：[0]=首个不一致 index(-1=无)，[1]=期望，[2]=实得，[3]=种类(0=CellStart,1=Cursor,2=末元素)。 // parity-check output (editor only). // 対拍出力。
+RWStructuredBuffer<int> ScanMismatch;
 
 // ---- 生成上传源（仅 ScatterSpawn 使用，只含动态状态；静态属性由 CPU 整块上传）。 // Spawn upload sources (ScatterSpawn only, dynamic state). ----
 StructuredBuffer<int>    UploadSlots;
@@ -118,6 +133,7 @@ StructuredBuffer<float4> UploadColor;
 int numParticles;   // = activeCount，遍历上界。 // = activeCount, loop bound.
 int numUploads;
 int tableSize;
+int numBlocks;      // = ceil(tableSize / SCAN_BLOCK)，并行前缀和的块数。 // number of scan blocks. // 走査ブロック数。
 int numColliders;
 int numBodies;
 int numForceFields;
@@ -388,6 +404,116 @@ void ScatterSlots(uint3 id : SV_DispatchThreadID)
     int pos;
     InterlockedAdd(Cursor[b], 1, pos);
     SortedSlots[pos] = ActiveIndices[k];
+}
+
+// ============ 并行前缀和（工作高效多块 Blelloch 扫描）============
+// 三步替代串行 PrefixSum，逐位等价产出：CellStart[t]=Σ Counts[0..t-1]（独占前缀）、CellStart[tableSize]=总数、Cursor[t]=CellStart[t]。
+//   ① ScanInBlock：每块（SCAN_BLOCK 元素）groupshared 内做 bank-conflict-free Blelloch 独占扫描 → 写块内局部前缀到 CellStart，块总和到 BlockSums。
+//   ② ScanBlockSums：单线程串行扫 numBlocks 个块总和 → BlockSums 变为各块全局偏移，并写 CellStart[tableSize]=总数。（numBlocks≪tableSize，可忽略）
+//   ③ AddBlockOffsets：每元素加本块偏移，并写 Cursor=CellStart。
+// Work-efficient multi-block Blelloch scan, bit-identical to the serial PrefixSum. ① per-block exclusive scan in groupshared;
+// ② serial scan of the small block-sums; ③ add per-block offsets + write Cursor. // 並列前缀和（多ブロック）。
+groupshared int gScan[SCAN_BLOCK + (SCAN_BLOCK >> LOG_NUM_BANKS) + 1];
+
+[numthreads(SCAN_THREADS,1,1)]
+void ScanInBlock(uint3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID)
+{
+    int thid = (int)gtid.x;
+    int block = (int)gid.x;
+    int baseIdx = block * SCAN_BLOCK;
+
+    int ai = thid;
+    int bi = thid + (SCAN_BLOCK >> 1);
+    int bankA = CONFLICT_FREE_OFFSET(ai);
+    int bankB = CONFLICT_FREE_OFFSET(bi);
+    int gA = baseIdx + ai;
+    int gB = baseIdx + bi;
+    // 载入（越界补 0）。 // load (pad out-of-range with 0). // 範囲外は 0。
+    gScan[ai + bankA] = (gA < tableSize) ? Counts[gA] : 0;
+    gScan[bi + bankB] = (gB < tableSize) ? Counts[gB] : 0;
+
+    int offset = 1;
+    // 上扫（reduce）。 // up-sweep. // 上り走査。
+    for (int d = SCAN_BLOCK >> 1; d > 0; d >>= 1)
+    {
+        GroupMemoryBarrierWithGroupSync();
+        if (thid < d)
+        {
+            int a = offset * (2 * thid + 1) - 1;
+            int b = offset * (2 * thid + 2) - 1;
+            a += CONFLICT_FREE_OFFSET(a);
+            b += CONFLICT_FREE_OFFSET(b);
+            gScan[b] += gScan[a];
+        }
+        offset <<= 1;
+    }
+    // 存块总和并把末元素清 0（Blelloch 独占扫描要求）。 // save block total, then clear the last element. // ブロック和を保存し末尾を 0。
+    if (thid == 0)
+    {
+        int last = (SCAN_BLOCK - 1) + CONFLICT_FREE_OFFSET(SCAN_BLOCK - 1);
+        BlockSums[block] = gScan[last];
+        gScan[last] = 0;
+    }
+    // 下扫（down-sweep）。 // down-sweep. // 下り走査。
+    for (int d2 = 1; d2 < SCAN_BLOCK; d2 <<= 1)
+    {
+        offset >>= 1;
+        GroupMemoryBarrierWithGroupSync();
+        if (thid < d2)
+        {
+            int a = offset * (2 * thid + 1) - 1;
+            int b = offset * (2 * thid + 2) - 1;
+            a += CONFLICT_FREE_OFFSET(a);
+            b += CONFLICT_FREE_OFFSET(b);
+            int t = gScan[a];
+            gScan[a] = gScan[b];
+            gScan[b] += t;
+        }
+    }
+    GroupMemoryBarrierWithGroupSync();
+    // 回写块内局部独占前缀（越界不写）。 // write back local exclusive prefix. // 局所前缀を書戻し。
+    if (gA < tableSize) CellStart[gA] = gScan[ai + bankA];
+    if (gB < tableSize) CellStart[gB] = gScan[bi + bankB];
+}
+
+// 串行扫块总和（numBlocks 个）→ 各块全局偏移；并写总数到 CellStart[tableSize]。numBlocks≪tableSize，串行可忽略。
+[numthreads(1,1,1)]
+void ScanBlockSums(uint3 id : SV_DispatchThreadID)
+{
+    int acc = 0;
+    for (int b = 0; b < numBlocks; b++)
+    {
+        int v = BlockSums[b];
+        BlockSums[b] = acc;
+        acc += v;
+    }
+    CellStart[tableSize] = acc; // 总数。 // grand total. // 総数。
+}
+
+// 每元素加本块全局偏移（→ 全局独占前缀），并写 Cursor=CellStart。 // add per-block offset, write Cursor=CellStart. // ブロックオフセット加算。
+[numthreads(NumThreads,1,1)]
+void AddBlockOffsets(uint3 id : SV_DispatchThreadID)
+{
+    int t = (int)id.x; if (t >= tableSize) return;
+    int v = CellStart[t] + BlockSums[t / SCAN_BLOCK];
+    CellStart[t] = v;
+    Cursor[t] = v;
+}
+
+// 对拍校验（仅编辑器调度）：串行重算独占前缀，与并行结果逐元素比对，记录首个不一致到 ScanMismatch。
+// Parity check (editor-only dispatch): recompute the serial exclusive scan and compare element-by-element; record the first mismatch. // 対拍。
+[numthreads(1,1,1)]
+void PrefixVerify(uint3 id : SV_DispatchThreadID)
+{
+    ScanMismatch[0] = -1; ScanMismatch[1] = 0; ScanMismatch[2] = 0; ScanMismatch[3] = 0;
+    int acc = 0;
+    for (int t = 0; t < tableSize; t++)
+    {
+        if (CellStart[t] != acc) { ScanMismatch[0] = t; ScanMismatch[1] = acc; ScanMismatch[2] = CellStart[t]; ScanMismatch[3] = 0; return; }
+        if (Cursor[t] != acc)    { ScanMismatch[0] = t; ScanMismatch[1] = acc; ScanMismatch[2] = Cursor[t];    ScanMismatch[3] = 1; return; }
+        acc += Counts[t];
+    }
+    if (CellStart[tableSize] != acc) { ScanMismatch[0] = tableSize; ScanMismatch[1] = acc; ScanMismatch[2] = CellStart[tableSize]; ScanMismatch[3] = 2; }
 }
 
 [numthreads(NumThreads,1,1)]

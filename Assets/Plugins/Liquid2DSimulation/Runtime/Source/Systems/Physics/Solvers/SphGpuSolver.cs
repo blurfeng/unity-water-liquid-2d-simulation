@@ -45,6 +45,7 @@ namespace Fs.Liquid2D
         private static readonly int _lastMixTime = Shader.PropertyToID("LastMixTime");
         private static readonly int _numParticles = Shader.PropertyToID("numParticles");
         private static readonly int _tableSize = Shader.PropertyToID("tableSize");
+        private static readonly int _numBlocksId = Shader.PropertyToID("numBlocks");
         private static readonly int _numColliders = Shader.PropertyToID("numColliders");
         private static readonly int _numBodies = Shader.PropertyToID("numBodies");
         private static readonly int _numForceFields = Shader.PropertyToID("numForceFields");
@@ -74,7 +75,22 @@ namespace Fs.Liquid2D
 
         private readonly int _kSpawn, _kExternal, _kClearGrid, _kCount, _kPrefix, _kScatter, _kDensity, _kPressure,
             _kViscosity, _kCopyVel, _kClearImpulse, _kIntegrate, _kMix, _kCopyColor, _kDeadZone;
+        // 并行前缀和核（替代串行 _kPrefix）。 // Parallel prefix-sum kernels (replace serial _kPrefix). // 並列前缀和カーネル。
+        private readonly int _kScanInBlock, _kScanBlockSums, _kAddOffsets, _kPrefixVerify;
         private readonly int[] _allKernels;
+
+        // 并行前缀和块大小（须与 compute 的 SCAN_BLOCK 一致）。 // scan block size (must match compute SCAN_BLOCK). // 走査ブロック幅。
+        private const int ScanBlock = 1024;
+        private int _numBlocksValue; // 本 Step 的块数 = ceil(tableSize/ScanBlock)。 // blocks this Step. // 本ステップのブロック数。
+
+        /// <summary>排错/对照用：改用串行前缀和（默认 false=并行）。 // Debug A/B: use the serial prefix sum instead of the parallel one. // 直列前缀和に切替（A/B）。</summary>
+        public static readonly bool DebugUseSerialPrefixSum = false;
+#if UNITY_EDITOR
+        /// <summary>编辑器对拍：每帧校验并行前缀和与串行结果逐位一致（同步回读，仅排障时开）。 // Editor parity check vs serial (sync readback; debugging only). // 対拍。</summary>
+        public static readonly bool DebugVerifyPrefixSum = false;
+        private readonly int[] _scanMismatchA = new int[4];
+        private bool _scanMismatchReported;
+#endif
 
         // 容量级缓冲（slot 索引，扩容时保状态重建）。 // Capacity-level buffers (slot-indexed). // 容量レベルバッファ。
         private ComputeBuffer _positions, _predicted, _velocities, _velNext, _densities, _colors, _colorsNext, _lastMix;
@@ -83,6 +99,8 @@ namespace Fs.Liquid2D
         private ComputeBuffer _active, _bucketOf, _sortedSlots, _killFlags;
         // tableSize 级。 // table-level.
         private ComputeBuffer _counts, _cellStart, _cursor;
+        // 并行前缀和：块和（numBlocks 级）+ 对拍输出（4 int，编辑器）。 // scan block-sums + parity output. // 走査ブロック和 + 対拍。
+        private ComputeBuffer _blockSums, _scanMismatch;
         // 辅助。 // aux.
         private ComputeBuffer _materials, _mixDatas, _colliders, _points, _forceFields;
         // 动态体接触累积（合并为单个缓冲，规避 D3D11 每 kernel 8 UAV 上限）：每体 _accumStride 个 int 通道，通道定义见 _accum* 常量与 shader ACCUM_*。
@@ -142,10 +160,15 @@ namespace Fs.Liquid2D
             _kMix = _cs.FindKernel("MixColor");
             _kCopyColor = _cs.FindKernel("CopyColor");
             _kDeadZone = _cs.FindKernel("DeadZoneKill");
+            _kScanInBlock = _cs.FindKernel("ScanInBlock");
+            _kScanBlockSums = _cs.FindKernel("ScanBlockSums");
+            _kAddOffsets = _cs.FindKernel("AddBlockOffsets");
+            _kPrefixVerify = _cs.FindKernel("PrefixVerify");
             _allKernels = new[]
             {
                 _kSpawn, _kExternal, _kClearGrid, _kCount, _kPrefix, _kScatter, _kDensity, _kPressure,
                 _kViscosity, _kCopyVel, _kClearImpulse, _kIntegrate, _kMix, _kCopyColor, _kDeadZone,
+                _kScanInBlock, _kScanBlockSums, _kAddOffsets, _kPrefixVerify,
             };
             _valid = true;
         }
@@ -287,9 +310,44 @@ namespace Fs.Liquid2D
         {
             _cs.Dispatch(_kClearGrid, gT, 1, 1);
             _cs.Dispatch(_kCount, gP, 1, 1);
-            _cs.Dispatch(_kPrefix, 1, 1, 1);
+
+            if (DebugUseSerialPrefixSum)
+            {
+                // 串行前缀和（兜底/对照）。 // serial prefix sum (fallback / A-B). // 直列。
+                _cs.Dispatch(_kPrefix, 1, 1, 1);
+            }
+            else
+            {
+                // 并行前缀和：① 块内扫描（每块一个线程组）② 串行扫块和 ③ 加偏移 + 写 Cursor。
+                // 连续 Dispatch 间的 UAV 依赖由驱动/Unity 保证有序（与既有 ClearGrid→Count→Scatter 同理）。
+                // Parallel prefix sum: ① per-block scan ② serial block-sums scan ③ add offsets. UAV ordering between consecutive dispatches is guaranteed (same as the existing pattern). // 並列前缀和。
+                _cs.Dispatch(_kScanInBlock, _numBlocksValue, 1, 1);
+                _cs.Dispatch(_kScanBlockSums, 1, 1, 1);
+                _cs.Dispatch(_kAddOffsets, gT, 1, 1);
+#if UNITY_EDITOR
+                if (DebugVerifyPrefixSum) VerifyPrefixSum();
+#endif
+            }
+
             _cs.Dispatch(_kScatter, gP, 1, 1);
         }
+
+#if UNITY_EDITOR
+        // 对拍校验：在 Scatter 消耗 Cursor 之前，调度 PrefixVerify 串行重算并比对，回读首个不一致并打印（一次）。
+        // 每帧同步回读，仅 DebugVerifyPrefixSum 开启时执行（排障用）。 // Editor parity check before Scatter consumes Cursor. // 対拍。
+        private void VerifyPrefixSum()
+        {
+            if (_scanMismatchReported || _scanMismatch == null) return;
+            _cs.Dispatch(_kPrefixVerify, 1, 1, 1);
+            _scanMismatch.GetData(_scanMismatchA, 0, 0, 4);
+            if (_scanMismatchA[0] >= 0)
+            {
+                string kind = _scanMismatchA[3] == 0 ? "CellStart" : (_scanMismatchA[3] == 1 ? "Cursor" : "CellStart[tableSize]");
+                Debug.LogError($"[SphGpuSolver] 并行前缀和对拍不一致 PrefixSum parity mismatch @ index={_scanMismatchA[0]} ({kind}): expected={_scanMismatchA[1]} got={_scanMismatchA[2]}.");
+                _scanMismatchReported = true;
+            }
+        }
+#endif
 
         // 容量级缓冲：扩容时先回读旧缓冲（保状态）再重建并标记全量重传。 // Grow: read back old buffers to preserve state, recreate, mark full re-upload. // 容量バッファ。
         private void HandleCapacity(in Liquid2DSolveContext ctx, Liquid2DParticleStore store)
@@ -450,6 +508,9 @@ namespace Fs.Liquid2D
         private void EnsureTableBuffers(int tableSize)
         {
             Ensure(ref _counts, tableSize, 4); Ensure(ref _cellStart, tableSize + 1, 4); Ensure(ref _cursor, tableSize, 4);
+            // 并行前缀和缓冲：块和（numBlocks 个）+ 对拍输出（固定 4 int）。 // scan block-sums (numBlocks) + parity output (4 ints). // 走査バッファ。
+            Ensure(ref _blockSums, (tableSize + ScanBlock - 1) / ScanBlock, 4);
+            Ensure(ref _scanMismatch, 4, 4);
         }
         private void EnsureAuxBuffers(int numTypes, int numColliders, int numPoints, int numBodies, int numForceFields)
         {
@@ -529,6 +590,7 @@ namespace Fs.Liquid2D
             Bind("DeadZones", _deadZones); Bind("DeadZonePoints", _deadZonePoints); Bind("KillFlags", _killFlags);
             Bind("BucketOf", _bucketOf); Bind("Counts", _counts); Bind("CellStart", _cellStart);
             Bind("Cursor", _cursor); Bind("SortedSlots", _sortedSlots);
+            Bind("BlockSums", _blockSums); Bind("ScanMismatch", _scanMismatch);
         }
 
         private void Bind(string name, ComputeBuffer buf)
@@ -541,6 +603,8 @@ namespace Fs.Liquid2D
         {
             _cs.SetInt(_numParticles, count);
             _cs.SetInt(_tableSize, tableSize);
+            _numBlocksValue = (tableSize + ScanBlock - 1) / ScanBlock;
+            _cs.SetInt(_numBlocksId, _numBlocksValue);
             _cs.SetInt(_numColliders, numColliders);
             _cs.SetInt(_numBodies, numBodies);
             _cs.SetInt(_numForceFields, numForceFields);
@@ -650,6 +714,7 @@ namespace Fs.Liquid2D
             R(_positions); R(_predicted); R(_velocities); R(_velNext); R(_densities); R(_colors); R(_colorsNext); R(_lastMix);
             R(_radii); R(_invMass); R(_typeId); R(_groupId);
             R(_active); R(_bucketOf); R(_sortedSlots); R(_killFlags); R(_counts); R(_cellStart); R(_cursor);
+            R(_blockSums); R(_scanMismatch);
             R(_materials); R(_mixDatas); R(_colliders); R(_points); R(_forceFields);
             R(_bodyAccum);
             R(_deadZones); R(_deadZonePoints);
