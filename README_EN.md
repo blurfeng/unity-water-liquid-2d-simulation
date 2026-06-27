@@ -53,6 +53,7 @@ The core algorithm of the fluid physics solver mainly references [SebLague/Fluid
   - [Mix Colors](#mix-colors)
 - [🧱 Scene Collision and Blocking](#-scene-collision-and-blocking)
   - [Liquid2DCollider](#liquid2dcollider)
+  - [Collider Interaction Mode (Push / Submerge)](#collider-interaction-mode-push--submerge)
 - [🤝 Two-Way Coupling (Fluid ↔ Rigidbody)](#-two-way-coupling-fluid--rigidbody)
   - [Liquid2DRigidbodyBridge Component](#liquid2drigidbodybridge-component)
 - [🧲 Force Fields](#-force-fields)
@@ -70,7 +71,7 @@ The core algorithm of the fluid physics solver mainly references [SebLague/Fluid
 ## Introduction
 With this fluid particle system you can quickly simulate 2D fluids, including water, lava, oil, foam, sand, and other media with different textures.  
 The system uses a **custom-built fluid particle solver** (SPH dual-density) and **no longer relies on Unity's physics system**. Particles are pure data with no per-particle GameObject, so it can efficiently simulate large numbers of particles.  
-Solving supports **both CPU and GPU modes**: CPU mode is based on the Job System + Burst; GPU mode uses Compute Shaders with data resident on the GPU, and can **easily reach tens of thousands of particles** while staying efficient (measured at around 22,000 particles still holding roughly 100 FPS in Editor mode).  
+Solving supports **both CPU and GPU modes**: CPU mode is based on the Job System + Burst; GPU mode uses Compute Shaders with data resident on the GPU, and can **easily reach tens of thousands of particles** while staying efficient (measured at around 20,000 particles still holding roughly 150 FPS in Editor mode; for the test device see the device screenshot under [💻 Requirements](#-requirements) below).  
 For rendering, the `Render Graph` framework requires only a single main camera and renders the fluid particles via `GPU Instancing`. Compared to the traditional approach of rendering to a separate camera's Render Target, rendering efficiency is greatly improved.  
 The rendering approach produces a fusion effect similar to SDF, expressing the natural look of fluids.  
 In practice, the particle fusion effect is achieved by stacking and clipping the alpha of the particle textures. Compared to a strict SDF method, this achieves a better balance between performance and visual quality, and performance does not degrade as the particle count grows.  
@@ -335,6 +336,22 @@ Additionally, `Liquid2DEdgeCollider` / `Liquid2DCustomCollider` / `Liquid2DMeshC
 > [!TIP]
 > Each collider has an optional `nameTag`: when left empty it applies to **all** particles; when filled in it **only blocks the particle group matching that tag**.  
 > This lets you create effects like "certain fluids can pass through certain objects."
+
+### Collider Interaction Mode (Push / Submerge)
+Every collider can switch between two interaction modes via the `Collider Mode` field, which decides how fluid particles behave when they meet it:
+- **Push (default)**: The collider continuously ejects fluid particles outside its body, and particles **cannot penetrate** it. Suitable for baffles, pipes, fluid containers, terrain, and other objects that must strictly block the fluid; this is also the original default behavior.
+- **Submerge**: Fluid particles can **pass through** the collider's interior. When the collider is static, the fluid naturally "covers" it; when the collider moves, it displaces the surrounding fluid by its velocity to produce splashes and ripples, while **preserving two-way coupling** (the collider still receives the fluid's drag and buoyancy). Visually the fluid "submerges / covers" the collider, which suits floating or sinking debris and gives a more natural entering-the-water look.  
+![](Documents/collider_mode_1.gif)
+
+In Submerge mode, an extra set of dedicated parameters is provided to fine-tune its interaction with the fluid (effective only in this mode):
+- `Submerge Coupling`: Displacement-coupling strength (0~1, default 0.25). While moving, the collider pushes the fluid it covers toward the **opposite of its own velocity**, so the water flows around the body — a "position exchange" between the body and the water (a rising body: front fluid yields downward / outward, rear backfills). Ramped in by collider speed, so a **still collider does not disturb the fluid**. Purely dissipative and stable; 0.15~0.4 recommended.
+- `Submerge Splash Strength`: Splash strength (default 1, 0 = no splash). Above the threshold below, it injects extra velocity **nonlinearly** along the opposite of the collider's velocity to create spray (e.g. slamming down into the surface sprays water up). It only takes effect during the transient high-speed impact and does not affect floating stability.
+- `Submerge Splash Threshold`: Splash onset speed threshold (world units/s, default 4). The collider only splashes above this speed — set it **above** the speed of a force-field disturbance on a floating body and **below** a free-fall impact onto the surface. It is also the reference speed for the velocity-coupling ramp.
+- `Submerge Splash Range`: Splash ramp speed range (world units/s, default 6). The speed range over which splash strength ramps from 0 to full; smaller reaches the strongest splash sooner.
+- `Submerge Fluid Density Threshold`: Fluid-density threshold for applying force (fraction of rest density, default 0.4, 0 = no filtering). Only fluid particles whose SPH density exceeds this value receive the displacement / splash force — dense water bodies / surfaces are at high density and get normal force, while isolated airborne droplets are at low density and get none, preventing an object in the air from flinging nearby droplets. A free surface is ≈0.5 and an isolated droplet ≈0.1~0.2; 0.35~0.45 lets surface splashes through while blocking lone droplets.
+
+> [!TIP]
+> Submerge mode is usually used together with the [Liquid2DRigidbodyBridge component](#liquid2drigidbodybridge-component), giving more natural two-way interactions such as objects sinking into / floating out of the water surface or being washed away by the flow.
 
 ## 🤝 Two-Way Coupling (Fluid ↔ Rigidbody)
 Fluid can not only be blocked by scene objects but can in turn push the `Rigidbody2D` in the scene, achieving two-way interactions such as wash-away and floating.

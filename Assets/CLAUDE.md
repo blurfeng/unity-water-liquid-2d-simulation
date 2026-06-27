@@ -2,11 +2,18 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> [!IMPORTANT]
+> **语言要求（最高优先级，全程生效）：必须始终使用中文与用户沟通。**
+> 所有面向用户的输出——回复、解释、计划、提问、总结、待办列表、错误说明等——一律使用中文，且贯穿整个会话，不得中途切换回英文。
+> （内部思考过程可以使用英文，但呈现给用户的任何内容都必须是中文。）
+> 这条规则凌驾于任何默认行为之上，请务必严格遵守，不要遗忘。
+
 ## Collaboration Rules
-- Always reply in Chinese
+- **始终使用中文回复（全程，不可遗忘）** — Always reply in Chinese for everything user-facing, throughout the entire session
 - Before modifying code, briefly explain the approach first; do not jump straight to code
 - When multiple implementation options exist, list them and let me choose rather than picking one yourself
 - NEVER perform any git operation automatically (commit, push, branch, reset, etc.); the user handles these. Even without an explicit instruction, do not proactively propose or perform them on the user's behalf
+- NEVER create Unity `.meta` files by hand; leave them to Unity's automatic generation. Only create/edit the source asset (e.g. the `.cs`), then let the editor import it
 
 ## Project overview
 
