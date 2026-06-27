@@ -587,6 +587,43 @@ namespace Fs.Liquid2D
             return false;
         }
 
+        /// <summary>
+        /// 纯查询：返回 nameTag 为 featureNameTag 的 Feature 在当前帧会渲染的存活粒子数，与绘制时的 nameTag 门控一致
+        /// （空标签粒子被所有 Feature 渲染，故始终计入；带标签粒子仅由同名 Feature 渲染）。不会注册新标签（无 GetGroup 副作用），
+        /// 供渲染层做「无可渲染粒子则整条全屏链路跳过」的早退判断。AliveCount 仅由真实回收递减（永不少算），故 ==0 即确无粒子，早退安全；
+        /// GPU 模式下 GPU 侧 kill 不递减 CPU 计数（只会多算），同样不会误跳。
+        /// Pure lookup: returns how many alive particles a feature with the given nameTag would render this frame, matching the
+        /// draw-time nameTag gate (empty-tag particles are drawn by every feature, always counted; a set tag matches only its own
+        /// group). Does NOT register the tag (no GetGroup side effect). For the render layer's "skip the whole full-screen chain
+        /// when nothing to render" early-out. AliveCount only decrements on real frees (never undercounts), so ==0 means genuinely
+        /// empty and skipping is safe; under GPU mode a GPU-side kill won't decrement the CPU count (only overcounts), so no false skip.
+        /// 純粋な照会：指定 nameTag の Feature が当該フレームで描画する生存粒子数を、描画時の nameTag ゲートと一致して返します
+        /// （空タグ粒子は全 Feature が描画＝常に計上、設定タグは同名 Feature のみ）。タグを登録しません（副作用なし）。
+        /// </summary>
+        public static int GetRenderableAliveCount(string featureNameTag)
+        {
+            var inst = _instance;
+            if (inst == null) return 0;
+            // 空标签组（id 0）被所有 Feature 渲染，始终计入。 // Empty-tag group (id 0) is drawn by every feature, always counted. // 空タグ組（id 0）は常に計上。
+            int total = inst.AliveCountForTag(string.Empty);
+            // 带标签 Feature 还会渲染同名标签组。 // A tagged feature also renders its own same-named group. // タグ付き Feature は同名組も描画。
+            if (!string.IsNullOrEmpty(featureNameTag))
+                total += inst.AliveCountForTag(featureNameTag);
+            return total;
+        }
+
+        /// <summary>
+        /// 纯查询某 nameTag 组的存活粒子数：未注册的标签返回 0，绝不经 GetGroup 注册新组（避免 _nameTagToGroup 单调增长）。
+        /// Pure lookup of a nameTag group's alive count: an unregistered tag returns 0; never registers via GetGroup.
+        /// </summary>
+        private int AliveCountForTag(string nameTag)
+        {
+            string key = string.IsNullOrEmpty(nameTag) ? string.Empty : nameTag;
+            if (!_nameTagToGroup.TryGetValue(key, out int g)) return 0;
+            if (!_groupSlots.TryGetValue(g, out var slots)) return 0;
+            return slots.AliveCount;
+        }
+
         #endregion
 
         private void OnDestroy()

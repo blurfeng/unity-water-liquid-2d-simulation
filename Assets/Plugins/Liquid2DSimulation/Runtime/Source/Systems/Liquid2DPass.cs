@@ -227,7 +227,17 @@ namespace Fs.Liquid2D
         {
             // ---- 更新设置 // Update settings // 設定を更新する ---- //
             UpdateSettings();
-            
+
+            // ---- 无可渲染粒子时整条链路早退 // Early-out when no particle is renderable // 描画対象が無ければチェーン全体を早期離脱 ---- //
+            // 该 Feature 当前帧若没有任何会被它渲染的存活粒子，则 GrabAsBg / 多趟全屏模糊 / Effect 合成都是纯浪费的全屏开销，
+            // 且空流体纹理合成回去对画面无影响，可安全跳过整条链路（与 line 667 的 nameTag 门控一致）。
+            // If this feature has no alive particle to draw this frame, GrabAsBg / the multi-pass full-screen blur / the Effect
+            // composite are all wasted full-screen work, and compositing an empty fluid texture changes nothing — safe to skip
+            // the whole chain (consistent with the draw-time nameTag gate at line 667).
+            // この Feature が当該フレームで描画する生存粒子が無い場合、全画面処理は無駄なので連鎖全体をスキップします。
+            if (Liquid2DSimulation.GetRenderableAliveCount(_settings.NameTag) == 0)
+                return;
+
             // ---- 获取基础数据 // Get basic data // 基本データを取得する ---- //
             UniversalCameraData cameraData = frameData.Get<UniversalCameraData>();
             UniversalResourceData resourceData = frameData.Get<UniversalResourceData>();
