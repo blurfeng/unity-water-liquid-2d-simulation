@@ -57,8 +57,9 @@ namespace Fs.Liquid2D.Volumes
                     }
                 }
             }
-            
-            return data != null;
+
+            // 走到这里必然未匹配（匹配时已在循环内 return true），data 仍为 null。 // Reaching here means no match (a match returns true above); data is still null. // 未一致のみここに到達。
+            return false;
         }
     }
 

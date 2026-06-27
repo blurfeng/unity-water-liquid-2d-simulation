@@ -351,7 +351,9 @@ namespace Fs.Liquid2D
             // 排空后仍会残影渲染上一批粒子（CPU 求解器为空操作）。 // Reset render count so a drained GPU fluid doesn't ghost-render. // 排空時の残影防止。
             if (count == 0) { _gpuPendingSpawns.Clear(); _solver?.ResetRenderCount(); return; }
 
-            if (Params.H <= 0f) Params = SolverParams.Default;
+            // 仅钳制非法的 H，不整体替换 SolverParams——否则一次瞬态的坏 H 会把其它已调好的字段（压力/粘性/重力等）也重置为默认。
+            // Clamp only an invalid H; don't replace the whole SolverParams, else a transient bad H would also reset other tuned fields (pressure/viscosity/gravity/…) to defaults. // H のみクランプ（全体置換しない）。
+            if (Params.H <= 0f) Params.H = SolverParams.Default.H;
 
             var colliders = Liquid2DColliderRegistry.BuildBuffer(Allocator.TempJob, _dynamicReceivers, GetGroup);
             int bodyCount = math.max(1, _dynamicReceivers.Count);
@@ -480,7 +482,9 @@ namespace Fs.Liquid2D
             for (int b = 0; b < _dynamicReceivers.Count && b < velSum.Length; b++)
             {
                 var r = _dynamicReceivers[b];
-                if (r == null) continue;
+                // 接收者接口通常由 MonoBehaviour（Liquid2DRigidbodyBridge）实现：C# `== null` 是纯引用相等，检测不到
+                // 「已销毁但未 GC」的对象，需用 Unity 重载的 bool 语义把它也当作 null 跳过。 // Use Unity's bool null semantics so a destroyed-but-not-GC'd receiver is skipped (plain `== null` wouldn't catch it). // 破棄済み MonoBehaviour も null 扱い。
+                if (r == null || (r is UnityEngine.Object o && !o)) continue;
 
                 float4 con = b < contact.Length ? contact[b] : float4.zero;
                 int contactCount = (int)con.z;

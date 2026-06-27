@@ -27,7 +27,6 @@ namespace Fs.Liquid2D
             internal static readonly int OccluderTex = Shader.PropertyToID("_OccluderTex");
             internal static readonly int OpacityValue = Shader.PropertyToID("_OpacityValue");
             internal static readonly int CoverColorId = Shader.PropertyToID("_CoverColor");
-            internal static readonly int EdgeStart = Shader.PropertyToID("_EdgeStart");
             internal static readonly int EdgeEnd = Shader.PropertyToID("_EdgeEnd");
             internal static readonly int EdgeMixStart = Shader.PropertyToID("_EdgeMixStart");
             internal static readonly int EdgeColor = Shader.PropertyToID("_EdgeColor");
@@ -883,8 +882,9 @@ namespace Fs.Liquid2D
                 float edgeStart = cutoff;
                 float edgeEnd = cutoff + edgeRange * (1 - cutoff);
                 float edgeMixStart = Mathf.Lerp(edgeStart, edgeEnd, edgeIntensity * 0.999f);
-            
-                mpb.SetFloat(ShaderIds.EdgeStart, edgeStart); // 边缘开始位置。 // Edge start position. // エッジ開始位置。
+
+                // _EdgeStart 已移除：shader 仅用 _EdgeMixStart/_EdgeEnd，不读 _EdgeStart（edgeStart 局部仍用于上面的 edgeMixStart 计算）。
+                // _EdgeStart removed: the shader uses only _EdgeMixStart/_EdgeEnd, never _EdgeStart (the edgeStart local is still used for edgeMixStart above). // _EdgeStart は未使用のため削除。
                 mpb.SetFloat(ShaderIds.EdgeEnd, edgeEnd); // 边缘结束位置。 // Edge end position. // エッジ終了位置。
                 // 边缘混合开始位置。用于 smoothstep 计算。 // Edge mix start position. Used for smoothstep calculation. // エッジミックス開始位置。smoothstep計算に使用。
                 mpb.SetFloat(ShaderIds.EdgeMixStart, edgeMixStart);

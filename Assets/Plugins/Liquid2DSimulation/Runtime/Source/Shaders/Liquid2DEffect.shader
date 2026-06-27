@@ -121,7 +121,7 @@ CBUFFER_START(UnityPerMaterial)
             #endif
 
             #if defined(_EDGE_ENABLE)
-            half _EdgeStart; // 边缘颜色起始位置。 // Edge color start position. // エッジカラー開始位置。
+            // 注：_EdgeStart 已移除（着色器从未读取它，仅用 _EdgeMixStart/_EdgeEnd）。 // _EdgeStart removed (never read; only _EdgeMixStart/_EdgeEnd are used). // _EdgeStart 削除済み。
             half _EdgeEnd; // 边缘颜色结束位置。 // Edge color end position. // エッジカラー終了位置。
             half _EdgeMixStart; // 边缘颜色混合起始位置。 // Edge color blend start position. // エッジカラーブレンド開始位置。
             half4 _EdgeColor; // 边缘颜色。 // Edge color. // エッジカラー。

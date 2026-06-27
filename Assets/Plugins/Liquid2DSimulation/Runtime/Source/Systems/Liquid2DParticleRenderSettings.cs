@@ -52,27 +52,5 @@ namespace Fs.Liquid2D
         {
             return Sprite && Material;
         }
-    
-        public bool Equals(Liquid2DParticleRenderSettings other)
-        {
-            if (other == null) return false;
-            return Sprite == other.Sprite && Material == other.Material;
-        }
-
-        public override bool Equals(object obj)
-        {
-            return Equals(obj as Liquid2DParticleRenderSettings);
-        }
-
-        public override int GetHashCode()
-        {
-            unchecked
-            {
-                int hash = 17;
-                hash = hash * 23 + (Sprite ? Sprite.GetHashCode() : 0);
-                hash = hash * 23 + (Material ? Material.GetHashCode() : 0);
-                return hash;
-            }
-        }
     }
 }

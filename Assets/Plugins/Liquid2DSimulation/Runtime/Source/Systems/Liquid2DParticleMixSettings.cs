@@ -51,7 +51,7 @@ namespace Fs.Liquid2D
         
         [LocalizationTooltip(
              "与接触的流体粒子混合颜色的时间间隔（每个接触的粒子单独计时）。",
-             "Time interval for mixing)] colors with contacting fluid particles (each contacting particle is timed separately).",
+             "Time interval for mixing colors with contacting fluid particles (each contacting particle is timed separately).",
              "接触している流体パーティクルと色を混ぜるための時間間隔（各接触パーティクルは個別にタイミングされます）。")]
         public float MixColorsWithContactParticlesInternal = 0.1f;
 

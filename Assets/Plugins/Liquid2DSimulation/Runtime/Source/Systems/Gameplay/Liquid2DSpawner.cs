@@ -442,7 +442,8 @@ namespace Fs.Liquid2D
             if (!_isInitForJit)
             {
                 _isInitForJit = true;
-                liquidParticles.RandomWeight();
+                // 仅在有配置时预热 JIT，否则空列表会触发 WeightInternal 的「对象列表为空」告警刷屏。 // Warm up only when non-empty, else the empty-list warning spams at startup. // 空リスト警告を回避。
+                if (liquidParticles.Count > 0) liquidParticles.RandomWeight();
             }
         }
 
@@ -774,12 +775,14 @@ namespace Fs.Liquid2D
             // Inspector 変更時に流量のランタイム計算値を即座に同期。
             SetFlowRate(flowRate);
             SetEjectForce(ejectForce);
-            
-            // 数量上限检查。 // Max spawn count check. // 生成数上限チェック。
-            if (maxSpawnCount > 0 && _spawnedCount < maxSpawnCount)
-            {
-                StartSpawn();
-            }
+
+            // 注：原先此处有「maxSpawnCount>0 && _spawnedCount<maxSpawnCount → StartSpawn()」块已移除。
+            // _spawnedCount 是非序列化运行时字段（编辑模式恒为 0），该条件在编辑模式恒真，会在改 Inspector 时误把
+            // IsSpawning 置真并重置计时器，且语义与「同步流量」无关。运行时由 startOnAwake/Start 自动开始，到上限自动 StopSpawn。
+            // Removed the former "maxSpawnCount>0 && _spawnedCount<maxSpawnCount → StartSpawn()" block: _spawnedCount is a
+            // non-serialized runtime field (0 in edit mode), so the condition was always true in the editor and wrongly set
+            // IsSpawning / reset timers on any inspector edit. Runtime start is handled by startOnAwake/Start; the cap auto-StopSpawns.
+            // 編集モードで誤って StartSpawn する旧ブロックを削除（_spawnedCount は非直列化で編集中は常に 0）。
 
             // 移动速度防呆。 // Guard against invalid move speed. // 無効な移動速度を防ぐ。
             if (moveSpeed <= 0f) moveSpeed = 0.001f;

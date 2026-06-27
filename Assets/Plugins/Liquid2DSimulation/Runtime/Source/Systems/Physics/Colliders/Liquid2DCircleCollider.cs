@@ -18,6 +18,8 @@ namespace Fs.Liquid2D
 
         public override void Fill(ref Liquid2DColliderData data, List<float2> pointsAccum)
         {
+            // 半径仅按 lossyScale.x 缩放：假设 XY 均匀缩放。非均匀缩放（sx≠sy）下 Y 被忽略，碰撞圆与可视/作者意图不符——请保持均匀缩放。
+            // Radius scales by lossyScale.x only, assuming uniform XY scale. Under non-uniform scale (sx≠sy) Y is ignored and the collision circle won't match the visual — keep scale uniform. // 半径は lossyScale.x のみ（均一スケール前提）。
             float scale = Mathf.Abs(CachedTransform.lossyScale.x);
             data.Shape = Liquid2DColliderShape.Circle;
             data.Center = WorldCenter;

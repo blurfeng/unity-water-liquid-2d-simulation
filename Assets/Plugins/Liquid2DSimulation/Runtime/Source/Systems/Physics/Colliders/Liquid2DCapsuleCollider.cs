@@ -21,6 +21,8 @@ namespace Fs.Liquid2D
 
         public override void Fill(ref Liquid2DColliderData data, List<float2> pointsAccum)
         {
+            // 长度与半径均仅按 lossyScale.x 缩放：假设 XY 均匀缩放。非均匀缩放（sx≠sy）下 Y 被忽略，碰撞形状与可视/作者意图不符——请保持均匀缩放。
+            // Length and radius scale by lossyScale.x only, assuming uniform XY scale. Under non-uniform scale (sx≠sy) Y is ignored and the collision shape won't match the visual — keep scale uniform. // 長さ/半径は lossyScale.x のみ（均一スケール前提）。
             float scale = Mathf.Abs(CachedTransform.lossyScale.x);
             data.Shape = Liquid2DColliderShape.Capsule;
             data.Center = WorldCenter;

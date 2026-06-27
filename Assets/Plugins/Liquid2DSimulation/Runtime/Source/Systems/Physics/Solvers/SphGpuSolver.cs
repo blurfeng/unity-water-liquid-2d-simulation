@@ -107,8 +107,11 @@ namespace Fs.Liquid2D
         // Temporary diagnostic toggle: when on, reads colours back each frame, logs the first "spontaneously black" active
         // particle with its context, then stops logging. Leave OFF in production (per-frame readback is a sync stall).
         // 一時診断スイッチ：オンで毎フレーム色を回読し、最初の「突然黒くなった」粒子の文脈を出力後に停止。
+        // 仅编辑器：同步全量回读不应进 release 构建（与本项目「编辑器专用代码 #if UNITY_EDITOR」约定一致）。 // Editor-only: the synchronous full readback must not ship in release builds. // エディタ専用。
+#if UNITY_EDITOR
         public static bool DebugDetectBlackParticle;
         private bool _blackReported;
+#endif
 
         // 托管暂存。 // Managed scratch.
         private float2[] _pos, _vel; private float4[] _col; private float[] _lastMixA;
@@ -239,7 +242,9 @@ namespace Fs.Liquid2D
             // 有销毁区域时回读销毁标记（小数组，count 字节级）。 // Read back kill flags when dead zones exist (small array). // 破棄領域がある時のみ回読。
             if (numDeadZones > 0) ReadbackKillFlags(ctx, count);
 
+#if UNITY_EDITOR
             if (DebugDetectBlackParticle) DebugScanBlack(ctx, count);
+#endif
 
             _lastCount = count;
         }
@@ -249,6 +254,7 @@ namespace Fs.Liquid2D
         // Diagnostic: find the first "spontaneously black" active particle. Reads GPU colours, logs the first active slot whose
         // RGB≈0 with visible alpha (slot/typeId/colour/grew-this-step), then stops. ⚠ Per-frame readback; debugging only.
         // 診断：突然黒くなった活動粒子を特定し、文脈を出力後に停止。⚠ 毎フレーム回読、排障時のみ。
+#if UNITY_EDITOR
         private void DebugScanBlack(in Liquid2DSolveContext ctx, int count)
         {
             if (_blackReported || _colors == null || count <= 0 || ctx.Store == null) return;
@@ -275,6 +281,7 @@ namespace Fs.Liquid2D
                 }
             }
         }
+#endif
 
         private void SortPass(int gP, int gT)
         {

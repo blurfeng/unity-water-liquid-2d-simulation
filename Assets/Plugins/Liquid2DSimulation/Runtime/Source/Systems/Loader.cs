@@ -215,6 +215,13 @@ namespace Fs.Liquid2D
         private static GameObject DefaultLoad(string path)
         {
             var viewPrefab = Resources.Load<GameObject>(path);
+            // 加载失败时返回 null 哨兵（与 DefaultLoadFromPrefab 一致），避免 Instantiate(null) 抛出不友好的异常。
+            // On load failure return the null sentinel (matching DefaultLoadFromPrefab) instead of Instantiate(null) throwing an unhelpful exception. // 失敗時は null を返す。
+            if (!viewPrefab)
+            {
+                Debug.LogError($"[Loader] Resources prefab not found: {path}");
+                return null;
+            }
             return Object.Instantiate(viewPrefab);
         }
         

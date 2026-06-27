@@ -195,7 +195,8 @@ namespace Fs.Liquid2D
             if (!_isInitForJit)
             {
                 _isInitForJit = true;
-                particles.RandomWeight();
+                // 仅在有配置时预热 JIT，否则空列表会触发 WeightInternal 的「对象列表为空」告警刷屏。 // Warm up only when non-empty, else the empty-list warning spams at startup. // 空リスト警告を回避。
+                if (particles.Count > 0) particles.RandomWeight();
             }
         }
 
