@@ -51,13 +51,22 @@ namespace Fs.Liquid2D
 
             bool hasColliders = ctx.Colliders.IsCreated && ctx.Colliders.Count > 0;
 
+            // 哈希网格缓冲尺寸在整个 Step 内恒定（tableSize/count 不变），循环外分配一次复用——每子步由 BuildHashGridJob
+            // 全量重写所有元素（计数排序从头构建），无陈旧数据泄漏，并省去每子步的分配/释放。
+            // Hash-grid buffer sizes are constant across the Step; allocate once and reuse — BuildHashGridJob fully overwrites
+            // every element each substep (counting sort from scratch), so no stale data leaks, avoiding per-substep alloc/free.
+            // ハッシュグリッドバッファは Step 全体でサイズ一定。ループ外で一度確保し再利用（毎子步 BuildHashGridJob が全量上書き）。
+            var cellStart = new NativeArray<int>(tableSize + 1, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
+            var sortedSlots = new NativeArray<int>(count, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
+
+            // try/finally 确保即使 Job 调度或 h.Complete() 抛异常（编辑器安全系统/NaN）也释放 TempJob 缓冲，避免泄漏。
+            // try/finally so all TempJob buffers are freed even if a job schedule or Complete throws (editor safety system / NaN).
+            // try/finally で Job 例外時も TempJob バッファを解放。
+            try
+            {
             for (int step = 0; step < substeps; step++)
             {
                 bool lastStep = step == substeps - 1;
-
-                // 每子步重建哈希网格（TempJob，子步末 Complete 后释放）。 // Rebuild hash grid each substep. // サブステップごとに再構築。
-                var cellStart = new NativeArray<int>(tableSize + 1, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
-                var sortedSlots = new NativeArray<int>(count, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
 
                 JobHandle h = default;
 
@@ -112,6 +121,9 @@ namespace Fs.Liquid2D
                 NativeArray<float> outNormalY = new NativeArray<float>(outLen, Allocator.TempJob, NativeArrayOptions.ClearMemory);
                 NativeArray<float> outDensityFactor = new NativeArray<float>(outLen, Allocator.TempJob, NativeArrayOptions.ClearMemory);
 
+                // try/finally 释放本子步接触采样缓冲（同样防 h.Complete() 抛异常泄漏）。 // Free this substep's contact arrays even on a Complete throw. // 接触バッファを解放。
+                try
+                {
                 h = new SphIntegrateCollideJob
                 {
                     ActiveIndices = ctx.ActiveIndices, Positions = store.positions, Velocities = store.velocities,
@@ -219,13 +231,22 @@ namespace Fs.Liquid2D
                     }
                 }
 
-                cellStart.Dispose();
-                sortedSlots.Dispose();
-                outDensityFactor.Dispose();
-                outVelSum.Dispose();
-                outBody.Dispose();
-                outContact.Dispose();
-                outNormalY.Dispose();
+                }
+                finally
+                {
+                    if (outVelSum.IsCreated) outVelSum.Dispose();
+                    if (outBody.IsCreated) outBody.Dispose();
+                    if (outContact.IsCreated) outContact.Dispose();
+                    if (outNormalY.IsCreated) outNormalY.Dispose();
+                    if (outDensityFactor.IsCreated) outDensityFactor.Dispose();
+                }
+            } // for
+            } // try
+            finally
+            {
+                // 循环外一次性释放复用的哈希网格缓冲。 // Free the reused hash-grid buffers once after the loop. // 再利用バッファをループ後に解放。
+                if (cellStart.IsCreated) cellStart.Dispose();
+                if (sortedSlots.IsCreated) sortedSlots.Dispose();
             }
         }
 

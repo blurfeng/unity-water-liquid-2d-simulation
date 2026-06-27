@@ -155,6 +155,9 @@ namespace Fs.Liquid2D
             _materialClone = null;
             CoreUtils.Destroy(_materialGrabAsBg);
             _materialGrabAsBg = null;
+            // 构造时生成的四边形 Mesh 也需销毁，否则每次 Feature 重建（编辑器重编译/域重载/OnValidate）泄漏一个 Mesh。
+            // _quadMesh 为 readonly，不置 null。 // The constructor-created quad Mesh must be destroyed too, else each feature recreate leaks a Mesh. _quadMesh is readonly. // コンストラクタ生成の Mesh も破棄。
+            CoreUtils.Destroy(_quadMesh);
         }
 
         private class PassData
