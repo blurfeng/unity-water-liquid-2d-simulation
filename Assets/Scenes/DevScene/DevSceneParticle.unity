@@ -258,8 +258,8 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 500301}
-  - component: {fileID: 500302}
   - component: {fileID: 500303}
+  - component: {fileID: 500302}
   - component: {fileID: 500304}
   m_Layer: 0
   m_Name: Container Floor
@@ -417,8 +417,8 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 500401}
-  - component: {fileID: 500402}
   - component: {fileID: 500403}
+  - component: {fileID: 500402}
   - component: {fileID: 500404}
   m_Layer: 0
   m_Name: Container Left
@@ -576,8 +576,8 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 500501}
-  - component: {fileID: 500502}
   - component: {fileID: 500503}
+  - component: {fileID: 500502}
   - component: {fileID: 500504}
   m_Layer: 0
   m_Name: Container Right
@@ -1148,7 +1148,7 @@ SpriteRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_MaskInteraction: 0
-  m_Sprite: {fileID: 7482667652216324306, guid: 311925a002f4447b3a28927169b83ea6, type: 3}
+  m_Sprite: {fileID: 7482667652216324306, guid: 440a3684f18f2ff4b9fa7bb40d348d2c, type: 3}
   m_Color: {r: 1, g: 0.7666199, b: 0.4575472, a: 1}
   m_FlipX: 0
   m_FlipY: 0
@@ -1556,7 +1556,7 @@ SpriteRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_MaskInteraction: 0
-  m_Sprite: {fileID: 7482667652216324306, guid: 311925a002f4447b3a28927169b83ea6, type: 3}
+  m_Sprite: {fileID: 7482667652216324306, guid: 440a3684f18f2ff4b9fa7bb40d348d2c, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
@@ -1889,7 +1889,6 @@ SceneRoots:
   - {fileID: 1101620319}
   - {fileID: 500101}
   - {fileID: 1656945275}
-  - {fileID: 471646947}
   - {fileID: 1646027099}
   - {fileID: 1041098852}
   - {fileID: 596802843}
@@ -1898,3 +1897,4 @@ SceneRoots:
   - {fileID: 414023487}
   - {fileID: 1488928532}
   - {fileID: 994501413}
+  - {fileID: 471646947}
