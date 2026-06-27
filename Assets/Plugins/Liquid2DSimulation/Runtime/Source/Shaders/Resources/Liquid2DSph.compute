@@ -613,6 +613,10 @@ void IntegrateCollide(uint3 id : SV_DispatchThreadID)
                 InterlockedAdd(BodyAccum[accBase + ACCUM_VEL_X], (int)(vIncoming.x * impulseScale));
                 InterlockedAdd(BodyAccum[accBase + ACCUM_VEL_Y], (int)(vIncoming.y * impulseScale));
                 InterlockedAdd(BodyAccum[accBase + ACCUM_CONTACT], 1);
+                // ⚠ 接触质心以定点 int(p·impulseScale=256) 原子累加。在「远离原点的大世界 + 高接触数 + 开启 applyTorque」时
+                // 可能溢出 int32：安全包络约 |p| · 接触数 < 2^31/256 ≈ 8.4e6（如 |p|~2000、接触数 < ~4200）。超出会让质心回绕
+                // 致力矩作用点错乱（仅 applyTorque 时有影响；速度/密度通道远更安全；CPU 浮点累加不受影响）。HLSL 无原子浮点加，
+                // 暂以定点保留；如需更大世界请减小 impulseScale 或改为相对某基准累加。 // Fixed-point centroid can overflow int32 in huge worlds with many contacts + applyTorque; safe envelope |p|·count < ~8.4e6. // 大世界+高接触+applyTorque で溢れ得る。
                 InterlockedAdd(BodyAccum[accBase + ACCUM_CENT_X], (int)(p.x * impulseScale));
                 InterlockedAdd(BodyAccum[accBase + ACCUM_CENT_Y], (int)(p.y * impulseScale));
                 InterlockedAdd(BodyAccum[accBase + ACCUM_DENSITY], densFixed);
@@ -769,7 +773,6 @@ void MixColor(uint3 id : SV_DispatchThreadID)
             if (j == i) continue;
             int2 jc = CellCoord(Positions[j]);
             if (jc.x != qc.x || jc.y != qc.y) continue;
-            if (--budget <= 0) break;
             int gj = GroupId[j];
             if (gi != gj && gi != 0 && gj != 0) continue;
             if (MixDatas[TypeId[j]].enabled == 0) continue;
@@ -791,6 +794,10 @@ void MixColor(uint3 id : SV_DispatchThreadID)
                 accumRgb += cj;
             }
             wsum += 1;
+            // 预算移到接触/贡献检查之后：仅对实际贡献的邻居计入预算（与 Density/Pressure 一致；更接近无预算的 CPU 混色）。
+            // Budget moved after the contact/contribution checks: count only contributing neighbors (matches Density/Pressure; closer to the unbudgeted CPU mix).
+            // 予算を貢献チェック後に移動：実際に貢献した近傍のみ計上。
+            if (--budget <= 0) break;
         }
     }
     if (wsum <= 0) { ColorsNext[i] = ci4; return; }

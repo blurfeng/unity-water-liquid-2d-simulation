@@ -371,11 +371,14 @@ namespace Fs.Liquid2D
         // 写入新生成粒子（增量=pending 列表）或扩容/首帧后的全部 active（full）。 // Write spawned particles (incremental) or all active after grow (full). // 新規粒子書込み。
         private void DispatchSpawns(in Liquid2DSolveContext ctx, Liquid2DParticleStore store, int count)
         {
-            bool full = _needFullReupload;
+            // 仅在有活动粒子时才执行全量重传；扩容恰逢 count==0 的帧不消费 _needFullReupload，留到下一非空帧再传，
+            // 避免标志被空帧清掉后活动 slot 一直没被重传。 // Only do the full re-upload when there are active particles; a grow on a count==0 frame defers it instead of clearing the flag with nothing uploaded. // count==0 の帧では消費しない。
+            bool full = _needFullReupload && count > 0;
             int n;
-            if (full) { n = count; _needFullReupload = false; }
+            if (full) n = count;
             else { var pending = ctx.GPUPendingSpawns; n = pending?.Count ?? 0; }
             if (n <= 0) return;
+            if (full) _needFullReupload = false; // 已确定要派发全量重传，此时才清标志。 // clear only now that the full re-upload is committed. // 派遣確定後にクリア。
 
             EnsureArray(ref _upSlotsA, n); EnsureArray(ref _upPosA, n); EnsureArray(ref _upVelA, n); EnsureArray(ref _upColorA, n);
 

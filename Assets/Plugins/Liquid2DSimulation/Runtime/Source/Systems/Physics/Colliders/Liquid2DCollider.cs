@@ -67,6 +67,7 @@ namespace Fs.Liquid2D
         // コライダー線速度の追跡（前フレームのワールド中心 + 記録フラグ）。水没モードで運動により流体を排除するために使用。
         private float2 _prevCenter;
         private bool _hasPrevCenter;
+        private float _lastSampleTime; // 上次采样的 fixedTime，用于检测中间跳过的固定步。 // fixedTime of the last sample, to detect skipped fixed steps. // 前回サンプルの fixedTime。
 
         /// <summary>作用的粒子组标签（空=作用于全部）。 // Particle group tag to act on (empty = all). // 作用する粒子グループのタグ（空=全部）。</summary>
         public string NameTag => nameTag;
@@ -138,8 +139,14 @@ namespace Fs.Liquid2D
             float2 c = WorldCenter;
             float2 vel = float2.zero;
             float dt = Time.fixedDeltaTime;
-            if (_hasPrevCenter && dt > 0f) vel = (c - _prevCenter) / dt;
+            float now = Time.fixedTime;
+            // 仅当与上次采样恰好相隔一个固定步时才算速度。本方法每帧由 BuildBuffer 调用一次，但 Liquid2DSimulation 在池空时
+            // 会提前返回、不构建缓冲，于是中间会跳过若干步；此时把多步位移当一步会得到虚高速度（喂给淹没模式的位移耦合/无界飞溅
+            // 项 → 误把流体弹飞）。故间隔超过 ~1 步则视为重启（vel=0）。 // Only velocity across exactly one fixed step; skipped steps (empty-pool early-return) would make a multi-step displacement look like one → spurious huge velocity. Treat a gap as a restart. // ステップ飛びは再起動扱い（偽高速度を防ぐ）。
+            if (_hasPrevCenter && dt > 0f && (now - _lastSampleTime) <= dt * 1.5f)
+                vel = (c - _prevCenter) / dt;
             _prevCenter = c;
+            _lastSampleTime = now;
             _hasPrevCenter = true;
             return vel;
         }

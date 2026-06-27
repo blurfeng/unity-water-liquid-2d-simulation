@@ -94,6 +94,22 @@ namespace Fs.Liquid2D
             _rb = GetComponent<Rigidbody2D>();
         }
 
+        /// <summary>
+        /// 使体积 / 淹没模式缓存失效（_autoVolume、_isSubmerge）。运行时增删/缩放子 <see cref="Liquid2DCollider"/>、
+        /// 切换 Push↔Submerge、或改变形状后需调用，否则 <see cref="EffectiveVolume"/>（驱动浮力）与 IsSubmergeBody
+        /// （决定 Push/Submerge 分支）仍用首次计算的旧值。<see cref="BodyDensity"/> 实时读质量但除以缓存体积。
+        /// Invalidate the volume / Submerge-mode caches (_autoVolume, _isSubmerge). Call after adding/removing/resizing a child
+        /// <see cref="Liquid2DCollider"/>, toggling Push↔Submerge, or changing shapes at runtime; otherwise
+        /// <see cref="EffectiveVolume"/> (drives buoyancy) and IsSubmergeBody (Push/Submerge branch) keep their first-computed
+        /// values. <see cref="BodyDensity"/> reads mass live but divides by the cached volume.
+        /// 体積 / 水没モードキャッシュを無効化。実行時にコライダー増減/スケール・モード切替・形状変更後に呼び出す。
+        /// </summary>
+        public void InvalidateBodyCache()
+        {
+            _autoVolume = -1f;
+            _isSubmerge = -1;
+        }
+
         /// <summary>有效体积：手填 &gt; 0 时用手填，否则自动从碰撞器求和（缓存）。 // Effective volume. // 有効体積。</summary>
         public float EffectiveVolume()
         {
