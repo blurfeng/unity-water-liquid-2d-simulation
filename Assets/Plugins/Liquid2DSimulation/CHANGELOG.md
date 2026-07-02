@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.1.0] - 2026-07-02
+### Added
+- `Liquid2DSimulation.ClearAll()` to instantly remove every fluid particle at runtime.
+### Changed
+- Parallelized the GPU counting-sort prefix sum: replaced the serial single-thread `PrefixSum` with a work-efficient, bank-conflict-free multi-block Blelloch scan (span reduced to O(log n)). Measured ~100 → ~150 FPS at 20k particles (GPU frame time ~10ms → ~6.7ms). A serial fallback and an editor-only A/B verification kernel are kept for correctness.
+- Amortized-O(1) slot freeing: `FreeSlot` no longer does an O(n) list removal; it now uses version-aware tombstones plus a head pointer with periodic in-place compaction, so per-group churn no longer scales with group size.
+- Features whose `nameTag` matches no live particles now early-out of the full-screen render chain (skipping grab / blur / composite).
+- Throttled spawns to a maximum of 256 particles per `FixedUpdate` (overflow dropped) to prevent a single-frame avalanche after a stall or under a very high flow rate.
+- Weighted-random selection now uses proper zero-weight semantics (sums weights first; a non-positive total returns default).
+- Reduced per-frame allocations: reuse the CPU hash-grid and contact buffers across substeps, build the draw matrix directly (skipping `Matrix4x4.TRS`), allocate kill flags only when destroy zones exist, and gate contact sampling on the dynamic-body count.
+- Removed dead code: the unreferenced public `StringParameter` / `UIntParameter` Volume types, unused `Equals` / `GetHashCode` overrides, and the write-only `_EdgeStart` shader property.
+- The debug particle-draw tool now also works in player builds.
+- Clear the last frame of fluid rendering when play mode stops.
+### Fixed
+- Concave mesh colliders no longer leak particles: closed solid-mesh outlines are convex-decomposed via ear-clip triangulation (each triangle sent to the solver as its own polygon), so concave shapes contain fluid correctly.
+- Collider velocity tracking is now gap-aware — it detects skipped fixed steps (e.g. after a hitch) and treats them as a restart instead of producing a huge phantom velocity.
+- Fix a `Mesh` leak: the in-shader quad mesh created per Feature is now destroyed on `Dispose`.
+- Wrap `SphCpuSolver.Step` in try/finally so `TempJob` buffers are always released even if a job throws (editor safety system / NaN).
+- Move the GPU `MixColor` budget after the contact check to match CPU behavior; add a `count > 0` guard to the GPU grow full-reupload; add `Liquid2DRigidbodyBridge.InvalidateBodyCache()`.
+- Hardening: the Spawner no longer starts an ejection burst in edit mode via `OnValidate`; `Loader`'s default load null-checks and logs; force dispatch uses Unity-Object null semantics to safely handle destroyed MonoBehaviours; synchronous GPU→CPU debug readbacks are now editor-only.
+- Fix a compute-shader warning by using unsigned division in the `AddBlockOffsets` kernel (`Liquid2DSph.compute`).
+
 ## [1.0.8] - 2026-06-27
 ### Added
 - Colliders now support Push and Submerge interaction modes. Push shoves fluid particles away (for fluid containers); Submerge lets fluid cover the collider for more natural floating/sinking of objects in water.
