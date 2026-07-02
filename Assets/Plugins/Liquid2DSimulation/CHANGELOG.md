@@ -4,7 +4,7 @@
 ### Added
 - `Liquid2DSimulation.ClearAll()` to instantly remove every fluid particle at runtime.
 ### Changed
-- Parallelized the GPU counting-sort prefix sum: replaced the serial single-thread `PrefixSum` with a work-efficient, bank-conflict-free multi-block Blelloch scan (span reduced to O(log n)). Measured ~100 → ~150 FPS at 20k particles (GPU frame time ~10ms → ~6.7ms). A serial fallback and an editor-only A/B verification kernel are kept for correctness.
+- Parallelized the GPU counting-sort prefix sum: replaced the serial single-thread `PrefixSum` with a work-efficient, bank-conflict-free multi-block Blelloch scan (span reduced to O(log n)). Measured ~100 → ~150 FPS at 20k particles (GPU frame time ~10ms → ~6.7ms)on Unity Editor. A serial fallback and an editor-only A/B verification kernel are kept for correctness.
 - Amortized-O(1) slot freeing: `FreeSlot` no longer does an O(n) list removal; it now uses version-aware tombstones plus a head pointer with periodic in-place compaction, so per-group churn no longer scales with group size.
 - Features whose `nameTag` matches no live particles now early-out of the full-screen render chain (skipping grab / blur / composite).
 - Throttled spawns to a maximum of 256 particles per `FixedUpdate` (overflow dropped) to prevent a single-frame avalanche after a stall or under a very high flow rate.
