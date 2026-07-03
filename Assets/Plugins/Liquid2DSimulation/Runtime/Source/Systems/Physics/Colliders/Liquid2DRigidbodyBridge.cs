@@ -280,8 +280,12 @@ namespace Fs.Liquid2D
             // (return when submergedBuoyancy < deadzone) already prevents it. Push still scales by all-direction contact count.
             // 浸水附加減衰（浮遊の主安定器）：Submerge は内部被覆 submergedBuoyancy でスケール（殻層ではない、浮遊安定維持）。空中はデッドゾーンで抑止。Push は全方向接触数。
             float dampScale = IsSubmergeBody ? submergedBuoyancy : submerged;
-            // 注意（2022 移植）：Unity 6 的 Rigidbody2D.linearVelocity 在 Unity 2022.3 中仍名为 velocity。
+#if UNITY_6000_0_OR_NEWER
+            if (submergedLinearDrag > 0f) _rb.linearVelocity *= Mathf.Clamp01(1f - submergedLinearDrag * dampScale * dt);
+#else
+            // 单源适配：Unity 6 的 Rigidbody2D.linearVelocity 在 Unity 2022.3 中仍名为 velocity。
             if (submergedLinearDrag > 0f) _rb.velocity *= Mathf.Clamp01(1f - submergedLinearDrag * dampScale * dt);
+#endif
             if (submergedAngularDrag > 0f) _rb.angularVelocity *= Mathf.Clamp01(1f - submergedAngularDrag * dampScale * dt);
         }
     }
