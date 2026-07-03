@@ -3,6 +3,9 @@
     "rootNamespace": "Fs.Liquid2D.Editor",
     "references": [
         "Liquid2DSimulation",
+        "Unity.Burst",
+        "Unity.Collections",
+        "Unity.Mathematics",
         "Unity.RenderPipelines.Universal.Runtime",
         "Unity.RenderPipelines.Universal.Editor",
         "Unity.RenderPipelines.Core.Runtime",
