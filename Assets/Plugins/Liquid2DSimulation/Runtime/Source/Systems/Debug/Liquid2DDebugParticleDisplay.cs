@@ -264,7 +264,12 @@ namespace Fs.Liquid2D
         /// Called by Liquid2DPass's Overlay Pass to draw particles into the current render target after the Effect Pass (Editor + Build).
         /// Liquid2DPass の Overlay Pass から呼ばれ、Effect Pass の後に現在のレンダーターゲットへ粒子を描画します（Editor + Build 共通）。
         /// </summary>
+#if UNITY_6000_0_OR_NEWER
         public void ExecuteDraw(UnityEngine.Rendering.RasterCommandBuffer cmd)
+#else
+        // 单源适配：Render Graph 的 RasterCommandBuffer 仅 U6 有；2022 命令式路径用经典 CommandBuffer（DrawProcedural 重载一致）。
+        public void ExecuteDraw(UnityEngine.Rendering.CommandBuffer cmd)
+#endif
         {
             if (!displayEnabled || !material) return;
 

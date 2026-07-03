@@ -1,4 +1,6 @@
-﻿using System.Collections.Generic;
+﻿// 单源：Unity 6 / URP 17 Render Graph 渲染路径。仅在 U6（URP17+）编译；2022 走 Liquid2DPass.Imperative.cs 的命令式版本。
+#if UNITY_6000_0_OR_NEWER
+using System.Collections.Generic;
 using Fs.Liquid2D.Volumes;
 using UnityEngine;
 using Unity.Mathematics;
@@ -1256,3 +1258,4 @@ namespace Fs.Liquid2D
         #endregion
     }
 }
+#endif

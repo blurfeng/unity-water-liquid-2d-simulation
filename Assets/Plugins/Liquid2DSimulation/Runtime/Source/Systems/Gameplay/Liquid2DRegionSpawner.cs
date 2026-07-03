@@ -491,7 +491,8 @@ namespace Fs.Liquid2D
                     3 => Color.red,                 // Overlap 过密
                     2 => Color.yellow,              // Tight 偏密
                     1 => Color.green,               // OK 正合适
-                    _ => Color.aquamarine           // Unknown 无描述符
+                    // 单源适配：Color.aquamarine 仅 Unity 6 有；用等值 RGB，两版本表现一致、无需宏。
+                    _ => new Color(0.498f, 1f, 0.831f) // Unknown 无描述符
                 };
 
                 Gizmos.color = borderColor;

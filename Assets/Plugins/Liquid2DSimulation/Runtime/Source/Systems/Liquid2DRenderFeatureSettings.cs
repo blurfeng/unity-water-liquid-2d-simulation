@@ -1,6 +1,12 @@
 ﻿using System;
 using Fs.Liquid2D.Localization;
 using UnityEngine;
+// 单源版本别名：U6 用 RenderingLayerMask struct（URP16+/2023.1+），2022 用 uint（URP14 的 FilteringSettings.renderingLayerMask 即 uint）。
+#if UNITY_6000_0_OR_NEWER
+using LayerMaskType = UnityEngine.RenderingLayerMask;
+#else
+using LayerMaskType = System.UInt32;
+#endif
 
 namespace Fs.Liquid2D
 {
@@ -266,14 +272,14 @@ namespace Fs.Liquid2D
              "液体阻挡层遮罩。指定哪些层的物体会阻挡液体效果。一般是挡板或容器等，他们会完全阻挡液体及时自身是透明的。相当于阻挡物的横截面。",
              "Liquid obstructor layer mask. Specifies which layers of objects will block liquid effects. Usually barriers or containers that completely block liquid even if they are transparent. Equivalent to the cross-section of obstructor.",
              "液体障害物レイヤーマスク。どのレイヤーのオブジェクトが液体効果をブロックするかを指定します。通常は障壁やコンテナなどで、自身が透明であっても液体を完全にブロックします。障害物の断面に相当します。")]
-        public RenderingLayerMask ObstructorRenderingLayerMask;
+        public LayerMaskType ObstructorRenderingLayerMask;
 
         [LocalizationTooltip(
              "液体遮挡层遮罩。指定哪些层的物体会遮挡液体效果，但不会阻挡流体流动。一般是地形、墙壁、玻璃瓶的正面等。",
              "Liquid occlusion layer mask. Specifies which layers of objects will occlude liquid effects but will not block fluid flow. Usually terrain, walls, the front of glass bottles, etc.",
              "液体遮蔽レイヤーマスク。どのレイヤーのオブジェクトが液体効果を遮蔽するかを指定しますが、流体の流れをブロックしません。通常は地形、壁、ガラス瓶の前面などです。"
              )]
-        public RenderingLayerMask OccluderRenderingLayerMask;
+        public LayerMaskType OccluderRenderingLayerMask;
         
         // Tips: 这里的遮挡物只会简单的渲染覆盖在流体上方，不会对背后的画面进行扭曲等效果处理。
         // 如果你希望实现更复杂的遮挡效果，应当实现自定义的 Renderer Feature 并添加到 URP 的 Renderer 的流体渲染之后。
