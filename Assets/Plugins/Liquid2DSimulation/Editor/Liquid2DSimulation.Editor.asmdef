@@ -1,0 +1,21 @@
+{
+    "name": "Liquid2DSimulation.Editor",
+    "rootNamespace": "Fs.Liquid2D.Editor",
+    "references": [
+        "Liquid2DSimulation",
+        "Unity.Burst",
+        "Unity.Collections",
+        "Unity.Mathematics"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

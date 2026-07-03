@@ -1,0 +1,701 @@
+using System.Collections.Generic;
+using Unity.Collections;
+using Unity.Mathematics;
+using UnityEngine;
+
+namespace Fs.Liquid2D
+{
+    /// <summary>
+    /// 2D 流体模拟中枢（运行时单例）。取代旧 Liquid2DParticleManager：拥有粒子 SoA 存储、SPH 求解器、碰撞体缓冲、
+    /// 描述符/材质表，在 FixedUpdate 驱动求解，并对外提供生成/销毁/查询 API。渲染层（Liquid2DPass）从这里取数据绕过 Transform。
+    /// 2D fluid simulation hub (runtime singleton). Replaces the old Liquid2DParticleManager: owns the particle SoA store,
+    /// SPH solver, collider buffer, descriptor/material tables; drives solving in FixedUpdate and exposes spawn/despawn/query
+    /// APIs. The render layer (Liquid2DPass) reads data here, bypassing Transform.
+    /// 2D 流体シミュレーションハブ（ランタイムシングルトン）。旧 Liquid2DParticleManager を置き換え。
+    /// </summary>
+    [DefaultExecutionOrder(-100)]
+    [AddComponentMenu("Liquid 2D/Systems/Liquid 2D Simulation")]
+    public class Liquid2DSimulation : MonoBehaviour
+    {
+        #region Singleton
+
+        public static Liquid2DSimulation Instance
+        {
+            get
+            {
+                if (_instance || _isQuitting || !Application.isPlaying) return _instance;
+                var go = new GameObject("[Liquid2DSimulation]") { hideFlags = HideFlags.HideAndDontSave };
+                _instance = go.AddComponent<Liquid2DSimulation>();
+                return _instance;
+            }
+        }
+
+        private static Liquid2DSimulation _instance;
+        public static bool HasInstance => _instance;
+        private static bool _isQuitting;
+        private void OnApplicationQuit() => _isQuitting = true;
+
+        #endregion
+
+        /// <summary>每个 nameTag 组的最大存活粒子数（&lt;=0 不限）。超出回收最旧。 // Max alive particles per nameTag group (&lt;=0 = unlimited). // nameTag グループごとの最大生存数。</summary>
+        public static int MaxParticlesPerTag { get; set; }
+
+        /// <summary>全局求解参数（由 Liquid2DPhysicsConfig 配置）。 // Global solver params (configured by Liquid2DPhysicsConfig). // グローバル解法パラメータ。</summary>
+        public static SolverParams Params = SolverParams.Default;
+
+        /// <summary>计算平台模式。 // Compute mode. // 計算モード。</summary>
+        public static Liquid2DSimulationMode Mode = Liquid2DSimulationMode.Gpu;
+
+        /// <summary>全局颜色混合算法模式（由 Liquid2DPhysicsConfig 可在场景级覆盖）。 // Global colour-mixing algorithm mode (can be overridden per-scene by Liquid2DPhysicsConfig). // グローバル色混合アルゴリズムモード。</summary>
+        public static Liquid2DColorMixMode ColorMixMode = Liquid2DColorMixMode.Oklab;
+
+        /// <summary>
+        /// GPU 模式下每帧把 GPU 数据全量回读到 CPU store。仅为让依赖 CPU store 的功能（Liquid2DDebugGizmos、
+        /// GetPosition/GetVelocity 查询）在 GPU 模式下可用。⚠ 这是同步 GPU→CPU 阻塞点，会严重降低性能，默认关闭。
+        /// Full per-frame GPU→CPU readback into the store in GPU mode, only so CPU-store consumers (Liquid2DDebugGizmos,
+        /// GetPosition/GetVelocity) work under GPU mode. ⚠ Synchronous stall, severely hurts performance; off by default.
+        /// GPU モードで毎フレーム GPU→CPU 全量回読（CPU store 依存機能の互換用）。⚠ 同期ストールで性能大幅低下、既定はオフ。
+        /// </summary>
+        private static bool _gpuReadbackToStore;
+
+        public static bool GpuReadbackToStore
+        {
+            get
+            {
+#if UNITY_EDITOR
+                // 编辑器模式时，若开启了调试可视化，则强制回读到 CPU store 以兼容 Gizmos 绘制。
+                return _gpuReadbackToStore || (Liquid2DDebugGizmos.HasInstance && Liquid2DDebugGizmos.Instance.ShowGizmos);
+#else
+                return _gpuReadbackToStore;
+#endif
+            }
+            set => _gpuReadbackToStore = value;
+        }
+
+        private Liquid2DParticleStore _store;
+        private ILiquid2DSolver _solver;
+
+        // 描述符表（按 typeId 索引）。 // Descriptor table (indexed by typeId). // 記述子表。
+        private readonly List<Liquid2DParticleDescriptor> _descriptors = new List<Liquid2DParticleDescriptor>();
+        private NativeArray<Liquid2DMaterialData> _materials;
+        private NativeArray<Liquid2DMixData> _mixData;
+
+        // nameTag → groupId（0 为空标签通配）。 // nameTag → groupId (0 = empty-tag wildcard). // nameTag → groupId。
+        private readonly Dictionary<string, int> _nameTagToGroup = new Dictionary<string, int>();
+        // 每个 nameTag 组的 slot 簿记。Handles 为追加顺序的句柄队列（带版本，故被 Free 或 slot 被复用的旧条目可经
+        // _store.IsAlive 精确识别为墓碑——仅查 alive 在 slot 复用时会误判）；Head 为最旧待检查下标；AliveCount 为组内存活数。
+        // 仅 EnforceCap 消费（LRU 淘汰最旧）：销毁不再 O(n) 从列表移除，而是留墓碑 + 推进 Head + 周期压缩，使销毁摊还 O(1)。
+        // Per-nameTag group slot bookkeeping. Handles is an append-ordered handle queue (versioned, so freed or slot-reused
+        // stale entries are precisely detected as tombstones via _store.IsAlive — checking alive alone misfires under slot reuse);
+        // Head is the oldest unchecked index; AliveCount is the group's alive count. Consumed only by EnforceCap (LRU eviction):
+        // freeing no longer removes in O(n); it leaves a tombstone, EnforceCap advances Head and CompactGroup reclaims → amortized O(1).
+        // nameTag グループの slot 簿記。Handles は追加順の句柄キュー（バージョン付きで墓碑を精確判定）、Head、AliveCount。
+        private sealed class GroupSlots
+        {
+            public readonly List<Liquid2DParticleHandle> Handles = new List<Liquid2DParticleHandle>();
+            public int Head;        // 最旧待检查句柄在 Handles 中的下标。 // index of the oldest unchecked handle. // 最旧待検査下標。
+            public int AliveCount;  // 组内存活粒子数（不含墓碑）。 // alive particle count in the group (excludes tombstones). // 生存数。
+        }
+        private readonly Dictionary<int, GroupSlots> _groupSlots = new Dictionary<int, GroupSlots>();
+
+        private NativeArray<int> _activeIndices;
+        private int _activeCount;
+        private bool _activeDirty;
+
+        private readonly List<ILiquid2DForceReceiver> _dynamicReceivers = new List<ILiquid2DForceReceiver>();
+
+        // GPU 模式：自上次 Step 以来新生成的粒子 slot（供 GPU 增量上传到常驻缓冲）。 // GPU mode: slots spawned since last Step. // GPU 増分アップロード用。
+        private readonly List<int> _gpuPendingSpawns = new List<int>();
+
+        public Liquid2DParticleStore Store => _store;
+        public IReadOnlyList<Liquid2DParticleDescriptor> Descriptors => _descriptors;
+
+        private void Awake()
+        {
+            _instance = this;
+            
+            _store = new Liquid2DParticleStore(2048);
+            _activeIndices = new NativeArray<int>(_store.Capacity, Allocator.Persistent);
+            CreateSolver();
+            _nameTagToGroup[string.Empty] = 0;
+        }
+
+        // 上次创建求解器所依据的目标模式（用于运行时切换检测）。 // Desired mode the solver was last created for (runtime-switch detection). // ソルバー作成時の目標モード。
+        private Liquid2DSimulationMode _createdMode = Liquid2DSimulationMode.Cpu;
+
+        private void CreateSolver()
+        {
+            // 切换求解器前：若旧求解器是 GPU 常驻求解器，先把 GPU 状态回读到 store。GPU 模式下 CPU store 按设计陈旧
+            // （仅扩容/回读帧同步），若不回读就切到 CPU，新 CPU 求解器会从陈旧 store 推进，导致全体粒子瞬移回旧位置、
+            // 丢失累计速度/混色。ReadbackToStore 已按 Min(_capacity, store.Capacity) 钳制，安全。首次创建时 _solver 为 null，跳过。
+            // Before swapping solvers: if the old one is the resident GPU solver, read its state back into the store. Under GPU
+            // mode the CPU store is intentionally stale (synced only on grow/readback frames); switching to CPU without this read
+            // would advance the new CPU solver from a stale snapshot, teleporting every particle and wiping velocity/mixed color.
+            // ReadbackToStore is clamped to Min(_capacity, store.Capacity). On first creation _solver is null, so this is skipped.
+            // ソルバー切替前に、旧が GPU 常駐なら状態を store へ回読（切替時の粒子瞬間移動と状態喪失を防ぐ）。
+            if (_solver is SphGpuSolver oldGpu && _store != null)
+            {
+                oldGpu.ReadbackToStore(_store);
+                _activeDirty = true;
+            }
+
+            _solver?.Dispose();
+            _createdMode = Mode;
+
+            if (Mode == Liquid2DSimulationMode.Gpu)
+            {
+                var cs = Resources.Load<ComputeShader>("Liquid2DSph");
+                if (cs != null && SystemInfo.supportsComputeShaders)
+                {
+                    _solver = new SphGpuSolver(cs);
+                    return;
+                }
+                // 计算着色器缺失或硬件不支持，回退 CPU。 // Compute shader missing or unsupported; fall back to CPU. // CS 不在/未対応のため CPU へ。
+                Debug.LogWarning("[Liquid2DSimulation] GPU mode unavailable (compute shader missing or unsupported); falling back to CPU.");
+            }
+            _solver = new SphCpuSolver();
+        }
+
+        #region Descriptor / group 描述符与分组 // 記述子とグループ
+
+        /// <summary>
+        /// 注册描述符并返回其 typeId（已注册则直接返回）。
+        /// Register a descriptor and return its typeId (returns existing if already registered).
+        /// 記述子を登録し typeId を返す。
+        /// </summary>
+        public int RegisterDescriptor(Liquid2DParticleDescriptor d)
+        {
+            if (!d) return -1;
+            if (d.RuntimeTypeId >= 0 && d.RuntimeTypeId < _descriptors.Count && _descriptors[d.RuntimeTypeId] == d)
+                return d.RuntimeTypeId;
+
+            int id = _descriptors.Count;
+            d.RuntimeTypeId = id;
+            _descriptors.Add(d);
+            return id;
+        }
+
+        // ⚠ 副作用：这是「查找或注册」——首次见到的 nameTag 会被分配新 groupId 并写入 _nameTagToGroup（非纯查询）。
+        // 由 Spawn 及每帧的注册表 BuildBuffer（碰撞器/力场/销毁区域）调用，故 _nameTagToGroup 会随出现过的不同 nameTag 单调增长（通常很少，不回收）。
+        // ⚠ Side effect: this is "get-or-register" — a first-seen nameTag is assigned a new groupId and written into _nameTagToGroup (not a pure lookup).
+        // Called from Spawn and the per-frame registry BuildBuffer (colliders/force-fields/dead-zones), so _nameTagToGroup grows monotonically with distinct tags seen (usually few; not reclaimed).
+        // ⚠ 副作用：初見の nameTag を登録（純粋な照会ではない）。出現したタグ分だけ単調増加。
+        private int GetGroup(string nameTag)
+        {
+            string key = string.IsNullOrEmpty(nameTag) ? string.Empty : nameTag;
+            if (_nameTagToGroup.TryGetValue(key, out int g)) return g;
+            g = _nameTagToGroup.Count; // 0 已被空标签占用。 // 0 is taken by the empty tag. // 0 は空タグ。
+            _nameTagToGroup[key] = g;
+            return g;
+        }
+
+        private void EnsureMaterials()
+        {
+            int n = math.max(1, _descriptors.Count);
+            // 仅当描述符数量变化（或首次）才重新分配；其余情况按值原地回填，
+            // 这样运行时修改描述符材质（如 GravityScale / Density）能逐帧生效（CPU 与 GPU 上传同时受益）。
+            // Reallocate only when the descriptor count changes (or first time); otherwise refill values in place,
+            // so runtime edits to a descriptor's material (e.g. GravityScale / Density) take effect each frame (CPU and GPU upload alike).
+            // 記述子数が変化（または初回）した時のみ再確保。それ以外は値を上書きし、実行時のマテリアル変更を毎フレーム反映。
+            if (!_materials.IsCreated || _materials.Length != n)
+            {
+                if (_materials.IsCreated) _materials.Dispose();
+                if (_mixData.IsCreated) _mixData.Dispose();
+                _materials = new NativeArray<Liquid2DMaterialData>(n, Allocator.Persistent);
+                _mixData = new NativeArray<Liquid2DMixData>(n, Allocator.Persistent);
+            }
+            for (int i = 0; i < _descriptors.Count; i++)
+            {
+                var d = _descriptors[i];
+                _materials[i] = d != null && d.Material != null ? d.Material.ToData() : Liquid2DMaterialData.Default;
+                _mixData[i] = BuildMix(d != null ? d.MixSettings : null);
+            }
+        }
+
+        private static Liquid2DMixData BuildMix(Liquid2DParticleMixSettings m)
+        {
+            if (m == null) return Liquid2DMixData.Disabled;
+            return new Liquid2DMixData
+            {
+                Enabled = (byte)(m.MixColors ? 1 : 0),
+                Speed = m.MixColorsSpeed,
+                WithMovement = (byte)(m.MixColorsWithMovement ? 1 : 0),
+                MaxSpeed = m.MixColorsWithMovementMaxSpeed,
+                Interval = m.MixColorsWithContactParticlesInternal,
+            };
+        }
+
+        #endregion
+
+        #region Spawn / Despawn 生成与销毁 // 生成と破棄
+
+        /// <summary>
+        /// 生成一个流体粒子。lifetimeOverride &gt; 0 覆盖描述符默认寿命；&lt;= 0 用描述符默认（0 表示无限）。
+        /// Spawn a fluid particle. lifetimeOverride &gt; 0 overrides the descriptor default; &lt;= 0 uses the descriptor default (0 = infinite).
+        /// 流体粒子を生成。
+        /// </summary>
+        public Liquid2DParticleHandle Spawn(Liquid2DParticleDescriptor d, float2 position, float2 velocity,
+            float sizeScale = 1f, float lifetimeOverride = -1f)
+        {
+            if (!d) return Liquid2DParticleHandle.Invalid;
+
+            int typeId = RegisterDescriptor(d);
+            int group = GetGroup(d.RenderSettings != null ? d.RenderSettings.NameTag : null);
+            float radius = math.max(0.001f, d.Radius * sizeScale);
+            float mass = d.Material != null ? d.Material.Mass : 1f;
+            Color c = d.RenderSettings != null ? d.RenderSettings.Color : Color.white;
+            float now = Time.time;
+
+            float life = lifetimeOverride > 0f ? lifetimeOverride : d.DefaultLifetime;
+            float lifeEnd = life > 0f ? now + life : -1f;
+
+            var handle = _store.Allocate(position, velocity, new float4(c.r, c.g, c.b, c.a),
+                radius, mass, typeId, group, lifeEnd, now);
+
+            if (!_groupSlots.TryGetValue(group, out var g))
+            {
+                g = new GroupSlots();
+                _groupSlots[group] = g;
+            }
+            g.Handles.Add(handle); // 存句柄（带版本）而非裸 slot，以便正确识别墓碑。 // store the versioned handle, not the bare slot. // 句柄を保存。
+            g.AliveCount++;
+            _activeDirty = true;
+
+            EnforceCap(g, handle.Index);
+            CompactGroup(g); // 墓碑过多时回收，避免列表随历史生成数无界增长（仅 Spawn 路径，摊还 O(1)）。 // reclaim tombstones to bound growth. // 墓碑回収。
+
+            // GPU 常驻模式：记录新 slot，待下次 Step 增量上传。 // GPU resident mode: record new slot for incremental upload. // GPU 常駐：新 slot を記録。
+            if (Mode == Liquid2DSimulationMode.Gpu) _gpuPendingSpawns.Add(handle.Index);
+            return handle;
+        }
+
+        /// <summary>销毁一个粒子。 // Despawn a particle. // 粒子を破棄。</summary>
+        public void Despawn(Liquid2DParticleHandle handle)
+        {
+            if (_store.IsAlive(handle)) FreeSlot(handle.Index);
+        }
+
+        /// <summary>
+        /// 运行时一键清空所有存活粒子（保留已分配容量与已注册描述符/分组）。清空后所有旧句柄立即失效，渲染当帧即为空。
+        /// 可在主线程任意时机调用（解算 Job 在 FixedUpdate 内已完成）。GPU 模式下会同步把求解器渲染计数归零，避免残影。
+        /// Clears all alive particles at runtime (keeps allocated capacity and registered descriptors/groups). All existing
+        /// handles become stale immediately and rendering shows empty from this frame on. Safe to call any time on the main
+        /// thread (solve jobs complete inside FixedUpdate). In GPU mode it also zeroes the solver's render count to avoid ghosting.
+        /// 実行時に全生存粒子を一括クリアします（確保済み容量と登録済み記述子/グループは保持）。既存ハンドルは即時失効し、
+        /// 当該フレームから描画は空になります。メインスレッドの任意時点で安全（解算 Job は FixedUpdate 内で完了）。
+        /// GPU モードでは残像防止のためソルバーの描画計数も 0 にします。
+        /// </summary>
+        public void ClearAll()
+        {
+            _store.Clear();
+            foreach (var g in _groupSlots.Values)
+            {
+                g.Handles.Clear();
+                g.Head = 0;
+                g.AliveCount = 0;
+            }
+            _gpuPendingSpawns.Clear();
+            _activeCount = 0;
+            _activeDirty = true;
+            // GPU 求解器：渲染计数归零，立即停止残影渲染（CPU 求解器为空操作，与排空早退路径一致）。
+            // GPU solver: zero the render count to stop ghost-rendering immediately (no-op on CPU, mirrors the drained early-out path).
+            // GPU ソルバー：描画計数を 0 にし残像描画を即停止（CPU は空操作、排空早期離脱と同じ）。
+            _solver?.ResetRenderCount();
+        }
+
+        // 超出每组上限时按 LRU 淘汰最旧的存活粒子。推进 Head 跳过墓碑（已 Free 或 slot 被复用 → 句柄失效），找到最旧存活者淘汰。
+        // Evict the oldest alive particle (LRU) when the per-group cap is exceeded. Advance Head past tombstones (freed or slot-reused → stale handle) to the oldest alive one.
+        // グループ上限超過時、最旧の生存粒子を LRU で淘汰。Head を進めて墓碑をスキップ。
+        private void EnforceCap(GroupSlots g, int justAddedSlot)
+        {
+            if (MaxParticlesPerTag <= 0) return;
+            while (g.AliveCount > MaxParticlesPerTag)
+            {
+                // 推进 Head 跳过墓碑（句柄不再指向存活粒子）。 // Advance Head past tombstones (handle no longer points to an alive particle). // 墓碑をスキップ。
+                while (g.Head < g.Handles.Count && !_store.IsAlive(g.Handles[g.Head])) g.Head++;
+                if (g.Head >= g.Handles.Count) break; // 无可淘汰的存活者（AliveCount>cap 时理论上不会发生）。 // no alive to evict (shouldn't happen while AliveCount>cap). // 淘汰対象なし。
+                var oldest = g.Handles[g.Head];
+                if (oldest.Index == justAddedSlot) break; // 不回收刚生成的。 // never recycle the just-spawned one. // 生成直後は回収しない。
+                g.Head++;
+                FreeSlot(oldest.Index); // 递减 AliveCount，并 bump version → 该句柄自然成墓碑。 // decrements AliveCount; version bump tombstones the handle. // AliveCount 減 + 墓碑化。
+            }
+        }
+
+        // 墓碑回收：墓碑（已死句柄）占比过高时，原地保留存活句柄并保序、重置 Head，避免列表随历史生成数无界增长。
+        // O(list) 但仅在墓碑多时触发，摊还 O(1)。仅 Spawn 后调用——无生成则列表不增长，墓碑留到下次生成时清理（有界）。
+        // Reclaim tombstones: when dead handles dominate, compact alive ones in place (order-preserving) and reset Head, bounding growth.
+        // O(list) but triggered only when tombstones are many → amortized O(1). Called after Spawn only; without spawning the list doesn't grow.
+        // 墓碑回収：墓碑が多い時のみ生存句柄を保序圧縮し Head をリセット（無界成長を防ぐ）。
+        private void CompactGroup(GroupSlots g)
+        {
+            int count = g.Handles.Count;
+            int dead = count - g.AliveCount;
+            if (dead <= 64 || dead < count / 2) return; // 墓碑既不多也不过半，不值得压缩。 // not enough tombstones to bother. // 圧縮不要。
+            var h = g.Handles;
+            int w = 0;
+            for (int r = 0; r < h.Count; r++)
+                if (_store.IsAlive(h[r])) h[w++] = h[r];
+            if (w < h.Count) h.RemoveRange(w, h.Count - w);
+            g.Head = 0;
+        }
+
+        private void FreeSlot(int slot)
+        {
+            if (slot < 0) return;
+            int group = _store.groupId[slot];
+            // 先按 slot 回收（FreeIndex 校验存活并返回是否真的回收了），仅在真回收时递减组存活数——不再 O(n) 从组列表移除（留墓碑，由 CompactGroup 周期回收）。
+            // Free by slot first (FreeIndex validates alive and returns whether it actually freed); decrement the group's alive
+            // count only on a real free — no O(n) list removal (leaves a tombstone, reclaimed later by CompactGroup).
+            // slot で回収（FreeIndex が存活検証）。真に回収した時のみ組生存数を減算（O(n) 除去なし、墓碑化）。
+            if (!_store.FreeIndex(slot)) return;
+            if (_groupSlots.TryGetValue(group, out var g)) g.AliveCount--;
+            _activeDirty = true;
+        }
+
+        #endregion
+
+        #region Query 查询 // 照会
+
+        /// <summary>查询粒子世界位置（句柄失效返回 zero）。 // Query particle world position. // 粒子の位置を照会。</summary>
+        public float2 GetPosition(Liquid2DParticleHandle h) => _store != null ? _store.GetPosition(h) : float2.zero;
+        public float2 GetVelocity(Liquid2DParticleHandle h) => _store != null ? _store.GetVelocity(h) : float2.zero;
+        public bool IsAlive(Liquid2DParticleHandle h) => _store != null && _store.IsAlive(h);
+        public void SetColor(Liquid2DParticleHandle h, Color c) => _store?.SetColor(h, c);
+
+        #endregion
+
+        #region Tick 求解驱动 // 解法駆動
+
+        private void FixedUpdate()
+        {
+            if (_store == null) return;
+
+            // 运行时切换 CPU/GPU 模式：目标模式变化时重建求解器。 // Runtime CPU/GPU switch: recreate solver when the desired mode changes. // 実行時の CPU/GPU 切替。
+            if (_createdMode != Mode || _solver == null) CreateSolver();
+
+            float now = Time.time;
+
+            ExpireLifetimes(now);
+
+            EnsureMaterials();
+            EnsureActiveCapacity();
+            int count = RebuildActiveIndices();
+            // 活动粒子为 0：提前返回不求解，但需把求解器的渲染计数归零，否则 GPU 求解器的 _lastCount 停留旧值，
+            // 排空后仍会残影渲染上一批粒子（CPU 求解器为空操作）。 // Reset render count so a drained GPU fluid doesn't ghost-render. // 排空時の残影防止。
+            if (count == 0) { _gpuPendingSpawns.Clear(); _solver?.ResetRenderCount(); return; }
+
+            // 仅钳制非法的 H，不整体替换 SolverParams——否则一次瞬态的坏 H 会把其它已调好的字段（压力/粘性/重力等）也重置为默认。
+            // Clamp only an invalid H; don't replace the whole SolverParams, else a transient bad H would also reset other tuned fields (pressure/viscosity/gravity/…) to defaults. // H のみクランプ（全体置換しない）。
+            if (Params.H <= 0f) Params.H = SolverParams.Default.H;
+
+            var colliders = Liquid2DColliderRegistry.BuildBuffer(Allocator.TempJob, _dynamicReceivers, GetGroup);
+            int bodyCount = math.max(1, _dynamicReceivers.Count);
+            var velSum = new NativeArray<float2>(bodyCount, Allocator.TempJob, NativeArrayOptions.ClearMemory);
+            var contact = new NativeArray<float4>(bodyCount, Allocator.TempJob, NativeArrayOptions.ClearMemory);
+            var buoyancy = new NativeArray<float4>(bodyCount, Allocator.TempJob, NativeArrayOptions.ClearMemory);
+            var forceFields = Liquid2DForceFieldRegistry.BuildBuffer(Allocator.TempJob, GetGroup);
+
+            // 销毁区域：扁平化为缓冲，并分配按 active 索引的 killFlags（求解器置位，Step 后回收 slot）。
+            // Dead zones: flatten to a buffer and allocate active-indexed killFlags (solver sets them, slots recycled after Step).
+            // 破棄領域：バッファに平坦化し、active 索引の killFlags を確保（ソルバーが設定、Step 後に slot 回収）。
+            var deadZones = Liquid2DDeadZoneRegistry.BuildBuffer(Allocator.TempJob, GetGroup);
+            int deadZoneCount = deadZones.Count;
+            // 仅有销毁区域时才分配 killFlags（count 大小、每帧 ClearMemory）。无销毁区域时求解器与 ApplyKills 都不会访问它
+            // （均按 deadZoneCount>0 / IsCreated 守卫），传 default 即可；finally 的 IsCreated 守卫照常释放。
+            // Allocate killFlags only when dead zones exist (it's count-sized and ClearMemory'd every frame). With none, neither
+            // the solver nor ApplyKills touches it (both guard on deadZoneCount>0 / IsCreated), so default is fine; the finally's
+            // IsCreated guard handles disposal. // 破棄領域がある時のみ確保（既定で渡し、IsCreated ガードで解放）。
+            var killFlags = deadZoneCount > 0
+                ? new NativeArray<byte>(math.max(1, count), Allocator.TempJob, NativeArrayOptions.ClearMemory)
+                : default;
+
+            var ctx = new Liquid2DSolveContext
+            {
+                Store = _store,
+                ActiveIndices = _activeIndices,
+                ActiveCount = count,
+                Materials = _materials,
+                MixData = _mixData,
+                Colliders = colliders,
+                ColliderVelSum = velSum,
+                ColliderContact = contact,
+                ColliderBuoyancy = buoyancy,
+                ForceFields = forceFields,
+                DeadZones = deadZones,
+                DeadZoneCount = deadZoneCount,
+                KillFlags = killFlags,
+                Time = now,
+                MixMode = (int)ColorMixMode,
+                DynamicBodyCount = _dynamicReceivers.Count,
+                GPUPendingSpawns = _gpuPendingSpawns,
+            };
+
+            // try/finally 确保即使 Step 抛异常也释放 TempJob 缓冲，避免泄漏。 // Ensure TempJob buffers are freed even if Step throws. // 例外時もバッファ解放。
+            try
+            {
+                if (_solver == null) return;
+                _solver.Step(ctx, Params, Time.fixedDeltaTime);
+
+                // 增量上传列表本帧已消费，清空。 // Pending spawn list consumed this frame; clear. // 消費したのでクリア。
+                _gpuPendingSpawns.Clear();
+
+                // 可选：GPU 模式每帧回读到 CPU store（仅为兼容 Gizmos / 查询，开启会严重降速）。
+                // Optional: per-frame GPU→CPU readback in GPU mode (compat for Gizmos/queries only; severe perf hit when on).
+                // 任意：GPU モードで毎フレーム回読（Gizmos/クエリ互換用、性能大幅低下）。
+                if (GpuReadbackToStore && _solver is SphGpuSolver gpuSolver)
+                {
+                    // 回读只重写 store 的值（位置/速度/颜色），不改变 slot 活动成员；活动索引表本帧已构建且仍有效，
+                    // 无需再置 _activeDirty（否则渲染期会多做一次 [0,HighWater) 全扫）。Spawn/FreeSlot 仍会自行标脏。
+                    // Readback rewrites store values, not slot membership; the active-index list built this FixedUpdate stays
+                    // valid, so don't re-dirty (it would force a second full [0,HighWater) scan at render time). Spawn/FreeSlot still dirty as needed.
+                    // 回読は値のみで活動メンバーシップは不変。本フレーム構築済みの活動索引表は有効、再 dirty 不要。
+                    gpuSolver.ReadbackToStore(_store);
+                }
+
+                DispatchBodyForces(velSum, contact, buoyancy, Time.fixedDeltaTime);
+
+                // 回收落入销毁区域的粒子（killFlags 由 CPU/GPU 求解器置位）。 // Recycle particles inside dead zones (killFlags set by CPU/GPU solver). // 破棄領域内の粒子を回収。
+                if (deadZoneCount > 0) ApplyKills(killFlags, count);
+            }
+            finally
+            {
+                colliders.Colliders.Dispose();
+                colliders.Points.Dispose();
+                velSum.Dispose();
+                contact.Dispose();
+                buoyancy.Dispose();
+                if (forceFields.Fields.IsCreated) forceFields.Fields.Dispose();
+                if (deadZones.Zones.IsCreated) deadZones.Zones.Dispose();
+                if (deadZones.Points.IsCreated) deadZones.Points.Dispose();
+                if (killFlags.IsCreated) killFlags.Dispose();
+            }
+        }
+
+        private void ExpireLifetimes(float now)
+        {
+            int hw = _store.HighWater;
+            var alive = _store.alive;
+            var lifeEnd = _store.lifetimeEnd;
+            for (int i = 0; i < hw; i++)
+            {
+                if (alive[i] == 0) continue;
+                float end = lifeEnd[i];
+                if (end > 0f && now >= end) FreeSlot(i);
+            }
+        }
+
+        private void EnsureActiveCapacity()
+        {
+            if (_activeIndices.IsCreated && _activeIndices.Length >= _store.Capacity) return;
+            if (_activeIndices.IsCreated) _activeIndices.Dispose();
+            _activeIndices = new NativeArray<int>(_store.Capacity, Allocator.Persistent);
+        }
+
+        private int RebuildActiveIndices()
+        {
+            int hw = _store.HighWater;
+            var alive = _store.alive;
+            int c = 0;
+            for (int i = 0; i < hw; i++)
+                if (alive[i] == 1) _activeIndices[c++] = i;
+            _activeCount = c;
+            _activeDirty = false;
+            return c;
+        }
+
+        // 把本帧累积的接触采样（流体速度之和 + 接触位置/数/密度 + 浮力专用下方接触）打包成 Liquid2DBodyForce 派发给各动态体的力接收者（双向耦合）。
+        // 平均流速 = 速度之和 / 接触数，供接收者做相对速度阻力；接触数=0 时无浮力/阻力，跳过。浮力按「下方接触」单独统计，避免压顶粒子虚假上浮。
+        // Pack this frame's contact samples (velocity sum + contact pos/count/density + buoyancy-only below-contacts) into a
+        // Liquid2DBodyForce and dispatch to each dynamic body's receiver (two-way coupling). Average fluid velocity = velSum /
+        // contactCount, for relative-velocity drag; with no contact there is no buoyancy/drag, so skip. Buoyancy uses the
+        // separate "below contacts" so particles resting on top don't create spurious lift.
+        // 本フレームの接触サンプルを Liquid2DBodyForce にまとめ各動的体へ派遣。浮力は「下方接触」で別集計し、上に乗る粒子の偽浮力を防ぐ。
+        private void DispatchBodyForces(NativeArray<float2> velSum, NativeArray<float4> contact, NativeArray<float4> buoyancy, float dt)
+        {
+            for (int b = 0; b < _dynamicReceivers.Count && b < velSum.Length; b++)
+            {
+                var r = _dynamicReceivers[b];
+                // 接收者接口通常由 MonoBehaviour（Liquid2DRigidbodyBridge）实现：C# `== null` 是纯引用相等，检测不到
+                // 「已销毁但未 GC」的对象，需用 Unity 重载的 bool 语义把它也当作 null 跳过。 // Use Unity's bool null semantics so a destroyed-but-not-GC'd receiver is skipped (plain `== null` wouldn't catch it). // 破棄済み MonoBehaviour も null 扱い。
+                if (r == null || (r is UnityEngine.Object o && !o)) continue;
+
+                float4 con = b < contact.Length ? contact[b] : float4.zero;
+                int contactCount = (int)con.z;
+                // 无接触 = 物体不在流体中：仍派发一个零力包，让接收者重置内部状态（如覆盖率归 0，避免出水后门控残留）；接收者据 ContactCount≤0 早退、不施任何力。
+                // No contact = body not in fluid: still dispatch a zero force so the receiver resets internal state (e.g. coverage → 0, so the gate doesn't linger after leaving water); the receiver early-returns on ContactCount ≤ 0, applying no force.
+                // 非接触＝流体外：ゼロ力を派遣しレシーバーの状態（被覆率を 0 等）をリセット。レシーバーは ContactCount≤0 で早退。
+                if (contactCount <= 0) { r.ApplyLiquidForces(new Liquid2DBodyForce { Dt = dt }); continue; }
+
+                float invCount = 1f / contactCount;
+                float2 fluidVel = velSum[b] * invCount;
+                float2 center = new float2(con.x, con.y) * invCount;
+                float fluidDensity = con.w * invCount;
+
+                // 浮力累积：x=浮力接触数，y=浮力接触密度和，z=浮力接触排开体积和（Σπr²）。平均密度=y/x。
+                // Push 用 x（下方接触数）估算浸没比例，Submerge 用 z（真实排开体积）估算，二者由接收者按碰撞模式选择。
+                // Buoyancy accum: x=count, y=density sum, z=displaced area sum (Σπr²). Avg density=y/x. Push uses x, Submerge uses z; receiver picks by mode.
+                // 浮力累積：x=接触数、y=密度和、z=排除面積和。平均密度=y/x。Push は x、Submerge は z を使用。
+                float4 buoy = b < buoyancy.Length ? buoyancy[b] : float4.zero;
+                int buoyancyCount = (int)buoy.x;
+                float buoyancyDensity = buoy.x > 1e-6f ? buoy.y / buoy.x : 0f;
+
+                r.ApplyLiquidForces(new Liquid2DBodyForce
+                {
+                    FluidVelocity = fluidVel,
+                    ContactCenter = center,
+                    ContactCount = contactCount,
+                    FluidDensity = fluidDensity,
+                    BuoyancyContactCount = buoyancyCount,
+                    BuoyancyFluidDensity = buoyancyDensity,
+                    BuoyancySubmergedVolume = buoy.z,
+                    ShellCoverageVolume = buoy.w,
+                    Dt = dt,
+                });
+            }
+        }
+
+        // 按 killFlags 回收落入销毁区域的粒子。killFlags[k] 对应本步活动索引 _activeIndices[k]。
+        // Recycle particles flagged by killFlags. killFlags[k] maps to this step's active index _activeIndices[k].
+        // killFlags に従って破棄領域内の粒子を回収。killFlags[k] は本ステップの _activeIndices[k] に対応。
+        private void ApplyKills(NativeArray<byte> killFlags, int count)
+        {
+            if (!killFlags.IsCreated) return;
+            for (int k = 0; k < count && k < killFlags.Length; k++)
+                if (killFlags[k] != 0) FreeSlot(_activeIndices[k]);
+        }
+
+        #endregion
+
+        #region Render data 渲染取数 // 描画用データ
+
+        /// <summary>
+        /// 供渲染层取数据。返回当前存活的 store、紧凑活动索引与描述符表（绕过 Transform）。
+        /// 渲染时无求解 Job 在飞（FixedUpdate 内已 Complete），可安全读取。
+        /// For the render layer. Returns the live store, compact active indices, and descriptor table (bypassing Transform).
+        /// At render time no solve jobs are in flight (completed within FixedUpdate), so reads are safe.
+        /// 描画層用。生存中の store・コンパクト active 索引・記述子表を返します。
+        /// </summary>
+        public static bool TryGetRenderData(out Liquid2DParticleStore store, out NativeArray<int> activeIndices,
+            out int activeCount, out IReadOnlyList<Liquid2DParticleDescriptor> descriptors)
+        {
+            store = null; activeIndices = default; activeCount = 0; descriptors = null;
+            var inst = _instance;
+            if (inst == null || inst._store == null || inst._store.Count == 0) return false;
+
+            if (inst._activeDirty)
+            {
+                inst.EnsureActiveCapacity();
+                inst.RebuildActiveIndices();
+            }
+
+            store = inst._store;
+            activeIndices = inst._activeIndices;
+            activeCount = inst._activeCount;
+            descriptors = inst._descriptors;
+            return activeCount > 0;
+        }
+
+        /// <summary>
+        /// GPU 模式：供渲染层直读常驻 GPU 缓冲（DrawProcedural）。仅在 GPU 求解器有效且有粒子时返回 true。
+        /// descriptors 用于按 typeId 取贴图/材质/renderScale/nameTag；buffers 为 slot 索引，需配合 activeIndices 间接寻址。
+        /// GPU mode: lets the render layer read resident GPU buffers directly (DrawProcedural). Returns true only when the
+        /// GPU solver is active and has particles. Buffers are slot-indexed; use activeIndices to indirect.
+        /// GPU モード：常駐 GPU バッファを直読するため。
+        /// </summary>
+        public static bool TryGetRenderBuffers(out ComputeBuffer positions, out ComputeBuffer colors,
+            out ComputeBuffer radii, out ComputeBuffer typeIds, out ComputeBuffer activeIndices,
+            out ComputeBuffer velocities, out int count, out IReadOnlyList<Liquid2DParticleDescriptor> descriptors)
+        {
+            positions = colors = radii = typeIds = activeIndices = velocities = null; count = 0; descriptors = null;
+            var inst = _instance;
+            if (inst == null) return false;
+            descriptors = inst._descriptors;
+            if (inst._solver is SphGpuSolver gpu)
+                return gpu.TryGetRenderBuffers(out positions, out colors, out radii, out typeIds, out activeIndices, out velocities, out count);
+            return false;
+        }
+
+        /// <summary>
+        /// 纯查询：返回 nameTag 为 featureNameTag 的 Feature 在当前帧会渲染的存活粒子数，与绘制时的 nameTag 门控一致
+        /// （空标签粒子被所有 Feature 渲染，故始终计入；带标签粒子仅由同名 Feature 渲染）。不会注册新标签（无 GetGroup 副作用），
+        /// 供渲染层做「无可渲染粒子则整条全屏链路跳过」的早退判断。AliveCount 仅由真实回收递减（永不少算），故 ==0 即确无粒子，早退安全；
+        /// GPU 模式下 GPU 侧 kill 不递减 CPU 计数（只会多算），同样不会误跳。
+        /// Pure lookup: returns how many alive particles a feature with the given nameTag would render this frame, matching the
+        /// draw-time nameTag gate (empty-tag particles are drawn by every feature, always counted; a set tag matches only its own
+        /// group). Does NOT register the tag (no GetGroup side effect). For the render layer's "skip the whole full-screen chain
+        /// when nothing to render" early-out. AliveCount only decrements on real frees (never undercounts), so ==0 means genuinely
+        /// empty and skipping is safe; under GPU mode a GPU-side kill won't decrement the CPU count (only overcounts), so no false skip.
+        /// 純粋な照会：指定 nameTag の Feature が当該フレームで描画する生存粒子数を、描画時の nameTag ゲートと一致して返します
+        /// （空タグ粒子は全 Feature が描画＝常に計上、設定タグは同名 Feature のみ）。タグを登録しません（副作用なし）。
+        /// </summary>
+        public static int GetRenderableAliveCount(string featureNameTag)
+        {
+            var inst = _instance;
+            if (inst == null) return 0;
+            // 空标签组（id 0）被所有 Feature 渲染，始终计入。 // Empty-tag group (id 0) is drawn by every feature, always counted. // 空タグ組（id 0）は常に計上。
+            int total = inst.AliveCountForTag(string.Empty);
+            // 带标签 Feature 还会渲染同名标签组。 // A tagged feature also renders its own same-named group. // タグ付き Feature は同名組も描画。
+            if (!string.IsNullOrEmpty(featureNameTag))
+                total += inst.AliveCountForTag(featureNameTag);
+            return total;
+        }
+
+        /// <summary>
+        /// 纯查询某 nameTag 组的存活粒子数：未注册的标签返回 0，绝不经 GetGroup 注册新组（避免 _nameTagToGroup 单调增长）。
+        /// Pure lookup of a nameTag group's alive count: an unregistered tag returns 0; never registers via GetGroup.
+        /// </summary>
+        private int AliveCountForTag(string nameTag)
+        {
+            string key = string.IsNullOrEmpty(nameTag) ? string.Empty : nameTag;
+            if (!_nameTagToGroup.TryGetValue(key, out int g)) return 0;
+            if (!_groupSlots.TryGetValue(g, out var slots)) return 0;
+            return slots.AliveCount;
+        }
+
+        #endregion
+
+        private void OnDestroy()
+        {
+            if (_instance == this) _instance = null;
+            _solver?.Dispose();
+            _store?.Dispose();
+            if (_activeIndices.IsCreated) _activeIndices.Dispose();
+            if (_materials.IsCreated) _materials.Dispose();
+            if (_mixData.IsCreated) _mixData.Dispose();
+        }
+
+#if UNITY_EDITOR
+        // 编辑器中「Play 模式下重新编译脚本」会触发域重载（domain reload）。本单例是运行时创建的
+        // HideAndDontSave 对象，域重载时不会走 OnDestroy，导致 SphGpuSolver 的 ComputeBuffer / NativeArray 泄漏。
+        // 在域重载前主动 DestroyImmediate 单例，触发 OnDestroy 完成释放。仅编辑器需要，构建中不存在域重载。
+        // Recompiling scripts while in Play mode triggers a domain reload in the editor. This runtime-created
+        // HideAndDontSave singleton does not get OnDestroy on a domain reload, leaking SphGpuSolver's ComputeBuffer /
+        // NativeArray. Destroy the singleton before the reload so OnDestroy runs and releases everything.
+        // Play モード中の再コンパイルはドメインリロードを起こし、HideAndDontSave のランタイム単例は OnDestroy が
+        // 呼ばれず ComputeBuffer / NativeArray が漏れます。リロード前に破棄して解放します。
+        [UnityEditor.InitializeOnLoadMethod]
+        private static void RegisterDomainReloadCleanup()
+        {
+            UnityEditor.AssemblyReloadEvents.beforeAssemblyReload += EditorDestroyInstance;
+        }
+
+        /// <summary>
+        /// 立即销毁运行时单例（触发 OnDestroy 完成 ComputeBuffer / NativeArray 释放）。仅编辑器使用。
+        /// 单例是 HideAndDontSave 对象，退出 Play 模式时不会被引擎自动销毁，会带着上一帧粒子数据残留进编辑模式，
+        /// 导致渲染链路把最后一帧流体反复合成。退出 Play 时主动调用本方法即可清空数据。
+        /// Immediately destroy the runtime singleton (runs OnDestroy to release ComputeBuffer / NativeArray). Editor only.
+        /// The singleton is a HideAndDontSave object that the engine does NOT auto-destroy on exiting Play mode; it would
+        /// linger into edit mode carrying last-frame particle data, so the render chain keeps compositing the final fluid
+        /// frame. Calling this on Play exit clears the data.
+        /// ランタイム単例を即時破棄します（OnDestroy を実行し ComputeBuffer / NativeArray を解放）。エディタ専用。
+        /// 単例は HideAndDontSave オブジェクトで、Play モード終了時にエンジンが自動破棄しないため、前フレームの粒子
+        /// データを保持したまま編集モードへ残留し、描画チェーンが最後の流体フレームを合成し続けます。Play 終了時に
+        /// 本メソッドを呼べばデータを消去できます。
+        /// </summary>
+        internal static void EditorDestroyInstance()
+        {
+            if (_instance) DestroyImmediate(_instance.gameObject);
+        }
+#endif
+    }
+}

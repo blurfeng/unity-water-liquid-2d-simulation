@@ -1,0 +1,17 @@
+{
+  "name": "com.blurfeng.liquid-2d-simulation",
+  "version": "0.1.0",
+  "displayName": "Liquid 2D Simulation",
+  "description": "A high-performance 2D liquid simulation plugin for Unity, supporting real-time liquid effects and interactions. (Unity 2022.3 / URP 14 port — work in progress.)",
+  "unity": "2022.3",
+  "keywords": ["liquid 2D simulation", "liquid", "water", "2d", "liquid 2d"],
+  "author": {
+    "name": "Blur Feng",
+    "url": "https://github.com/BlurFeng"
+  },
+  "license": "MIT",
+  "category": "Physics",
+  "dependencies": {
+    "com.unity.render-pipelines.universal": "14.0.12"
+  }
+}

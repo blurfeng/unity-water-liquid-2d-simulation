@@ -1,0 +1,251 @@
+using System.Collections.Generic;
+using Unity.Collections;
+using static Unity.Mathematics.math;
+using float2 = Unity.Mathematics.float2;
+
+namespace Fs.Liquid2D
+{
+    /// <summary>
+    /// 碰撞体投影数学：把粒子（预测位置）推出碰撞体表面。所有方法 Burst 友好（无托管、无分配）。
+    /// Collider projection math: push a particle (predicted position) out of a collider surface. All methods are
+    /// Burst-friendly (no managed state, no allocation).
+    /// コライダー投影の数学：粒子（予測位置）をコライダー表面の外へ押し出します。すべて Burst 対応（マネージド/割り当てなし）。
+    /// </summary>
+    public static class Liquid2DColliderMath
+    {
+        /// <summary>
+        /// 计算碰撞体形状的世界面积（2D，用作浮力体积）。数据为世界量（Size 为半尺寸、Radius 为半径，多边形顶点为世界坐标）。
+        /// 边链（开放折线）无面积返回 0。仅托管侧调用（非 Burst Job），故用 List 承载多边形顶点。
+        /// World-space area of a collider shape (2D, used as buoyancy volume). Data is world-space (Size = half-size, Radius =
+        /// radius, polygon vertices in world coords). Edge chains (open polylines) have no area → 0. Managed-side only.
+        /// コライダー形状の世界面積（2D、浮力体積用）。エッジチェーンは 0。
+        /// </summary>
+        public static float ComputeArea(in Liquid2DColliderData c, List<float2> points)
+        {
+            switch (c.Shape)
+            {
+                case Liquid2DColliderShape.Circle: return PI * c.Radius * c.Radius;
+                case Liquid2DColliderShape.Box:
+                case Liquid2DColliderShape.BoundsBox: return 4f * c.Size.x * c.Size.y;
+                case Liquid2DColliderShape.Capsule: return 4f * c.Size.x * c.Radius + PI * c.Radius * c.Radius;
+                case Liquid2DColliderShape.Polygon: return PolygonArea(points, c.PointStart, c.PointCount);
+                default: return 0f; // EdgeChain：无面积。 // no area. // 面積なし。
+            }
+        }
+
+        private static float PolygonArea(List<float2> pts, int start, int count)
+        {
+            if (pts == null || count < 3) return 0f;
+            float a = 0f;
+            for (int i = 0; i < count; i++)
+            {
+                float2 p0 = pts[start + i];
+                float2 p1 = pts[start + ((i + 1) % count)];
+                a += p0.x * p1.y - p1.x * p0.y;
+            }
+            return 0.5f * abs(a); // 鞋带公式（绝对值，朝向无关）。 // shoelace (absolute, orientation-independent). // 靴ひも公式。
+        }
+
+        /// <summary>
+        /// 计算把位置 p（半径 particleRadius）推出碰撞体所需的修正向量与表面外法线。
+        /// Compute the correction vector and outward surface normal needed to push position p (radius particleRadius) out of the collider.
+        /// 位置 p（半径 particleRadius）をコライダーの外へ押し出す補正ベクトルと外向き法線を計算します。
+        /// </summary>
+        /// <returns>是否发生穿透（true 时 correction/normal 有效）。 // whether penetrating. // 貫通したか。</returns>
+        public static bool Project(in Liquid2DColliderData c, in NativeArray<float2> points,
+            float2 p, float particleRadius, out float2 correction, out float2 normal)
+        {
+            switch (c.Shape)
+            {
+                case Liquid2DColliderShape.Circle: return ProjectCircle(c, p, particleRadius, out correction, out normal);
+                case Liquid2DColliderShape.Box: return ProjectBox(c, p, particleRadius, out correction, out normal);
+                case Liquid2DColliderShape.Capsule: return ProjectCapsule(c, p, particleRadius, out correction, out normal);
+                case Liquid2DColliderShape.Polygon: return ProjectPolygon(c, points, p, particleRadius, out correction, out normal);
+                case Liquid2DColliderShape.EdgeChain: return ProjectEdgeChain(c, points, p, particleRadius, out correction, out normal);
+                case Liquid2DColliderShape.BoundsBox: return ProjectBoundsBox(c, p, particleRadius, out correction, out normal);
+                default: correction = float2.zero; normal = float2.zero; return false;
+            }
+        }
+
+        private static bool ProjectCircle(in Liquid2DColliderData c, float2 p, float pr, out float2 correction, out float2 normal)
+        {
+            float2 d = p - c.Center;
+            float distSq = lengthsq(d);
+            float minD = c.Radius + pr;
+            if (distSq >= minD * minD) { correction = float2.zero; normal = float2.zero; return false; }
+            float dist = sqrt(distSq);
+            normal = dist > 1e-6f ? d / dist : new float2(0f, 1f);
+            correction = normal * (minD - dist);
+            return true;
+        }
+
+        private static bool ProjectBox(in Liquid2DColliderData c, float2 p, float pr, out float2 correction, out float2 normal)
+        {
+            float cs = cos(c.Rotation), sn = sin(c.Rotation);
+            float2 d = p - c.Center;
+            float2 local = new float2(d.x * cs + d.y * sn, -d.x * sn + d.y * cs); // R^T * d
+            float2 half = c.Size;
+            float2 cl = clamp(local, -half, half);
+            float2 diff = local - cl;
+            float distSq = lengthsq(diff);
+
+            float2 nLocal, corrLocal;
+            if (distSq > 1e-12f)
+            {
+                if (distSq >= pr * pr) { correction = float2.zero; normal = float2.zero; return false; }
+                float dist = sqrt(distSq);
+                nLocal = diff / dist;
+                corrLocal = nLocal * (pr - dist);
+            }
+            else
+            {
+                // 圆心在盒内部，沿最小穿透轴推出。 // Center inside the box; push out along the min-penetration axis. // 中心がボックス内部、最小貫通軸で押し出す。
+                float dx = half.x - abs(local.x);
+                float dy = half.y - abs(local.y);
+                if (dx < dy)
+                {
+                    float sx = local.x >= 0f ? 1f : -1f;
+                    nLocal = new float2(sx, 0f);
+                    corrLocal = nLocal * (dx + pr);
+                }
+                else
+                {
+                    float sy = local.y >= 0f ? 1f : -1f;
+                    nLocal = new float2(0f, sy);
+                    corrLocal = nLocal * (dy + pr);
+                }
+            }
+
+            correction = new float2(corrLocal.x * cs - corrLocal.y * sn, corrLocal.x * sn + corrLocal.y * cs);
+            normal = new float2(nLocal.x * cs - nLocal.y * sn, nLocal.x * sn + nLocal.y * cs);
+            return true;
+        }
+
+        private static bool ProjectCapsule(in Liquid2DColliderData c, float2 p, float pr, out float2 correction, out float2 normal)
+        {
+            float cs = cos(c.Rotation), sn = sin(c.Rotation);
+            float2 d = p - c.Center;
+            float2 local = new float2(d.x * cs + d.y * sn, -d.x * sn + d.y * cs);
+            float t = clamp(local.x, -c.Size.x, c.Size.x);
+            float2 seg = new float2(t, 0f);
+            float2 dl = local - seg;
+            float distSq = lengthsq(dl);
+            float minD = c.Radius + pr;
+            if (distSq >= minD * minD) { correction = float2.zero; normal = float2.zero; return false; }
+            float dist = sqrt(distSq);
+            float2 nLocal = dist > 1e-6f ? dl / dist : new float2(0f, 1f);
+            float2 corrLocal = nLocal * (minD - dist);
+            correction = new float2(corrLocal.x * cs - corrLocal.y * sn, corrLocal.x * sn + corrLocal.y * cs);
+            normal = new float2(nLocal.x * cs - nLocal.y * sn, nLocal.x * sn + nLocal.y * cs);
+            return true;
+        }
+
+        private static bool ProjectPolygon(in Liquid2DColliderData c, in NativeArray<float2> points,
+            float2 p, float pr, out float2 correction, out float2 normal)
+        {
+            int n = c.PointCount;
+            if (n < 3) { correction = float2.zero; normal = float2.zero; return false; }
+            int s = c.PointStart;
+
+            float minDistSq = float.MaxValue;
+            float2 bestClosest = p;
+            for (int i = 0; i < n; i++)
+            {
+                float2 a = points[s + i];
+                float2 b = points[s + ((i + 1) % n)];
+                float2 cp = ClosestPointOnSegment(a, b, p);
+                float dsq = lengthsq(p - cp);
+                if (dsq < minDistSq) { minDistSq = dsq; bestClosest = cp; }
+            }
+
+            bool inside = PointInPolygon(points, s, n, p);
+            float dist = sqrt(minDistSq);
+            if (!inside)
+            {
+                if (minDistSq >= pr * pr) { correction = float2.zero; normal = float2.zero; return false; }
+                normal = dist > 1e-6f ? (p - bestClosest) / dist : new float2(0f, 1f);
+                correction = normal * (pr - dist);
+            }
+            else
+            {
+                normal = dist > 1e-6f ? (bestClosest - p) / dist : new float2(0f, 1f);
+                correction = normal * (dist + pr);
+            }
+            return true;
+        }
+
+        private static bool ProjectBoundsBox(in Liquid2DColliderData c, float2 p, float pr, out float2 correction, out float2 normal)
+        {
+            float cs = cos(c.Rotation), sn = sin(c.Rotation);
+            float2 d = p - c.Center;
+            float2 local = new float2(d.x * cs + d.y * sn, -d.x * sn + d.y * cs);
+            float2 effHalf = max(c.Size - pr, 0f);
+            if (abs(local.x) <= effHalf.x && abs(local.y) <= effHalf.y)
+            {
+                correction = float2.zero; normal = float2.zero; return false;
+            }
+            float2 target = clamp(local, -effHalf, effHalf);
+            float2 corrLocal = target - local;
+            float dist = sqrt(lengthsq(corrLocal));
+            float2 nLocal = dist > 1e-6f ? corrLocal / dist : new float2(0f, 1f);
+            correction = new float2(corrLocal.x * cs - corrLocal.y * sn, corrLocal.x * sn + corrLocal.y * cs);
+            normal = new float2(nLocal.x * cs - nLocal.y * sn, nLocal.x * sn + nLocal.y * cs);
+            return true;
+        }
+
+        private static bool ProjectEdgeChain(in Liquid2DColliderData c, in NativeArray<float2> points,
+            float2 p, float pr, out float2 correction, out float2 normal)
+        {
+            int n = c.PointCount;
+            if (n < 2) { correction = float2.zero; normal = float2.zero; return false; }
+            int s = c.PointStart;
+
+            float minDistSq = float.MaxValue;
+            float2 bestClosest = p;
+            for (int i = 0; i < n - 1; i++)
+            {
+                float2 a = points[s + i];
+                float2 b = points[s + i + 1];
+                float2 cp = ClosestPointOnSegment(a, b, p);
+                float dsq = lengthsq(p - cp);
+                if (dsq < minDistSq) { minDistSq = dsq; bestClosest = cp; }
+            }
+
+            // c.radius 为边线自身的扩展半径（EdgeCollider2D.edgeRadius），0 表示无扩展。
+            // c.radius is the edge's own expansion radius (EdgeCollider2D.edgeRadius); 0 means no expansion.
+            // c.radius はエッジ自身の拡張半径（EdgeCollider2D.edgeRadius）、0 は拡張なし。
+            float minD = c.Radius + pr;
+            if (minDistSq >= minD * minD) { correction = float2.zero; normal = float2.zero; return false; }
+            float dist = sqrt(minDistSq);
+            normal = dist > 1e-6f ? (p - bestClosest) / dist : new float2(0f, 1f); // 两面：粒子所在侧。 // two-sided: the side the particle is on. // 両面：粒子のいる側。
+            correction = normal * (minD - dist);
+            return true;
+        }
+
+        private static float2 ClosestPointOnSegment(float2 a, float2 b, float2 p)
+        {
+            float2 ab = b - a;
+            float denom = lengthsq(ab);
+            if (denom < 1e-12f) return a;
+            float t = clamp(dot(p - a, ab) / denom, 0f, 1f);
+            return a + t * ab;
+        }
+
+        private static bool PointInPolygon(in NativeArray<float2> points, int start, int count, float2 p)
+        {
+            // 射线交叉数法（适用任意简单多边形）。 // Crossing-number test (works for any simple polygon). // 交差数法（任意の単純多角形に対応）。
+            bool inside = false;
+            for (int i = 0, j = count - 1; i < count; j = i++)
+            {
+                float2 vi = points[start + i];
+                float2 vj = points[start + j];
+                if (((vi.y > p.y) != (vj.y > p.y)) &&
+                    (p.x < (vj.x - vi.x) * (p.y - vi.y) / (vj.y - vi.y) + vi.x))
+                {
+                    inside = !inside;
+                }
+            }
+            return inside;
+        }
+    }
+}
