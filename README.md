@@ -42,5 +42,7 @@ git checkout origin/dev -- \
   Assets/Plugins/Liquid2DSimulation/package.json \
   Assets/Plugins/Liquid2DSimulation/package.json.meta \
   Assets/Plugins/Liquid2DSimulation/CHANGELOG.md \
-  Assets/Plugins/Liquid2DSimulation/CHANGELOG.md.meta
+  Assets/Plugins/Liquid2DSimulation/CHANGELOG.md.meta \
+  Assets/Plugins/Liquid2DSimulation/README.md \
+  Assets/Plugins/Liquid2DSimulation/README.md.meta
 ```
