@@ -23,7 +23,8 @@
 # Liquid 2D Simulation
 Liquid 2D Simulation is a 2D fluid simulation system for `Unity`. It works out of the box and lets you quickly achieve realistic fluid effects.  
 It is powered by a **custom-built fluid particle physics system** (SPH dual-density solver) and **does not rely on Unity's physics system**; with GPU mode it can **easily reach tens of thousands of particles** while staying highly efficient.  
-With its rich set of configuration parameters, you can freely create water, lava, oil, foam, sand, and many other fluids with different textures and looks.
+With its rich set of configuration parameters, you can freely create water, lava, oil, foam, sand, and many other fluids with different textures and looks.  
+It supports both `Unity 6` and `Unity 2022.3` (older versions are untested).
 
 ## 🙏 Acknowledgements
 The core algorithm of the fluid physics solver mainly references [SebLague/Fluid-Sim](https://github.com/SebLague/Fluid-Sim). Thanks to SebLague.
@@ -72,7 +73,7 @@ The core algorithm of the fluid physics solver mainly references [SebLague/Fluid
 With this fluid particle system you can quickly simulate 2D fluids, including water, lava, oil, foam, sand, and other media with different textures.  
 The system uses a **custom-built fluid particle solver** (SPH dual-density) and **no longer relies on Unity's physics system**. Particles are pure data with no per-particle GameObject, so it can efficiently simulate large numbers of particles.  
 Solving supports **both CPU and GPU modes**: CPU mode is based on the Job System + Burst; GPU mode uses Compute Shaders with data resident on the GPU, and can **easily reach tens of thousands of particles** while staying efficient (measured at around 20,000 particles still holding roughly 150 FPS in Editor mode; for the test device see the device screenshot under [💻 Requirements](#-requirements) below).  
-For rendering, the `Render Graph` framework requires only a single main camera and renders the fluid particles via `GPU Instancing`. Compared to the traditional approach of rendering to a separate camera's Render Target, rendering efficiency is greatly improved.  
+For rendering, Unity 6 uses the `Render Graph` framework and renders the fluid particles via `GPU Instancing`; `Unity 2022.3` **does not use Render Graph** and instead renders with the classic imperative URP pipeline, producing the same result.  
 The rendering approach produces a fusion effect similar to SDF, expressing the natural look of fluids.  
 In practice, the particle fusion effect is achieved by stacking and clipping the alpha of the particle textures. Compared to a strict SDF method, this achieves a better balance between performance and visual quality, and performance does not degrade as the particle count grows.  
 ![](Documents/mix_1.gif)
@@ -85,14 +86,14 @@ In practice, the particle fusion effect is achieved by stacking and clipping the
 | Rich fluid materials              | Configurable viscosity, surface tension, friction, restitution, gravity scale, buoyancy density, and more, with built-in Water / Lava / Foam / Sand presets. |
 | Scene interaction                 | Custom colliders block fluid, two-way rigidbody coupling (wash-away / buoyant float), force fields (attract / repel / swirl), and dead zones for recycling. |
 | Multi color-space mixing          | Fluids of different colors mix when they meet, with three mixing algorithms: Oklab / RYB / LinearRgb.         |
-| URP 2D / Render Graph             | Built on URP 2D, using the new Render Graph framework for rendering, greatly improving performance.           |
+| URP 2D / Render Graph             | Built on URP 2D for rendering, greatly improving performance. Unity 6 uses the new Render Graph framework; Unity 2022.3 does not use Render Graph and instead uses the classic imperative URP pipeline, with the same result.           |
 | GPU Instancing                    | Particles are rendered with GPU Instancing, rendering large numbers of particles in one pass and supporting higher particle counts. |
 | Runtime tweaking via Volume       | Supports modifying the fluid particles' rendering effects at runtime through Volumes.                         |
 
 ## 💻 Requirements
 - `Unity 6000.2` or newer
-- The 2022.3 branch supports `Unity 2022.3`, but this branch updates more slowly than the main branch
-- URP 2D rendering pipeline. Unity 6 uses the Render Graph framework for rendering
+- **`Unity 2022.3` is also fully supported** (see [🌳 Branches](#-branches)); the source is **single-source**, with one codebase supporting both engine versions via version macros
+- URP 2D rendering pipeline. Unity 6 uses the Render Graph framework; Unity 2022.3 uses the classic imperative URP 14 rendering (no Render Graph), with the same result
 - A platform compatible with the shaders
 - GPU solve mode requires platform support for `Compute Shaders`; it automatically falls back to CPU mode when unsupported
 
@@ -101,18 +102,34 @@ Device information used for project development.
 ![](Documents/device.png)
 
 ## 🌳 Branches
-- **main** - The main branch, based on Unity 6.
-- **2022.3** - The Unity 2022.3 branch. If you need to use this system on an older version, check out this branch. It updates more slowly than the main branch.
+- **main** - The main branch, targeting `Unity 6` (URP 17 / Render Graph). The source is **single-source**: one codebase supports both Unity 6 and Unity 2022.3 via version macros.
+- **2022.3** - The `Unity 2022.3` branch (URP 14). The source is merged down from the main branch, is **functionally identical and used in the same way**, and updates slightly more slowly than the main branch. If you need to use this system on an older engine version, check out this branch. The only differences from the main branch are the underlying implementation and configuration entry points:
+  - **Rendering**: does not use Render Graph; it is implemented with the classic imperative URP pipeline, producing the same result.
+  - **Rendering Layer configuration location differs**: Unity 6 configures them under `Project Settings → Tags and Layers` → `Rendering Layers`; Unity 2022.3 configures them under `Project Settings → Graphics → URP Global Settings` → the `Rendering Layers (3D)` list. **The entry point differs, but usage is exactly the same** (see [Configure Rendering Layers](#configure-rendering-layers)).
+  - **Samples** are adapted for 2022.3.
 
 ## 🌱 Quick Start
 Install the plugin in whatever way you prefer, then you can look at the demo scenes to learn how to use the system.  
 Or follow the steps below one by one.
 ### 1. Install the Plugin
 #### Using UPM
+**Unity 6 (main branch):**
 ```
 https://github.com/blurfeng/unity-water-liquid-2d-simulation.git?path=Assets/Plugins/Liquid2DSimulation
 ```
+
+**Unity 2022.3 (2022.3 branch):**
+```
+https://github.com/blurfeng/unity-water-liquid-2d-simulation.git?path=Assets/Plugins/Liquid2DSimulation#2022.3
+```
+
 Install the plugin into your project via UPM. If you need the demo scenes, import them as shown below.
+
+> [!TIP]
+> **Which link should I use?** The plugin source is **single-source** (one codebase supporting both Unity 6 and Unity 2022.3 via version macros); the code itself is shared across both versions, and the only real difference between the two links is that the **Samples are adapted for each engine version**.
+> - **Unity 6**: use the main branch link.
+> - **Unity 2022.3**: if you **don't need the demo scenes (Samples)**, the **main branch link works fine**; only use the `#2022.3` branch link when you want the ready-to-use Samples already adapted for 2022.3.
+> - In testing, even copying an entire Unity 6 demo scene into Unity 2022.3 runs fine — so using the main link is usually OK too, but copying non-code assets (scenes / prefabs / materials) across versions can cause unexpected issues; for the safest path, use the `#2022.3` branch link on 2022.3.
 1. Open `Window -> Package Manager`.  
 ![](Documents/qs_1_1.png)
 
@@ -176,6 +193,14 @@ The following mainly explains the important features or parameters; for more det
 
 ### Configure Rendering Layers
 The Liquid Feature uses Rendering Layers to distinguish which objects can block or occlude the fluid particles.
+
+> [!NOTE]
+> **The entry point for configuring Rendering Layers differs by engine version, but usage is exactly the same:**
+> - `Unity 6`: add / name rendering layers under `Project Settings → Tags and Layers` → `Rendering Layers`.
+> - `Unity 2022.3`: add / name rendering layers under `Project Settings → Graphics → URP Global Settings` → the `Rendering Layers (3D)` list.
+>
+> The steps below use Unity 6 as the example; on 2022.3, just replace the "add a rendering layer" step with the location above — everything else is identical.
+
 #### Add a Blocking Rendering Layer
 1. Open `Edit -> Project Settings -> Tags and Layers`.
 2. In `Rendering Layers`, add a new layer, e.g. `LiquidObstructor`.

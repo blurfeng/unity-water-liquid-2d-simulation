@@ -23,7 +23,8 @@
 # Liquid 2D Simulation - 2D流体模拟
 Liquid 2D Simulation 是一款面向 `Unity` 的 2D 流体模拟系统，开箱即用，能够快速实现逼真的流体效果。  
 它搭载**自研的流体粒子物理系统**（SPH 双密度求解），**不依赖 Unity 的物理系统**；通过 GPU 模式可以**轻松达到数万规模的粒子**，并保持高效运行。  
-借助丰富的配置参数，你可以自由地创建水、岩浆、石油、泡沫、沙等各种不同质感的流体表现。
+借助丰富的配置参数，你可以自由地创建水、岩浆、石油、泡沫、沙等各种不同质感的流体表现。  
+同时支持 `Unity 6` 与 `Unity 2022.3` 两个引擎版本（更旧的版本未经测试）。
 
 ## 🙏 致谢
 流体物理求解器的核心算法主要参考了 [SebLague/Fluid-Sim](https://github.com/SebLague/Fluid-Sim)，感谢 SebLague。
@@ -72,7 +73,7 @@ Liquid 2D Simulation 是一款面向 `Unity` 的 2D 流体模拟系统，开箱�
 使用本流体粒子系统，你可以快速实现2D流体的模拟，包括水、岩浆、石油、泡沫、沙等不同质感的流体。  
 本系统使用**自研的流体粒子物理求解器**（SPH 双密度），**不再依赖 Unity 的物理系统**。粒子是纯数据，没有每个粒子对应的 GameObject，因此可以高效地模拟大量粒子。  
 求解支持 **CPU / GPU 双模式**：CPU 模式基于 Job System + Burst；GPU 模式使用 Compute Shader，数据常驻 GPU，可以**轻松达到数万规模的粒子**并保持高效运行（实测约 2 万粒子在编辑器模式下仍保持 150FPS 左右，测试设备见下方 [💻 环境要求](#-环境要求) 中的设备截图）。  
-渲染方面，通过 `Render Graph` 框架，只需一个主相机，并通过 `GPU Instance` 方式渲染流体粒子。与传统的单独相机渲染到 Render Target 的方式相比，渲染效率大幅提升。  
+渲染方面，Unity 6 通过 `Render Graph` 框架，并通过 `GPU Instance` 方式渲染流体粒子；`Unity 2022.3` **不使用 Render Graph**，改用旧的命令式 URP 渲染管线实现，最终效果一致。
 渲染方式类似 SDF 的融合效果，表现出流体的自然效果。  
 实际过程中，通过粒子纹理的透明度叠加和裁剪实现粒子融合效果。相比于严格的 SDF 方法，这种方式在性能和效果上达到了更好的平衡，并且不会随着粒子数量的增加而降低性能。  
 ![](Documents/mix_1.gif)
@@ -85,14 +86,14 @@ Liquid 2D Simulation 是一款面向 `Unity` 的 2D 流体模拟系统，开箱�
 | 丰富的流体材质                    | 可配置粘性、表面张力、摩擦、反弹、重力缩放、浮力密度等，内置水/熔岩/泡沫/沙预设。                   |
 | 场景交互                          | 自研碰撞器阻挡流体、两路刚体耦合（冲走 / 浮力漂浮）、力场（吸引 / 排斥 / 旋流）、死亡区域回收。       |
 | 多色彩空间混色                    | 不同颜色流体相遇时混色，支持 Oklab / RYB / LinearRgb 三种混色算法。                                |
-| URP 2D / Render Graph             | 基于 URP 2D，使用新的 Render Graph 框架进行渲染，性能大幅提升。                                    |
+| URP 2D / Render Graph             | 基于 URP 2D 渲染，性能大幅提升。Unity 6 使用新的 Render Graph 框架；Unity 2022.3 不使用 Render Graph，改用旧的命令式 URP 管线实现，效果一致。                                    |
 | GPU Instance                      | 使用 GPU Instance 方式渲染粒子，可以一次渲染大量粒子，支持更多粒子数量。                          |
 | Volume 运行时修改                  | 支持在运行时通过 Volume 修改流体粒子的渲染效果。                                                |
 
 ## 💻 环境要求
 - `Unity 6000.2` 或更新的版本
-- 2022.3分支支持 `Unity 2022.3` 版本，但是此分支的更新慢于主分支
-- URP 2D 渲染管线。Unity 6 版本使用 Render Graph 框架进行渲染
+- **`Unity 2022.3` 也已完整支持**（见 [🌳 分支](#-分支)）；源码为**单源设计**，同一套代码通过版本宏同时支持两个引擎版本
+- URP 2D 渲染管线。Unity 6 使用 Render Graph 框架渲染；Unity 2022.3 使用命令式 URP 14 渲染（无 Render Graph），最终效果一致
 - 与着色器兼容的平台
 - GPU 求解模式需要平台支持 `Compute Shader`；不支持时会自动回退到 CPU 模式
 
@@ -101,18 +102,34 @@ Liquid 2D Simulation 是一款面向 `Unity` 的 2D 流体模拟系统，开箱�
 ![](Documents/device.png)
 
 ## 🌳 分支
-- **main** - 主分支，基于 Unity 6 版本。
-- **2022.3** - Unity 2022.3 版本分支。如果你需要在更旧的版本上使用此系统，可以查看此分支。更新会慢于主分支。
+- **main** - 主分支，面向 `Unity 6`（URP 17 / Render Graph）。源码为**单源设计**，同一套代码通过版本宏同时支持 Unity 6 与 Unity 2022.3。
+- **2022.3** - `Unity 2022.3` 版本分支（URP 14）。源码从主分支合并而来，**功能与主分支一致、使用方式相同**，更新会略慢于主分支。如果你需要在更旧的引擎版本上使用此系统，请查看此分支。与主分支的区别仅在于底层实现与配置入口：
+  - **渲染方式**：不使用 Render Graph，改用旧的命令式 URP 渲染管线实现，最终效果一致。
+  - **Rendering Layer 配置位置不同**：Unity 6 在 `Project Settings → Tags and Layers` 的 `Rendering Layers` 中配置；Unity 2022.3 在 `Project Settings → Graphics → URP Global Settings` 的 `Rendering Layers (3D)` 列表中配置。**配置入口不同，但使用方式完全相同**（详见 [配置 Rendering Layer](#配置-rendering-layer)）。
+  - **演示场景（Samples）** 针对 2022.3 做了适配。
 
 ## 🌱 快速开始
 按你喜欢的方式安装插件，然后你可以直接查看演示场景学习如何使用此系统。  
 或者，按以下步骤一步步操作。
 ### 1.安装插件
 #### 使用 UPM
+**Unity 6（main 主分支）：**
 ```
 https://github.com/blurfeng/unity-water-liquid-2d-simulation.git?path=Assets/Plugins/Liquid2DSimulation
 ```
+
+**Unity 2022.3（2022.3 分支）：**
+```
+https://github.com/blurfeng/unity-water-liquid-2d-simulation.git?path=Assets/Plugins/Liquid2DSimulation#2022.3
+```
+
 通过 UPM 安装插件到你的项目。如果你需要演示场景，使用下面的方式导入。
+
+> [!TIP]
+> **该用哪个链接？** 插件源码为**单源设计**（同一套代码通过版本宏同时支持 Unity 6 与 Unity 2022.3），代码本身两版通用，两个链接的核心区别只在**演示场景（Samples）针对不同引擎版本做了适配**。  
+> - **Unity 6**：使用 main 主分支链接。  
+> - **Unity 2022.3**：如果**不需要演示场景（Samples）**，直接使用 **main 主分支链接**即可正常工作；只有当你想要开箱即用、且已适配 2022.3 的演示场景时，才使用 `#2022.3` 分支链接。  
+> - 实测中，即使把 Unity 6 的整个演示场景直接拷贝到 Unity 2022.3 也能正常运行——所以直接用 main 链接通常也没问题，但跨版本拷贝场景 / 预制体 / 材质等**非代码资源**可能出现意想不到的问题；追求稳妥请在 2022.3 中使用 `#2022.3` 分支链接。
 1. 打开 `Window -> Package Manager`。  
 ![](Documents/qs_1_1.png)
 
@@ -176,6 +193,14 @@ https://github.com/blurfeng/unity-water-liquid-2d-simulation.git?path=Assets/Plu
 
 ### 配置 Rendering Layer
 在 Liquid Feature 中使用了 Rendering Layer 来区分指定可以阻挡或遮挡流体粒子的物体。
+
+> [!NOTE]
+> **不同引擎版本的 Rendering Layer 配置入口不同，但使用方式完全一致：**
+> - `Unity 6`：在 `Project Settings → Tags and Layers` 的 `Rendering Layers` 中添加 / 命名渲染层。
+> - `Unity 2022.3`：在 `Project Settings → Graphics → URP Global Settings` 的 `Rendering Layers (3D)` 列表中添加 / 命名渲染层。
+>
+> 下文步骤以 Unity 6 为例；2022.3 用户请把「添加渲染层」替换到上述位置，其余操作完全相同。
+
 #### 添加阻挡层 Rendering Layer
 1. 打开 `Edit -> Project Settings -> Tags and Layers`。
 2. 在 `Rendering Layers` 中添加一个新的层，比如 `LiquidObstructor`。
