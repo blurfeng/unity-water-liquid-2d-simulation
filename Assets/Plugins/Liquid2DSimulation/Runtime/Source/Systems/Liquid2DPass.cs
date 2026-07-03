@@ -286,8 +286,16 @@ namespace Fs.Liquid2D
         // ── 从仿真绘制粒子（CPU 路径）───────────────────────────────────────
         private void ExecuteParticles(CommandBuffer cmd, ref RenderingData renderingData)
         {
-            // TODO GPU 路径：当 Liquid2DSimulation.Mode == Gpu 且 TryGetRenderBuffers 成功时，
-            //      改用 DrawProcedural + ComputeBuffer 绘制（U6 ExecutePassParticleGpu）。当前 CPU 优先。
+            // GPU 常驻路径：Mode==Gpu 且能取到常驻 GPU 缓冲时，直接 DrawProcedural 读缓冲，绕过 CPU 逐粒子矩阵与回读。
+            if (Liquid2DSimulation.Mode == Liquid2DSimulationMode.Gpu
+                && Liquid2DSimulation.TryGetRenderBuffers(out var gpuPositions, out var gpuColors, out var gpuRadii,
+                    out var gpuTypeIds, out var gpuActive, out _, out int gpuCount, out var gpuDescriptors))
+            {
+                ExecuteParticlesGpu(cmd, gpuPositions, gpuColors, gpuRadii, gpuTypeIds, gpuActive, gpuCount, gpuDescriptors);
+                return;
+            }
+
+            // CPU 路径：从仿真 SoA 逐粒子构建矩阵，GPU Instancing 批量绘制。
             Camera cam = renderingData.cameraData.camera;
             GeometryUtility.CalculateFrustumPlanes(cam, _frustumPlanes);
 
@@ -347,6 +355,38 @@ namespace Fs.Liquid2D
                     _mpbParticle.SetVectorArray(ShaderIds.ColorId, _colorArrayCache);
                     cmd.DrawMeshInstanced(_quadMesh, 0, settings.Material, 0, _matricesCache, count, _mpbParticle);
                 }
+            }
+        }
+
+        // ── GPU 常驻路径的粒子绘制（DrawProcedural 直读 ComputeBuffer）───────
+        private void ExecuteParticlesGpu(CommandBuffer cmd, ComputeBuffer positions, ComputeBuffer colors,
+            ComputeBuffer radii, ComputeBuffer typeIds, ComputeBuffer active, int count,
+            IReadOnlyList<Liquid2DParticleDescriptor> descriptors)
+        {
+            if (descriptors == null || count <= 0) return;
+            var gpuMat = MaterialParticleGpu;
+            if (!gpuMat) return;
+
+            string nameTag = _settings.NameTag;
+            for (int t = 0; t < descriptors.Count; t++)
+            {
+                var d = descriptors[t];
+                if (!d || !d.IsValid()) continue;
+                var settings = d.RenderSettings;
+                if (!string.IsNullOrEmpty(settings.NameTag) && !settings.NameTag.Equals(nameTag)) continue;
+
+                _mpbParticle.Clear();
+                _mpbParticle.SetBuffer(ShaderIds.PositionsBuf, positions);
+                _mpbParticle.SetBuffer(ShaderIds.ColorsBuf, colors);
+                _mpbParticle.SetBuffer(ShaderIds.RadiiBuf, radii);
+                _mpbParticle.SetBuffer(ShaderIds.TypeIdsBuf, typeIds);
+                _mpbParticle.SetBuffer(ShaderIds.ActiveIdxBuf, active);
+                _mpbParticle.SetTexture(ShaderIds.MainTexId, settings.Sprite.texture);
+                _mpbParticle.SetInteger(ShaderIds.TargetType, t);
+                _mpbParticle.SetFloat(ShaderIds.RenderScale, d.RenderScale);
+
+                // 6 顶点/实例（两三角拼四边形），实例数 = 活动粒子数；Shader 内按 typeId 剔除非本类。
+                cmd.DrawProcedural(Matrix4x4.identity, gpuMat, 0, MeshTopology.Triangles, 6, count, _mpbParticle);
             }
         }
 

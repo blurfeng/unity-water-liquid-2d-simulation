@@ -628,7 +628,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   applyOnAwake: 1
-  mode: 0
+  mode: 1
   colorMixMode: 1
   gpuReadbackToStore: 0
   gravity: {x: 0, y: -9.8}

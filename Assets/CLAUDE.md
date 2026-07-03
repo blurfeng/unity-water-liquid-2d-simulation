@@ -19,16 +19,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 移植状态 (Porting status) — READ FIRST
 
 > [!IMPORTANT]
-> **本仓库是 2D 流体系统从 Unity 6 向下移植到 Unity 2022.3 的「进行中」版本。** 采用**完全移植**策略：直接从 Unity 6 移植代码，2022 的旧内容已作为参考被清除。**物理系统已移植（CPU 路径优先），渲染系统尚未移植。**
+> **本仓库是 2D 流体系统从 Unity 6 向下移植到 Unity 2022.3 的版本，核心移植已完成。** 采用**完全移植**策略：直接从 Unity 6 移植代码，2022 的旧内容已作为参考被清除。**物理系统（CPU + GPU 路径）与渲染系统均已移植并在编辑器验证通过。**
 
 - **真源（Unity 6，功能完整）：** `F:\ProjectUnity\unity-water-liquid-2d-simulation\Assets`（引擎 `6000.3`，URP `17.3.0`，Render Graph）。它的 `Assets/CLAUDE.md` 描述完整目标架构。移植以它为算法与设计的权威参考，但 **Render Graph 渲染管线相关的描述不适用于本仓库**（见下）。
 - **本仓库（Unity 2022.3，移植目标）：** 引擎 `2022.3.62f3`，URP `14.0.12`（**无 Render Graph**，Compatibility Mode）。命名空间根 `Fs.Liquid2D`。
 - **进度：**
   - ✅ **UPM 插件骨架已建**：`Assets/Plugins/Liquid2DSimulation/`（镜像 Unity 6 目录结构，含 `Runtime`/`Editor` asmdef + `package.json`）。
-  - ✅ **物理系统已移植**（纯数据 SPH，CPU + GPU 代码均已拷入；**当前只针对/验证 CPU 路径**，GPU 后置）。已应用全部 2022 适配（见「Physics port notes」）。
+  - ✅ **物理系统已移植并验证**（纯数据 SPH，**CPU + GPU 两条路径均已在编辑器验证通过**）。已应用全部 2022 适配（见「Physics port notes」）。
   - ✅ **旧 2022 内容已删除**（`Assets/Source`、`Assets/Editor`、旧粒子预制体/材质/物理材质），`Settings/Renderer2D.asset` 的旧 Feature 引用已清空。
-  - ❌ **渲染系统尚未移植**：Unity 6 的 Render Graph 管线（`Liquid2DFeature`/`Liquid2DPass`/`Liquid2DVolume`/全部渲染 shader）需用 URP 14 的 `ScriptableRenderPass` 重写。**【留白 / TODO：渲染阶段的拆分与渲染层选择机制待定。】**
-  - ⏳ **随渲染阶段一并移植的延后项**：`Liquid2DParticleDescriptorEditor`、`Liquid2DEditorUtility`（依赖 URP+渲染层）、`Liquid2DDebugParticleDisplay`（依赖 RasterCommandBuffer/Render Graph）。
+  - ✅ **渲染系统已移植**（URP 14 命令式重写，已在编辑器验证）：`Liquid2DPass` 由 Render Graph 改写为 `ScriptableRenderPass.Execute`+`CommandBuffer`+`RTHandle`+`DrawRenderers`；`Liquid2DFeature`/`Liquid2DRenderFeatureSettings`/`Liquid2DVolume`(+`Liquid2DVolumeDataParameter`)/8 个 shader/`Liquid2DDebugParticleDisplay`/2 个 editor(`Liquid2DParticleDescriptorEditor`/`Liquid2DEditorUtility`) 均已移植。渲染层选择机制采用 **nameTag（粒子↔Feature）+ URP Rendering Layers（障碍/遮挡）**，忠实照 Unity 6。
+  - ✅ **GPU 路径已移植并验证**：GPU compute 求解器（`SphGpuSolver`+`Liquid2DSph.compute`）与 GPU 渲染路径均已在编辑器验证通过。`Liquid2DPass.ExecuteParticles` 已接通 GPU 分支——当 `Mode==Gpu` 且 `TryGetRenderBuffers` 成功时走 `ExecuteParticlesGpu`（`DrawProcedural` 直接读 5 个 `ComputeBuffer` + `Liquid2DParticleGpu` shader），否则回落 CPU `DrawMeshInstanced`。
 - **留白约定：** 未定型/未验证处用 `【留白 / TODO：…】` 标注，勿当既定事实。
 
 ## Project overview
@@ -46,11 +46,12 @@ A Unity 2022.3 URP **2D liquid simulation** system, ported down from the Unity 6
 - **`.sln` / `*.csproj` are Unity-generated** — never hand-edit them. **No test suite** yet.
 - **Editor-must-be-closed for disk restructures.** Bulk file moves/deletes and `.asset` edits are safest with the editor closed; adding/moving `.cs` while it is open can desync `.meta`. Deletions are handled gracefully. Check `Temp/UnityLockfile` presence as a hint the editor is open.
 - **Physics is play-mode only.** `Liquid2DSimulation.Instance` is null in edit mode; the sim auto-creates a hidden singleton and runs in `FixedUpdate`. `Liquid2DDebugGizmos` only draws in Play.
-- **Validating the ported physics (CPU path)** — the intended loop right now:
-  1. Create a particle type asset: `Create ▸ Liquid2D/Particle Descriptor`. For gizmo-only validation only `Radius` + `Material` (physics) matter; `RenderSettings` (sprite/material) may stay empty.
-  2. In a scene, add: a `Liquid2DPhysicsConfig` with **`mode = Cpu`** (⚠ default is `Gpu` — see gotchas), a `Liquid2DBounds` (container), a `Liquid2DSpawner` (add one `liquidParticles` entry pointing at the descriptor), and a `Liquid2DDebugGizmos`.
-  3. Enter Play → the debug gizmos draw each particle's physics-radius and render-size disc in the Scene view as the fluid falls and settles in the bounds.
-- **【留白 / TODO：SampleScene 目前指向已删除的旧预制体/旧 Volume，有 missing script，需要清理/改造成纯数据物理测试场景。】**
+- **Scene setup (both physics + rendering are verified working via this)**:
+  1. Create a particle type asset: `Create ▸ Liquid2D/Particle Descriptor`. Set `Radius` + physics `Material`. For **rendering**, fill `RenderSettings`: `Sprite` (e.g. `Texture/Circle`), `Material` (a material using shader **`Custom/URP/2D/Liquid2DParticle`**), and `NameTag` = `"Liquid2D"` (matching the feature) or empty. (For gizmo-only physics validation, `RenderSettings` may stay empty.)
+  2. In a scene, add: a `Liquid2DPhysicsConfig` with **`mode = Cpu`** (⚠ default is `Gpu` — see gotchas), a `Liquid2DBounds` (container), a `Liquid2DSpawner` (one `liquidParticles` entry → the descriptor), and optionally `Liquid2DDebugGizmos` (Scene-view physics discs).
+  3. Add the **`Liquid2DFeature`** to `Settings/Renderer2D.asset` (Add Renderer Feature). Its Blur/Effect shaders auto-populate via `Shader.Find`.
+  4. Enter Play → **Game view** shows the composited metaball fluid; **Scene view** shows the debug gizmos.
+- **【留白 / TODO：SampleScene 仍指向已删除的旧预制体/旧 Volume（有 missing script）；应改造成一个纯数据 + 渲染的正式 demo 场景。】**
 
 ## Architecture
 
@@ -69,9 +70,16 @@ No per-particle GameObjects. Particles are rows in Structure-of-Arrays `NativeAr
 - **Gameplay** (`Systems/Gameplay/`) — `Liquid2DSpawner` / `Liquid2DRegionSpawner` (spawn from a `Liquid2DParticleConfig` wrapping a descriptor), `Liquid2DDeadZone`, `Liquid2DMouseInteractor` (legacy+new input, compiled via `ENABLE_LEGACY_INPUT_MANAGER`), `AutoRotator`, `Random/`.
 - **`Systems/Debug/Liquid2DDebugGizmos.cs`** — Scene-view gizmo visualizer reading the sim SoA (physics-only validation tool; Play-mode only; `#if UNITY_EDITOR`).
 
-### Rendering — NOT yet ported
+### Rendering — URP 14 imperative `ScriptableRenderPass` (`Runtime/Source/Systems/`) — PORTED
 
-The renderer must (eventually) consume the sim hand-off (`TryGetRenderData` / `TryGetRenderBuffers` / `GetRenderableAliveCount`) instead of Transforms, and replicate the Unity 6 look (GrabAsBg → draw particles from sim → iterative blur with core-keep → obstructor/occluder → composite via a `Liquid2DEffect` with cutoff/opacity/cover/edge/pixel/distort keywords). **In this repo it must be written as a URP 14 `ScriptableRenderPass.Execute(context, ref renderingData)` with `CommandBuffer` + `RTHandle` — Unity 6's `Liquid2DPass.cs` is entirely Render Graph and cannot be copied.** See "Rendering port notes".
+Consumes the sim hand-off (`TryGetRenderData` CPU SoA — the active path; `TryGetRenderBuffers` GPU — deferred) instead of Transforms, and replicates the Unity 6 look.
+
+- **`Liquid2DFeature.cs`** — `ScriptableRendererFeature`; `Shader.Find`s the Blur/Effect shaders, builds their materials, constructs `Liquid2DPass`, `EnqueuePass`. Carries `NameTag`. **Ported verbatim** (not Render Graph).
+- **`Liquid2DPass.cs`** — `ScriptableRenderPass` at `RenderPassEvent.AfterRenderingTransparents`. **Rewritten** from Unity 6's Render Graph pass into imperative URP 14: RTs allocated in `OnCameraSetup` via `RenderingUtils.ReAllocateIfNeeded` (persistent `RTHandle`s, released in `Dispose`), everything else built into one `CommandBuffer` in `Execute`. Per frame: GrabAsBg (**two-target MRT** via `cmd.SetRenderTarget(RenderTargetIdentifier[], depth)`) → draw particles from sim (`cmd.DrawMeshInstanced`, per-descriptor nameTag gate, frustum cull, ≤1023/batch) → iterative Kawase blur with core-keep (`Blitter.BlitCameraTexture` + `CombineTwo`) → obstructor/occluder rendering-layer textures (`context.DrawRenderers` — **must flush the `cmd` first**) → composite via `Liquid2DEffect` (cutoff/cover/edge/opacity/pixel/distort keywords) → debug-display overlay. Scene-view camera draws particles straight to camera color and returns.
+- **`Liquid2DRenderFeatureSettings.cs`** — the serialized effect settings + nested `Blur`/`Distort`/`Edge`/`Pixel` + the `CopyFrom` merge (single source of truth for the per-frame Volume merge). `Obstructor/OccluderRenderingLayerMask` are **`uint`** (Unity 6 used the `RenderingLayerMask` struct, which doesn't exist in 2022.3 — see notes).
+- **`Volumes/Liquid2DVolume.cs`** — `VolumeComponent` overriding feature settings at runtime; `Liquid2DPass.UpdateSettings()` merges by `nameTag` each frame via `CopyFrom`.
+- **Shaders (`Runtime/Source/Shaders/`)** — 8 shaders (`Liquid2DParticle`(`Gpu`)/`Liquid2DParticleDisplay`/`Liquid2DBlur`/`Liquid2DEffect`/`CombineTwo`/`GrabAsBg`/`Clone`) + `ShaderLibrary/MathUtils.hlsl`, resolved by `Shader.Find("Custom/URP/2D/...")`. Ported verbatim (URP 14-compatible). ⚠ `Liquid2DParticleDisplay.shader` declares the name `Custom/URP/2D/Liquid2DDebugParticleDisplay`.
+- **`Systems/Debug/Liquid2DDebugParticleDisplay.cs`** — optional `DrawProcedural`-based particle overlay drawn by the pass (`ExecuteDraw(CommandBuffer)`; Unity 6 used `RasterCommandBuffer`).
 
 ## Physics port notes
 
@@ -82,13 +90,23 @@ The renderer must (eventually) consume the sim hand-off (`TryGetRenderData` / `T
   - Everything else (Collections 1.2.4 / Mathematics 1.2.6 / Burst 1.8 / the compute shader / C# 9) compiles unchanged.
 - **⚠ `Liquid2DSimulation.Mode` defaults to `Gpu`** (and `Liquid2DPhysicsConfig.mode` defaults to `Gpu`). Since GPU is not yet validated, **set `mode = Cpu`** for now. In CPU mode the CPU store is always current, so `GetPosition`/`Liquid2DDebugGizmos` work directly; in GPU mode they need `gpuReadbackToStore = true` (a synchronous GPU→CPU stall).
 - **asmdef:** `Runtime/Liquid2DSimulation.asmdef` references only `Unity.Burst` / `Unity.Collections` / `Unity.Mathematics` — the physics layer uses **no URP type** (`TryGetRenderBuffers` returns core `ComputeBuffer`). When the renderer is added it will need URP references (likely a separate rendering asmdef or new references here).
-- **GPU path** (`SphGpuSolver` + `Liquid2DSph.compute`) is present and API-compatible with 2022.3 but **unvalidated**; the Blelloch parallel prefix-sum kernel (512 threads/group) needs a functional re-test, and a serial fallback kernel exists as an escape hatch.
+- **GPU path** (`SphGpuSolver` + `Liquid2DSph.compute`) is ported and **validated in-editor** under `Mode=Gpu`; the Blelloch parallel prefix-sum kernel (512 threads/group) works. A serial fallback remains as an escape hatch: `SphGpuSolver.DebugUseSerialPrefixSum` (a `public static readonly bool = false` compile-time constant, ~line 87) — flip to `true` in code to switch to the serial prefix-sum kernel if the parallel one ever regresses.
 
-## Rendering port notes
+## Rendering port notes (DONE)
 
-- **Largest port cost.** Unity 6's `Liquid2DPass.cs` is entirely Render Graph (`RecordRenderGraph`, `AddRasterRenderPass<PassData>`, `TextureHandle`/`TextureDesc`, `builder.SetRenderAttachment`/`UseTexture`, `RendererListHandle`, `AddBlitPass`, `frameData.Get<Universal*Data>`). None of this exists in URP 14.0.12; rewrite imperatively as `ScriptableRenderPass.Execute` + `CommandBuffer` + `RTHandle`/temp RTs + `Blit`/`Blitter` + `CoreUtils.SetRenderTarget` (incl. the two-target MRT in GrabAsBg) + `context.DrawRenderers`.
-- **Ports ~verbatim once the pass shell exists:** the 8 shaders, the draw-call bodies (`DrawMeshInstanced`, `DrawProcedural` with `ComputeBuffer`), `MaterialPropertyBlock`, the sim→renderer hand-off, and the Volume `CopyFrom` merge. `DrawProcedural`/`ComputeBuffer`/`GraphicsBuffer`/`MaterialPropertyBlock` behave identically on 2022.3.
-- **【留白 / TODO：渲染层选择机制——Unity 6 用 `nameTag`(string) + URP Rendering Layers；2022 的旧框架曾用 `ELiquid2DLayer`(flags 枚举，已随旧代码删除)。渲染阶段需重新决定采用哪种。】**
+The Render Graph → URP 14 rewrite is complete. Key Unity 6 → URP 14.0.12 API mappings used in `Liquid2DPass.cs` (apply the same when extending it):
+
+- `RecordRenderGraph(RenderGraph, ContextContainer)` → `Execute(ScriptableRenderContext, ref RenderingData)` + `OnCameraSetup`.
+- `frameData.Get<Universal*Data>()` / `resourceData.activeColorTexture` → `renderingData.cameraData` + `renderingData.cameraData.renderer.cameraColorTargetHandle` (read the color target only in `OnCameraSetup`/`Execute`, cache it; never in the ctor/`AddRenderPasses`).
+- `renderGraph.CreateTexture(TextureDesc)` (transient) → persistent `RTHandle` fields + `RenderingUtils.ReAllocateIfNeeded(ref h, desc, ...)` in `OnCameraSetup` (**URP 14 name — URP 15+ renamed it `ReAllocateHandleIfNeeded`**), released in `Dispose`.
+- `builder.SetRenderAttachment(th, idx)` → `cmd.SetRenderTarget(...)` / `CoreUtils.SetRenderTarget(cmd, rt, ClearFlag, color)`; the **two-target MRT** (GrabAsBg) → `cmd.SetRenderTarget(RenderTargetIdentifier[]{rt0,rt1}, rt0)`.
+- `renderGraph.AddBlitPass` → `Blitter.BlitCameraTexture(cmd, src, dst)`.
+- `renderGraph.CreateRendererList` + `cmd.DrawRendererList` → `context.DrawRenderers(cullResults, ref drawSettings, ref filteringSettings)` — **`context`, not `cmd`, so flush (`context.ExecuteCommandBuffer(cmd); cmd.Clear();`) before calling it**. Build `drawSettings` via the inherited `protected CreateDrawingSettings(tag, ref renderingData, sort)`.
+- `RasterCommandBuffer` (RG) → classic `CommandBuffer`.
+- **`RenderingLayerMask` struct → `uint`** — the struct is 2023.1+/URP 16+ only; `FilteringSettings.renderingLayerMask` is `uint` in URP 14. (Inspector shows a raw number; a nicer mask popup drawer is a future polish.)
+- **Ported verbatim** (no API change): the 8 shaders, `DrawMeshInstanced`/`DrawProcedural`+`MaterialPropertyBlock`, the sim→renderer hand-off, the Volume `CopyFrom` merge.
+- **Correctness invariants preserved** (each was a deliberate Unity 6 fix): core-keep even/odd RT parity; clear obstructor/occluder to transparent every frame; occluder gated on `renderingLayerMask != 0`; `_PIXEL_BG` keyword set unconditionally; distortion disabled on opaque-Replace; `SetKeyword` state-change guard.
+- **GPU render path is wired + validated**: `Liquid2DPass.ExecuteParticles` takes the GPU branch (`ExecuteParticlesGpu`) when `Liquid2DSimulation.Mode == Gpu && TryGetRenderBuffers(...)` succeeds — per descriptor (nameTag gate) it binds the 5 `ComputeBuffer`s (`PositionsBuf`/`ColorsBuf`/`RadiiBuf`/`TypeIdsBuf`/`ActiveIdxBuf`) + sprite texture + `RenderScale` on a `MaterialPropertyBlock` and draws via `cmd.DrawProcedural(..., MeshTopology.Triangles, 6, count, mpb)` with the shared `Liquid2DParticleGpu` material; otherwise it falls back to the CPU `DrawMeshInstanced` path.
 
 ## Conventions / gotchas
 
