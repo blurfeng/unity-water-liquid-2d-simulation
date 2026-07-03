@@ -99,7 +99,7 @@ namespace Fs.Liquid2D
             "流量。每秒喷射的粒子数量。", 
             "Flow rate. Number of particles sprayed per second.", 
             "流量。毎秒噴射されるパーティクル数。")]
-        private float flowRate = 60f;
+        private float flowRate = 200f;
 
         [SerializeField, LocalizationTooltip("流量调整系数", "Flow rate adjustment factor", "流量調整係数")]
         private float flowRateFactor = 1f;
@@ -108,10 +108,10 @@ namespace Fs.Liquid2D
              "尺寸随机范围（最小值，最大值）", 
              "Size random range (minimum, maximum)", 
              "サイズランダム範囲（最小値、最大値）")]
-        private Vector2 sizeRandomRange = new Vector2(0.9f, 1.2f);
+        private Vector2 sizeRandomRange = new Vector2(1f, 1f);
 
         [SerializeField, LocalizationTooltip("喷射力大小", "Ejection force magnitude", "噴射力の大きさ")]
-        private float ejectForce = 40f;
+        private float ejectForce = 60f;
         
         [SerializeField, LocalizationTooltip("喷射力调整系数", "Ejection force adjustment factor", "噴射力調整係数")]
         private float ejectForceFactor = 1f;
@@ -770,6 +770,9 @@ namespace Fs.Liquid2D
         
         private void OnValidate()
         {
+            // 初始化新添加的数据。序列化数据无法通过构造函数自动初始化，需在编辑器回调中手动检查并初始化。
+            Liquid2DParticleConfig.TryInitOnEditorForList(liquidParticles);
+            
             if (liquidParticles.Count > 0)
             {
                 var d = liquidParticles[0].Descriptor;
