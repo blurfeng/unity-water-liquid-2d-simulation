@@ -15,6 +15,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - NEVER perform any git operation automatically (commit, push, branch, reset, etc.); the user handles these
 - NEVER create Unity `.meta` files by hand; leave them to Unity's automatic generation. Only create/edit the source asset (e.g. the `.cs`), then let the editor import it. (When *moving/copying* an existing asset on disk, move its existing `.meta` alongside it to preserve the GUID — that is not "creating" a meta.)
 - **Non-code assets down-porting risk**: copying non-code assets (scenes/prefabs/materials/`.asset`) from the Unity 6 repo into this 2022 project can break silently (version/GUID drift). Only copy a non-code asset after confirming it is truly compatible; otherwise ask the user to **create the asset in the 2022 editor first**, then edit it referencing the Unity 6 version. Copying `.cs`/`.compute`/`.hlsl`/`.shader` (text) + their `.meta` is safe.
+- **本仓库(-2022)原则上不改 `Runtime`/`Editor` 源代码**：源码只从主仓库 `unity-water-liquid-2d-simulation`（`dev`/`main`）合并；本仓库仅用于制作 Samples。单源合并的源码改动一律落在**主仓库 `dev` 分支**（详见下「仓库分工」）。
+
+## 仓库分工 (Repository roles) — READ FIRST
+
+> [!IMPORTANT]
+> **本项目采用「双仓库 + 单源」结构：源代码唯一真源在主仓库并通过版本宏同时支持 U6 与 2022；本 `-2022` 仓库原则上不改源码、只从主仓库合并，另用于制作 Samples。**
+
+- **主仓库（源码真源）：** `F:\ProjectUnity\unity-water-liquid-2d-simulation`（Unity 6 / URP 17）。**单源合并工作在其 `dev` 分支进行**——同一套 `Runtime`/`Editor` 源码用 `#if` 版本宏同时支持 Unity 6 与 Unity 2022，最终以一个 UPM 链接分发。
+- **本仓库（`-2022`，Unity 2022.3 / URP 14）：** 主仓库源码在 2022 下的消费方 + **Samples 制作场**。**原则上不在此改 `Runtime`/`Editor` 源代码**，源码经 git 从主仓库合并下来；本仓库主要用 2022 编辑器制作/维护 Samples 场景与资源。现有源码是移植阶段产物（见下「移植状态」），单源化后将由主仓库合并版本取代。
+- **为何两仓库而非一仓库切分支：** 引擎大版本不同（6000.x ↔ 2022.3），同仓库切分支会触发 `Library` 全量重生成，极耗时、碍开发；故用两个独立工作副本。
+- **版本宏策略（单源核心）：** 以 `#if UNITY_6000_0_OR_NEWER` 区分四类分歧——Render Graph↔命令式渲染管线、`RenderingLayerMask` struct↔`uint`、`RasterCommandBuffer`↔`CommandBuffer`、`Rigidbody2D.linearVelocity`↔`velocity`。渲染分歧本质是 URP/Render Graph；若将来需与引擎版本解耦，可改用 asmdef `versionDefines` 定义 `URP_17_0_OR_NEWER`（一处 asmdef + 换符号即可）。渲染 Pass 的 RG/命令式两套编排以**互斥 `#if` 分文件**承载。
+- **Samples：** 由用户自行制作、方式自行抉择；「先在 2022 做、再让 U6 前向升级」仅为**参考惯例、非硬性规则**（有时不可靠）。唯一版本锁定的硬阻断是 URP `Renderer2D` 资产——**勿跨版本共享**（U6 内嵌 URP17 probeVolume 字段、mask 序列化为 struct）。
 
 ## 移植状态 (Porting status) — READ FIRST
 
