@@ -258,7 +258,14 @@ public class HandlerUI : MonoBehaviour
     private void EnsureEventSystem()
     {
         if (FindFirstObjectByType<EventSystem>()) return;
+        // 新版 InputSystem 启用时用 InputSystemUIInputModule，否则回退旧版 StandaloneInputModule。
+        // Use InputSystemUIInputModule when the new InputSystem is active; otherwise fall back to the legacy StandaloneInputModule.
+        // 新しい InputSystem が有効な場合は InputSystemUIInputModule を、そうでなければ旧来の StandaloneInputModule を使用します。
+#if ENABLE_INPUT_SYSTEM
+        new GameObject("EventSystem", typeof(EventSystem), typeof(UnityEngine.InputSystem.UI.InputSystemUIInputModule));
+#else
         new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
+#endif
     }
 
     private static void ClearChildren(Transform t)
