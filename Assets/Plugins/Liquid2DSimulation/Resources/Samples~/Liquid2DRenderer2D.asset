@@ -1,226 +1,6 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
---- !u!114 &-9061980609469922955
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 58ccafab4e6e1e74fb8316d4c2cc72de, type: 3}
-  m_Name: Liquid2DFeature Milk
-  m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DFeature
-  m_Active: 1
-  shaderBlur: {fileID: 4800000, guid: ba2a65ae22134d45b98c9bead0df1a34, type: 3}
-  shaderEffect: {fileID: 4800000, guid: 22ec51fd89bf43c799b2934514998e2d, type: 3}
-  renderFeatureSettings:
-    NameTag: PixelMilk
-    ObstructorRenderingLayerMask:
-      serializedVersion: 0
-      m_Bits: 2
-    OccluderRenderingLayerMask:
-      serializedVersion: 0
-      m_Bits: 4
-    Cutoff: 0.45
-    OpacityMode: 0
-    OpacityValue: 1
-    CoverColor: {r: 0, g: 0, b: 0, a: 0}
-    Blur:
-      Iterations: 7
-      BlurSpread: 0.6
-      CoreKeepIntensity: 0.4
-      ScaleFactor: 4
-      IgnoreBgColor: 0
-      BlurBgColor: {r: 0, g: 0, b: 0, a: 0}
-      BlurBgColorIntensity: 0
-    Distort:
-      Enable: 0
-      Magnitude: 0.1
-      Frequency: 380
-      Amplitude: 0.008
-      DistortSpeed: {x: 0.1, y: 1}
-      DistortTimeFactors: {x: 0.3, y: -0.4, z: 0.1, w: 0.5}
-      NoiseCoordOffset: 4
-    Edge:
-      Enable: 0
-      EdgeRange: 0.6
-      EdgeIntensity: 0.1
-      EdgeColor: {r: 1, g: 1, b: 1, a: 0.8}
-      BlendType: 0
-    Pixel:
-      Enable: 1
-      PixelSize: 6
-      PixelBg: 1
---- !u!114 &-6077797710476843767
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 58ccafab4e6e1e74fb8316d4c2cc72de, type: 3}
-  m_Name: Liquid2DFeatureWaterMinisize
-  m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DFeature
-  m_Active: 1
-  shaderBlur: {fileID: 4800000, guid: ba2a65ae22134d45b98c9bead0df1a34, type: 3}
-  shaderEffect: {fileID: 4800000, guid: 22ec51fd89bf43c799b2934514998e2d, type: 3}
-  renderFeatureSettings:
-    NameTag: WaterMinisize
-    ObstructorRenderingLayerMask:
-      serializedVersion: 0
-      m_Bits: 2
-    OccluderRenderingLayerMask:
-      serializedVersion: 0
-      m_Bits: 4
-    Cutoff: 0.45
-    OpacityMode: 2
-    OpacityValue: 0.4
-    CoverColor: {r: 0, g: 0.7650552, b: 1, a: 1}
-    Blur:
-      Iterations: 4
-      BlurSpread: 0.8
-      CoreKeepIntensity: 0.4
-      ScaleFactor: 4
-      IgnoreBgColor: 0
-      BlurBgColor: {r: 0, g: 0, b: 0, a: 0}
-      BlurBgColorIntensity: 0
-    Distort:
-      Enable: 1
-      Magnitude: 0.1
-      Frequency: 380
-      Amplitude: 0.008
-      DistortSpeed: {x: 0.1, y: 1}
-      DistortTimeFactors: {x: 0.3, y: -0.4, z: 0.1, w: 0.5}
-      NoiseCoordOffset: 4
-    Edge:
-      Enable: 1
-      EdgeRange: 1
-      EdgeIntensity: 0.305
-      EdgeColor: {r: 0.1462264, g: 0.5164853, b: 1, a: 0.7176471}
-      BlendType: 0
-    Pixel:
-      Enable: 0
-      PixelSize: 6
-      PixelBg: 1
---- !u!114 &11400000
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 11145981673336645838492a2d98e247, type: 3}
-  m_Name: Liquid2DRenderer2D
-  m_EditorClassIdentifier: 
-  debugShaders:
-    debugReplacementPS: {fileID: 4800000, guid: cf852408f2e174538bcd9b7fda1c5ae7, type: 3}
-    hdrDebugViewPS: {fileID: 4800000, guid: 573620ae32aec764abd4d728906d2587, type: 3}
-    probeVolumeSamplingDebugComputeShader: {fileID: 7200000, guid: 53626a513ea68ce47b59dc1299fe3959, type: 3}
-  probeVolumeResources:
-    probeVolumeDebugShader: {fileID: 0}
-    probeVolumeFragmentationDebugShader: {fileID: 0}
-    probeVolumeOffsetDebugShader: {fileID: 0}
-    probeVolumeSamplingDebugShader: {fileID: 0}
-    probeSamplingDebugMesh: {fileID: 0}
-    probeSamplingDebugTexture: {fileID: 0}
-    probeVolumeBlendStatesCS: {fileID: 0}
-  m_RendererFeatures:
-  - {fileID: 8380843845757841626}
-  - {fileID: 4213133728103814185}
-  - {fileID: 7169886000912180024}
-  - {fileID: -9061980609469922955}
-  - {fileID: -6077797710476843767}
-  m_RendererFeatureMap: da306af812bd4e742954d8b6cd0e783a38a36a84548d8063754111eba5603d82096558122f53a7ab
-  m_UseNativeRenderPass: 0
-  m_LayerMask:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_TransparencySortMode: 0
-  m_TransparencySortAxis: {x: 0, y: 1, z: 0}
-  m_HDREmulationScale: 1
-  m_LightRenderTextureScale: 0.5
-  m_LightBlendStyles:
-  - name: Multiply
-    maskTextureChannel: 0
-    blendMode: 1
-  - name: Additive
-    maskTextureChannel: 0
-    blendMode: 0
-  - name: Multiply with Mask
-    maskTextureChannel: 1
-    blendMode: 1
-  - name: Additive with Mask
-    maskTextureChannel: 1
-    blendMode: 0
-  m_UseDepthStencilBuffer: 1
-  m_UseCameraSortingLayersTexture: 0
-  m_CameraSortingLayersTextureBound: -1
-  m_CameraSortingLayerDownsamplingMethod: 0
-  m_MaxLightRenderTextureCount: 16
-  m_MaxShadowRenderTextureCount: 1
-  m_PostProcessData: {fileID: 11400000, guid: 41439944d30ece34e96484bdb6645b55, type: 2}
-  m_DefaultMaterialType: 0
-  m_DefaultCustomMaterial: {fileID: 2100000, guid: a97c105638bdf8b4a8650670310a4cd3, type: 2}
---- !u!114 &4213133728103814185
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 58ccafab4e6e1e74fb8316d4c2cc72de, type: 3}
-  m_Name: Liquid2DFeature Magma
-  m_EditorClassIdentifier: Assembly-CSharp::Fs.Liquid2D.Liquid2DFeature
-  m_Active: 1
-  shaderBlur: {fileID: 4800000, guid: ba2a65ae22134d45b98c9bead0df1a34, type: 3}
-  shaderEffect: {fileID: 4800000, guid: 22ec51fd89bf43c799b2934514998e2d, type: 3}
-  renderFeatureSettings:
-    NameTag: Magma
-    ObstructorRenderingLayerMask:
-      serializedVersion: 0
-      m_Bits: 2
-    OccluderRenderingLayerMask:
-      serializedVersion: 0
-      m_Bits: 0
-    Cutoff: 0.14
-    OpacityMode: 0
-    OpacityValue: 1
-    CoverColor: {r: 0, g: 0, b: 0, a: 0}
-    Blur:
-      Iterations: 4
-      BlurSpread: 0.6
-      CoreKeepIntensity: 0.4
-      ScaleFactor: 4
-      IgnoreBgColor: 0
-      BlurBgColor: {r: 0.16078432, g: 0, b: 0, a: 1}
-      BlurBgColorIntensity: 0.4
-    Distort:
-      Enable: 1
-      Magnitude: 0.1
-      Frequency: 380
-      Amplitude: 0.008
-      DistortSpeed: {x: 0.1, y: 1}
-      DistortTimeFactors: {x: 0.3, y: -0.4, z: 0.1, w: 0.5}
-      NoiseCoordOffset: 4
-    Edge:
-      Enable: 0
-      EdgeRange: 0.6
-      EdgeIntensity: 0.1
-      EdgeColor: {r: 1, g: 1, b: 1, a: 0.8}
-      BlendType: 0
-    Pixel:
-      Enable: 0
-      PixelSize: 6
-      PixelBg: 1
---- !u!114 &7169886000912180024
+--- !u!114 &-8451847886382414282
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -231,18 +11,16 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 58ccafab4e6e1e74fb8316d4c2cc72de, type: 3}
   m_Name: Liquid2DFeature Water Mix
-  m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DFeature
+  m_EditorClassIdentifier: 
   m_Active: 1
   shaderBlur: {fileID: 4800000, guid: ba2a65ae22134d45b98c9bead0df1a34, type: 3}
   shaderEffect: {fileID: 4800000, guid: 22ec51fd89bf43c799b2934514998e2d, type: 3}
   renderFeatureSettings:
     NameTag: WaterMix
     ObstructorRenderingLayerMask:
-      serializedVersion: 0
-      m_Bits: 2
+      _bits: 2
     OccluderRenderingLayerMask:
-      serializedVersion: 0
-      m_Bits: 0
+      _bits: 4
     Cutoff: 0.45
     OpacityMode: 0
     OpacityValue: 1
@@ -273,7 +51,7 @@ MonoBehaviour:
       Enable: 0
       PixelSize: 6
       PixelBg: 1
---- !u!114 &8380843845757841626
+--- !u!114 &-945065106664826556
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -284,18 +62,16 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 58ccafab4e6e1e74fb8316d4c2cc72de, type: 3}
   m_Name: Liquid2DFeature Water
-  m_EditorClassIdentifier: Assembly-CSharp::Fs.Liquid2D.Liquid2DFeature
+  m_EditorClassIdentifier: 
   m_Active: 1
   shaderBlur: {fileID: 4800000, guid: ba2a65ae22134d45b98c9bead0df1a34, type: 3}
   shaderEffect: {fileID: 4800000, guid: 22ec51fd89bf43c799b2934514998e2d, type: 3}
   renderFeatureSettings:
     NameTag: Water
     ObstructorRenderingLayerMask:
-      serializedVersion: 0
-      m_Bits: 2
+      _bits: 2
     OccluderRenderingLayerMask:
-      serializedVersion: 0
-      m_Bits: 0
+      _bits: 4
     Cutoff: 0.6
     OpacityMode: 1
     OpacityValue: 0.3
@@ -326,3 +102,173 @@ MonoBehaviour:
       Enable: 0
       PixelSize: 6
       PixelBg: 0
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 11145981673336645838492a2d98e247, type: 3}
+  m_Name: Liquid2DRenderer2D
+  m_EditorClassIdentifier: 
+  debugShaders:
+    debugReplacementPS: {fileID: 4800000, guid: cf852408f2e174538bcd9b7fda1c5ae7, type: 3}
+    hdrDebugViewPS: {fileID: 4800000, guid: 573620ae32aec764abd4d728906d2587, type: 3}
+  m_RendererFeatures:
+  - {fileID: -945065106664826556}
+  - {fileID: 3232522451734028978}
+  - {fileID: -8451847886382414282}
+  - {fileID: 7770631667835380}
+  m_RendererFeatureMap: 4459a0eb4a74e2f2b2e214100b3adc2c36468a8c2001b58af4e13d2c599b1b00
+  m_UseNativeRenderPass: 0
+  m_LayerMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_TransparencySortMode: 0
+  m_TransparencySortAxis: {x: 0, y: 1, z: 0}
+  m_HDREmulationScale: 1
+  m_LightRenderTextureScale: 0.5
+  m_LightBlendStyles:
+  - name: Multiply
+    maskTextureChannel: 0
+    blendMode: 1
+  - name: Additive
+    maskTextureChannel: 0
+    blendMode: 0
+  - name: Multiply with Mask
+    maskTextureChannel: 1
+    blendMode: 1
+  - name: Additive with Mask
+    maskTextureChannel: 1
+    blendMode: 0
+  m_UseDepthStencilBuffer: 1
+  m_UseCameraSortingLayersTexture: 0
+  m_CameraSortingLayersTextureBound: -1
+  m_CameraSortingLayerDownsamplingMethod: 0
+  m_MaxLightRenderTextureCount: 16
+  m_MaxShadowRenderTextureCount: 1
+  m_ShapeLightShader: {fileID: 4800000, guid: d79e1c784eaf80c4585c0be7391f757a, type: 3}
+  m_ShapeLightVolumeShader: {fileID: 4800000, guid: 7e60080c8cd24a2468cb08b4bfee5606, type: 3}
+  m_PointLightShader: {fileID: 4800000, guid: e35a31e1679aeff489e202f5cc4853d5, type: 3}
+  m_PointLightVolumeShader: {fileID: 4800000, guid: c7d04ca57e5449d49ad9cee1c604bc26, type: 3}
+  m_CoreBlitShader: {fileID: 4800000, guid: 93446b5c5339d4f00b85c159e1159b7c, type: 3}
+  m_BlitHDROverlay: {fileID: 4800000, guid: a89bee29cffa951418fc1e2da94d1959, type: 3}
+  m_CoreBlitColorAndDepthPS: {fileID: 4800000, guid: d104b2fc1ca6445babb8e90b0758136b, type: 3}
+  m_SamplingShader: {fileID: 4800000, guid: 04c410c9937594faa893a11dceb85f7e, type: 3}
+  m_ProjectedShadowShader: {fileID: 4800000, guid: ce09d4a80b88c5a4eb9768fab4f1ee00, type: 3}
+  m_SpriteShadowShader: {fileID: 4800000, guid: 44fc62292b65ab04eabcf310e799ccf6, type: 3}
+  m_SpriteUnshadowShader: {fileID: 4800000, guid: de02b375720b5c445afe83cd483bedf3, type: 3}
+  m_GeometryUnshadowShader: {fileID: 4800000, guid: 77774d9009bb81447b048c907d4c6273, type: 3}
+  m_FallbackErrorShader: {fileID: 4800000, guid: e6e9a19c3678ded42a3bc431ebef7dbd, type: 3}
+  m_PostProcessData: {fileID: 11400000, guid: 41439944d30ece34e96484bdb6645b55, type: 2}
+  m_FallOffLookup: {fileID: 2800000, guid: 5688ab254e4c0634f8d6c8e0792331ca, type: 3}
+  m_DefaultMaterialType: 0
+  m_DefaultCustomMaterial: {fileID: 2100000, guid: a97c105638bdf8b4a8650670310a4cd3, type: 2}
+  m_DefaultLitMaterial: {fileID: 2100000, guid: a97c105638bdf8b4a8650670310a4cd3, type: 2}
+  m_DefaultUnlitMaterial: {fileID: 2100000, guid: 9dfc825aed78fcd4ba02077103263b40, type: 2}
+  m_DefaultMaskMaterial: {fileID: 2100000, guid: 15d0c3709176029428a0da2f8cecf0b5, type: 2}
+--- !u!114 &7770631667835380
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 58ccafab4e6e1e74fb8316d4c2cc72de, type: 3}
+  m_Name: Liquid2DFeature Milk
+  m_EditorClassIdentifier: 
+  m_Active: 1
+  shaderBlur: {fileID: 4800000, guid: ba2a65ae22134d45b98c9bead0df1a34, type: 3}
+  shaderEffect: {fileID: 4800000, guid: 22ec51fd89bf43c799b2934514998e2d, type: 3}
+  renderFeatureSettings:
+    NameTag: PixelMilk
+    ObstructorRenderingLayerMask:
+      _bits: 2
+    OccluderRenderingLayerMask:
+      _bits: 4
+    Cutoff: 0.45
+    OpacityMode: 0
+    OpacityValue: 1
+    CoverColor: {r: 0, g: 0, b: 0, a: 0}
+    Blur:
+      Iterations: 7
+      BlurSpread: 0.6
+      CoreKeepIntensity: 0.4
+      ScaleFactor: 4
+      IgnoreBgColor: 0
+      BlurBgColor: {r: 0, g: 0, b: 0, a: 0}
+      BlurBgColorIntensity: 0
+    Distort:
+      Enable: 0
+      Magnitude: 0.1
+      Frequency: 380
+      Amplitude: 0.008
+      DistortSpeed: {x: 0.1, y: 1}
+      DistortTimeFactors: {x: 0.3, y: -0.4, z: 0.1, w: 0.5}
+      NoiseCoordOffset: 4
+    Edge:
+      Enable: 0
+      EdgeRange: 0.6
+      EdgeIntensity: 0.1
+      EdgeColor: {r: 1, g: 1, b: 1, a: 0.8}
+      BlendType: 0
+    Pixel:
+      Enable: 1
+      PixelSize: 6
+      PixelBg: 1
+--- !u!114 &3232522451734028978
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 58ccafab4e6e1e74fb8316d4c2cc72de, type: 3}
+  m_Name: Liquid2DFeature Magma
+  m_EditorClassIdentifier: 
+  m_Active: 1
+  shaderBlur: {fileID: 4800000, guid: ba2a65ae22134d45b98c9bead0df1a34, type: 3}
+  shaderEffect: {fileID: 4800000, guid: 22ec51fd89bf43c799b2934514998e2d, type: 3}
+  renderFeatureSettings:
+    NameTag: Magma
+    ObstructorRenderingLayerMask:
+      _bits: 2
+    OccluderRenderingLayerMask:
+      _bits: 4
+    Cutoff: 0.14
+    OpacityMode: 0
+    OpacityValue: 1
+    CoverColor: {r: 0, g: 0, b: 0, a: 0}
+    Blur:
+      Iterations: 4
+      BlurSpread: 0.6
+      CoreKeepIntensity: 0.4
+      ScaleFactor: 4
+      IgnoreBgColor: 0
+      BlurBgColor: {r: 0.16078432, g: 0, b: 0, a: 1}
+      BlurBgColorIntensity: 0.4
+    Distort:
+      Enable: 1
+      Magnitude: 0.1
+      Frequency: 380
+      Amplitude: 0.008
+      DistortSpeed: {x: 0.1, y: 1}
+      DistortTimeFactors: {x: 0.3, y: -0.4, z: 0.1, w: 0.5}
+      NoiseCoordOffset: 4
+    Edge:
+      Enable: 0
+      EdgeRange: 0.6
+      EdgeIntensity: 0.1
+      EdgeColor: {r: 1, g: 1, b: 1, a: 0.8}
+      BlendType: 0
+    Pixel:
+      Enable: 0
+      PixelSize: 6
+      PixelBg: 1
