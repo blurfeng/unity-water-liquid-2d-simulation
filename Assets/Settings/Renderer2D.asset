@@ -135,7 +135,7 @@ MonoBehaviour:
       m_Bits: 2
     OccluderRenderingLayerMask:
       serializedVersion: 0
-      m_Bits: 0
+      m_Bits: 4
     Cutoff: 0.14
     OpacityMode: 0
     OpacityValue: 1
@@ -188,7 +188,7 @@ MonoBehaviour:
       m_Bits: 2
     OccluderRenderingLayerMask:
       serializedVersion: 0
-      m_Bits: 0
+      m_Bits: 4
     Cutoff: 0.45
     OpacityMode: 0
     OpacityValue: 1
@@ -241,7 +241,7 @@ MonoBehaviour:
       m_Bits: 2
     OccluderRenderingLayerMask:
       serializedVersion: 0
-      m_Bits: 0
+      m_Bits: 4
     Cutoff: 0.6
     OpacityMode: 1
     OpacityValue: 0.3
