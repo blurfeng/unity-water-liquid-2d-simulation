@@ -7,7 +7,7 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: Liquid2dParticle
+  m_Name: Liquid2DParticle
   m_Shader: {fileID: 4800000, guid: d659843dbd6b483e9ee52f4bee91704c, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
