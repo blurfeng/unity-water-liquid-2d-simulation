@@ -1,0 +1,460 @@
+using System.Collections.Generic;
+using Fs.Liquid2D.Localization;
+using Unity.Collections;
+using Unity.Mathematics;
+using UnityEngine;
+
+namespace Fs.Liquid2D
+{
+    /// <summary>
+    /// 测试用粒子显示组件（正式流程是走 Renderer 2D Data 中配置的 Feature）。运行时流体粒子独立可视化组件。通过 <c>Graphics.DrawProcedural</c> 将所有活跃粒子渲染到场景（quad 由 shader 程序化生成，无需 mesh），
+    /// 数据直接来自 <see cref="Liquid2DSimulation"/> SoA，不依赖 URP Render Feature。
+    /// 支持速度渐变与模拟颜色两种着色模式；配套着色器 <c>Custom/URP/2D/Liquid2DParticleDisplay</c>。
+    /// Runtime standalone fluid-particle visualization. Renders all active particles via
+    /// <c>Graphics.DrawProcedural</c> (the quad is generated in-shader, no mesh required), reading data directly from
+    /// <see cref="Liquid2DSimulation"/> SoA without a URP Render Feature. Supports simulation-colour and velocity-gradient
+    /// shading modes; companion shader: <c>Custom/URP/2D/Liquid2DParticleDisplay</c>.
+    /// ランタイム流体パーティクル独立可視化。<c>Graphics.DrawProcedural</c> でアクティブ粒子を描画（quad はシェーダー生成、mesh 不要）。
+    /// URP Render Feature 不要で <see cref="Liquid2DSimulation"/> SoA から直接データを取得。
+    /// シミュレーション色・速度グラデーションの 2 モードに対応；専用シェーダー <c>Custom/URP/2D/Liquid2DParticleDisplay</c>。
+    /// </summary>
+    [AddComponentMenu("Liquid 2D/Gameplay/Liquid 2D Debug Particle Display")]
+    public class Liquid2DDebugParticleDisplay : MonoBehaviour
+    {
+        // ── 总开关 Master toggle マスタースイッチ ──────────────────────────────
+        [SerializeField, LocalizationTooltip(
+            "总开关：关闭后停止绘制，GPU 缓冲保留不释放。",
+            "Master toggle: stops rendering when off; GPU buffers are retained.",
+            "マスタースイッチ：オフで描画停止、GPU バッファは保持されます。")]
+        private bool displayEnabled = true;
+
+        // ── 渲染资源 Rendering resources 描画リソース ──────────────────────────
+        // 形状由片元裁剪决定、quad 在 shader 内程序化生成，故无需 mesh。
+        // Shape is decided in the fragment stage and the quad is generated in-shader, so no mesh is needed.
+        // 形状はフラグメントで決定し quad はシェーダー内生成のため mesh は不要。
+        [Header("Rendering")]
+        [SerializeField, LocalizationTooltip(
+            "使用 Custom/URP/2D/Liquid2DParticleDisplay 着色器的材质。",
+            "Material using the Custom/URP/2D/Liquid2DParticleDisplay shader.",
+            "Custom/URP/2D/Liquid2DParticleDisplay シェーダーを使用するマテリアル。")]
+        private Material material;
+
+        [SerializeField, LocalizationTooltip(
+            "可视尺寸全局倍率（最终可视半径 = radius × renderScale × 此值）。",
+            "Global visual scale multiplier (final visual radius = radius × renderScale × this).",
+            "可視サイズ全体倍率（最終可視半径 = radius × renderScale × この値）。")]
+        private float scale = 0.4f;
+
+        // ── 颜色模式 Colour mode カラーモード ──────────────────────────────────
+        [Header("Colour")]
+        [SerializeField, LocalizationTooltip(
+            "颜色模式：VelocityGradient=按速度大小映射渐变色；Simulation=粒子模拟自身颜色。",
+            "Colour mode: Simulation = per-particle simulation colour; VelocityGradient = map speed to gradient.",
+            "カラーモード：Simulation=粒子自身の色；VelocityGradient=速さでグラデーション色。")]
+        private ColourMode colourMode = ColourMode.VelocityGradient;
+
+        [SerializeField, LocalizationTooltip(
+            "速度渐变色（ColourMode = VelocityGradient 时生效）。",
+            "Velocity colour gradient (active when ColourMode = VelocityGradient).",
+            "速度グラデーション色（ColourMode = VelocityGradient のとき有効）。")]
+        private Gradient colourMap;
+
+        [SerializeField, Min(2), LocalizationTooltip(
+            "渐变贴图宽度（像素）。",
+            "Gradient texture width in pixels.",
+            "グラデーションテクスチャの幅（ピクセル）。")]
+        private int gradientResolution = 64;
+
+        [SerializeField, LocalizationTooltip(
+            "速度渐变上限：速度达到或超过此值时显示渐变末端颜色。",
+            "Velocity gradient upper bound: at or above this speed the gradient end colour is shown.",
+            "速度グラデーション上限：この速度以上でグラデーション末端色を表示。")]
+        private float velocityDisplayMax = 10f;
+        
+        [SerializeField, LocalizationTooltip(
+            "当前帧活跃粒子数（仅用于调试显示）。",
+            "Active particle count this frame (debug display only).",
+            "現在フレームのアクティブ粒子数（デバッグ表示のみ）。")]
+        private int currentParticleCount;
+
+        // ── 颜色模式枚举 ColourMode enum カラーモード列挙 ──────────────────────
+        /// <summary>
+        /// 粒子颜色显示模式。
+        /// Particle colour display mode.
+        /// パーティクルカラー表示モード。
+        /// </summary>
+        public enum ColourMode
+        {
+            /// <summary>按速度大小映射渐变色图。 // Map speed to gradient colour map. // 速さでグラデーションカラーマップにマッピング。</summary>
+            VelocityGradient = 0,
+            
+            /// <summary>使用粒子模拟自身颜色（RGBA）。 // Use per-particle simulation colour (RGBA). // 粒子自身のシミュレーション色（RGBA）。</summary>
+            Simulation = 1,
+        }
+
+        // ── 实例注册表 Instance registry インスタンスレジストリ ──────────────────
+        // 供 Liquid2DPass 的 Overlay Pass 在 Effect Pass 之后统一绘制（Editor + Build），
+        // 避免每帧 FindObjectsByType 全场景扫描。
+        // For Liquid2DPass's Overlay Pass to draw after the Effect Pass (Editor + Build),
+        // avoiding a per-frame full-scene FindObjectsByType scan.
+        // Liquid2DPass の Overlay Pass が Effect Pass の後に統一描画するため（Editor + Build）、
+        // 毎フレームの FindObjectsByType 全シーン走査を回避します。
+        private static readonly List<Liquid2DDebugParticleDisplay> _instances = new List<Liquid2DDebugParticleDisplay>();
+
+        /// <summary>
+        /// 当前已启用的实例列表（只读）。 // Currently enabled instances (read-only). // 現在有効なインスタンス一覧（読み取り専用）。
+        /// </summary>
+        public static IReadOnlyList<Liquid2DDebugParticleDisplay> Instances => _instances;
+
+        // ── 内部状态 Internal state 内部状態 ────────────────────────────────────
+        private GraphicsBuffer _positionBuffer;
+        private GraphicsBuffer _velocityBuffer;
+        private GraphicsBuffer _colorBuffer;
+        private GraphicsBuffer _scaleBuffer;
+
+        private Vector2[] _positions;
+        private Vector2[] _velocities;
+        private Vector4[] _colors;
+        private float[]   _scales;
+
+        private int       _bufferCapacity = -1;
+        private Texture2D _gradientTexture;
+        private bool      _gradientDirty = true;
+
+        private static readonly int _idPositions   = Shader.PropertyToID("_Positions");
+        private static readonly int _idVelocities  = Shader.PropertyToID("_Velocities");
+        private static readonly int _idColors      = Shader.PropertyToID("_Colors");
+        private static readonly int _idScales      = Shader.PropertyToID("_Scales");
+        private static readonly int _idColourMap   = Shader.PropertyToID("_ColourMap");
+        private static readonly int _idVelocityMax = Shader.PropertyToID("_VelocityMax");
+        private static readonly int _idColourMode  = Shader.PropertyToID("_ColourMode");
+
+        // GPU 常驻路径专用。 // GPU resident path only. // GPU 常駐パス専用。
+        private static readonly int _idRadii        = Shader.PropertyToID("_Radii");
+        private static readonly int _idTypeIds      = Shader.PropertyToID("_TypeIds");
+        private static readonly int _idActiveIndices = Shader.PropertyToID("_ActiveIndices");
+        private static readonly int _idTargetType   = Shader.PropertyToID("_TargetType");
+        private static readonly int _idRenderScale  = Shader.PropertyToID("_RenderScale");
+        private static readonly int _idDisplayScale = Shader.PropertyToID("_DisplayScale");
+        private const string GpuProceduralKeyword = "_GPU_PROCEDURAL";
+
+        private MaterialPropertyBlock _gpuMpb;
+
+        // 绘制由 Liquid2DPass 的 Overlay Pass 负责（在 Effect Pass 之后，Editor + Build 一致），所以需要缓存数据供其读取。
+        // 这样粒子始终画在水体效果之上、不被扰动 Shader 干扰。
+        // Drawing is handled by Liquid2DPass's Overlay Pass (after the Effect Pass, same for Editor + Build), so data is cached
+        // for it. This keeps particles drawn above the water effect, undisturbed by the distortion shader.
+        // 描画は Liquid2DPass の Overlay Pass が担当（Effect Pass の後、Editor + Build 共通）するため、データをキャッシュします。
+        private bool _pendingDraw;
+        private int  _pendingCount;
+        private bool _pendingGpuDraw;
+        private ComputeBuffer _cachedGpuPositions;
+        private ComputeBuffer _cachedGpuColors;
+        private ComputeBuffer _cachedGpuRadii;
+        private ComputeBuffer _cachedGpuTypeIds;
+        private ComputeBuffer _cachedGpuActive;
+        private ComputeBuffer _cachedGpuVelocities;
+        private int _cachedGpuCount;
+        private IReadOnlyList<Liquid2DParticleDescriptor> _cachedGpuDescriptors;
+
+        private void LateUpdate()
+        {
+            if (!Application.isPlaying)
+            {
+                currentParticleCount = 0;
+                return;
+            }
+            // 更新当前粒子数以供调试显示，数据来源于 Simulation 的 TryGetRenderData（GPU 模式下该数据由 Simulation 内部维护并更新，非每帧都能拿到）。
+            // Update current particle count for debug display, sourced from Simulation's TryGetRenderData (under GPU mode this data is maintained and updated internally by Simulation, not guaranteed every frame).
+            // デバッグ表示用の現在の粒子数を更新します。Simulation の TryGetRenderData から取得します（GPU モードではこのデータは Simulation 内部で管理・更新され、毎フレーム取得できるとは限りません）。
+            if (Liquid2DSimulation.TryGetRenderData(out _, out _, out int count, out _))
+                currentParticleCount = count;
+            else
+                currentParticleCount = 0;
+
+            // 每帧统一清空待绘制标志：未启用/无数据时保持 false，避免 Editor Overlay Pass 绘制陈旧数据。
+            // 标志不再由 ExecuteDraw 一次性消费——这样同一帧的多个相机（Game + Scene 视图）都能绘制同一份缓存；
+            // 否则先渲染的相机会吃掉标志、令另一相机当帧漏画 → 选中对象时 Scene 视图重绘抢标志导致闪烁。
+            // Reset the pending flags every frame: stay false when disabled / no data so the Editor Overlay Pass won't draw
+            // stale data. The flags are no longer consumed (one-shot) by ExecuteDraw, so every camera in the same frame
+            // (Game + Scene view) draws the same cache; otherwise the first camera steals the flag and the other misses the
+            // frame → flicker when the Scene view repaints on selection.
+            // 毎フレーム待ち描画フラグをリセット。ExecuteDraw で消費しないため、同一フレームの複数カメラが同じキャッシュを描画。
+            _pendingDraw = false;
+            _pendingGpuDraw = false;
+
+            if (!displayEnabled) return;
+            if (!material) return;
+
+            // GPU 模式：直读常驻 GPU 缓冲，程序化绘制（每帧最新、零回读，与正式 Feature 路径一致）。
+            // GPU 模式下无论本帧是否拿到缓冲都直接返回，绝不回落到读 CPU store 的 CPU 路径（store 在 GPU 模式下是陈旧数据）。
+            // GPU mode: read resident GPU buffers and draw procedurally (per-frame latest, zero readback; same as the Feature path).
+            // In GPU mode always return here; never fall through to the CPU store path (the store is stale under GPU mode).
+            // GPU モード：常駐 GPU バッファを直読してプロシージャル描画。GPU モードでは常に return し、CPU store パスへ回落しません。
+            if (Liquid2DSimulation.Mode == Liquid2DSimulationMode.Gpu)
+            {
+                material.EnableKeyword(GpuProceduralKeyword);
+                _pendingGpuDraw = Liquid2DSimulation.TryGetRenderBuffers(
+                    out _cachedGpuPositions, out _cachedGpuColors, out _cachedGpuRadii, out _cachedGpuTypeIds,
+                    out _cachedGpuActive, out _cachedGpuVelocities, out _cachedGpuCount,
+                    out _cachedGpuDescriptors);
+                // 绘制统一交给 Liquid2DPass 的 Overlay Pass（Effect 之后），此处仅缓存。
+                // Drawing is deferred to Liquid2DPass's Overlay Pass (after Effect); only cache here.
+                // 描画は Liquid2DPass の Overlay Pass に委譲（Effect の後）し、ここではキャッシュのみ。
+                return;
+            }
+
+            // CPU 模式：从 CPU store 取数，上传密实缓冲后用 DrawProcedural 程序化绘制（quad 由 shader 生成）。
+            // CPU mode: pull from the CPU store, upload dense buffers, draw via DrawProcedural (quad generated in-shader).
+            // CPU モード：CPU store から取得し密実バッファをアップロード、DrawProcedural で描画（quad はシェーダー生成）。
+            material.DisableKeyword(GpuProceduralKeyword);
+
+            if (!Liquid2DSimulation.TryGetRenderData(
+                    out Liquid2DParticleStore store,
+                    out NativeArray<int> active,
+                    out int activeCount,
+                    out IReadOnlyList<Liquid2DParticleDescriptor> descriptors))
+                return;
+            if (activeCount <= 0) return;
+
+            EnsureBufferCapacity(activeCount);
+            FillArrays(store, active, activeCount, descriptors);
+            UploadBuffers(activeCount);
+            ApplyMaterial();
+
+            // 绘制统一交给 Liquid2DPass 的 Overlay Pass（Effect 之后），此处仅缓存。
+            // Drawing is deferred to Liquid2DPass's Overlay Pass (after Effect); only cache here.
+            // 描画は Liquid2DPass の Overlay Pass に委譲（Effect の後）し、ここではキャッシュのみ。
+            _pendingDraw  = true;
+            _pendingCount = activeCount;
+        }
+
+        // ── GPU 程序化绘制 GPU procedural draw GPU プロシージャル描画 ────────────
+
+        // 设置 GPU 绘制所需的 MaterialPropertyBlock（供 Overlay Pass 的 ExecuteDraw 使用）。
+        // Set up the MaterialPropertyBlock for GPU drawing (used by ExecuteDraw in the Overlay Pass).
+        // GPU 描画に必要な MaterialPropertyBlock を設定します（Overlay Pass の ExecuteDraw で使用）。
+        private void SetupGpuMpb(
+            ComputeBuffer positions, ComputeBuffer colors, ComputeBuffer radii, ComputeBuffer typeIds,
+            ComputeBuffer active, ComputeBuffer velocities)
+        {
+            if (colourMode == ColourMode.VelocityGradient && _gradientDirty)
+            {
+                _gradientDirty = false;
+                BakeGradient(ref _gradientTexture, gradientResolution, colourMap);
+            }
+
+            _gpuMpb ??= new MaterialPropertyBlock();
+            _gpuMpb.Clear();
+            _gpuMpb.SetBuffer(_idPositions, positions);
+            _gpuMpb.SetBuffer(_idColors, colors);
+            _gpuMpb.SetBuffer(_idRadii, radii);
+            _gpuMpb.SetBuffer(_idTypeIds, typeIds);
+            _gpuMpb.SetBuffer(_idActiveIndices, active);
+            if (velocities != null) _gpuMpb.SetBuffer(_idVelocities, velocities);
+            _gpuMpb.SetFloat(_idVelocityMax, velocityDisplayMax);
+            _gpuMpb.SetInteger(_idColourMode, (int)colourMode);
+            _gpuMpb.SetFloat(_idDisplayScale, scale);
+            if (colourMode == ColourMode.VelocityGradient && _gradientTexture != null)
+                _gpuMpb.SetTexture(_idColourMap, _gradientTexture);
+        }
+
+        /// <summary>
+        /// 由 Liquid2DPass 的 Overlay Pass 调用，在 Effect Pass 之后将粒子绘制到当前渲染目标（Editor + Build 一致）。
+        /// Called by Liquid2DPass's Overlay Pass to draw particles into the current render target after the Effect Pass (Editor + Build).
+        /// Liquid2DPass の Overlay Pass から呼ばれ、Effect Pass の後に現在のレンダーターゲットへ粒子を描画します（Editor + Build 共通）。
+        /// </summary>
+        // 注意（2022 移植）：Unity 6 的 RasterCommandBuffer 属 Render Graph，URP14 无此类型；改用经典 CommandBuffer（同一命名空间），DrawProcedural 重载完全一致，方法体无需改动。
+        public void ExecuteDraw(UnityEngine.Rendering.CommandBuffer cmd)
+        {
+            if (!displayEnabled || !material) return;
+
+            if (Liquid2DSimulation.Mode == Liquid2DSimulationMode.Gpu)
+            {
+                if (!_pendingGpuDraw || _cachedGpuPositions == null || _cachedGpuActive == null || _cachedGpuCount <= 0) return;
+                
+                SetupGpuMpb(_cachedGpuPositions, _cachedGpuColors, _cachedGpuRadii, _cachedGpuTypeIds, _cachedGpuActive, _cachedGpuVelocities);
+                
+                int typeCount = _cachedGpuDescriptors?.Count ?? 0;
+                if (typeCount == 0)
+                {
+                    _gpuMpb.SetInteger(_idTargetType, 0);
+                    _gpuMpb.SetFloat(_idRenderScale, 1f);
+                    cmd.DrawProcedural(Matrix4x4.identity, material, 0, MeshTopology.Triangles, 6, _cachedGpuCount, _gpuMpb);
+                }
+                else
+                {
+                    if (_cachedGpuDescriptors == null) return;
+                    for (int t = 0; t < typeCount; t++)
+                    {
+                        _gpuMpb.SetInteger(_idTargetType, t);
+                        _gpuMpb.SetFloat(_idRenderScale, _cachedGpuDescriptors[t] ? _cachedGpuDescriptors[t].RenderScale : 1f);
+                        cmd.DrawProcedural(Matrix4x4.identity, material, 0, MeshTopology.Triangles, 6, _cachedGpuCount, _gpuMpb);
+                    }
+                }
+                // 不在此消费标志：同一帧多个相机（Game + Scene 视图）需各自绘制；标志每帧由 LateUpdate 统一刷新。
+                // Don't consume the flag here: multiple cameras (Game + Scene view) in the same frame each draw; LateUpdate refreshes it per frame.
+                // フラグはここで消費しない：同一フレームの複数カメラが各自描画。LateUpdate が毎フレーム刷新。
+            }
+            else
+            {
+                if (!_pendingDraw) return;
+                cmd.DrawProcedural(Matrix4x4.identity, material, 0, MeshTopology.Triangles, 6, _pendingCount);
+            }
+        }
+
+        // ── 容量管理 Capacity management 容量管理 ─────────────────────────────
+
+        private void EnsureBufferCapacity(int needed)
+        {
+            if (_positionBuffer != null && _bufferCapacity >= needed) return;
+
+            ReleaseBuffers();
+            // 向上取2的幂次以减少频繁重建。 // Round up to next power-of-two to reduce rebuilds. // 再構築を減らすため次の 2 の累乗に切り上げ。
+            int cap = Mathf.Max(64, Mathf.NextPowerOfTwo(needed));
+            _positions  = new Vector2[cap];
+            _velocities = new Vector2[cap];
+            _colors     = new Vector4[cap];
+            _scales     = new float[cap];
+
+            // stride: float2=8, float4=16, float=4 bytes.
+            _positionBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Structured, cap, 8);
+            _velocityBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Structured, cap, 8);
+            _colorBuffer    = new GraphicsBuffer(GraphicsBuffer.Target.Structured, cap, 16);
+            _scaleBuffer    = new GraphicsBuffer(GraphicsBuffer.Target.Structured, cap, 4);
+            _bufferCapacity = cap;
+        }
+
+        // ── 数据填充 Data fill データ充填 ────────────────────────────────────
+
+        private void FillArrays(
+            Liquid2DParticleStore store,
+            NativeArray<int> active,
+            int activeCount,
+            IReadOnlyList<Liquid2DParticleDescriptor> descriptors)
+        {
+            for (int i = 0; i < activeCount; i++)
+            {
+                int slot = active[i];
+
+                float2 pos = store.positions[slot];
+                float2 vel = store.velocities[slot];
+                float4 col = store.colors[slot];
+                float  rad = store.radii[slot];
+
+                // 从描述符取 renderScale（默认 1）。
+                // Look up renderScale from descriptor (default 1).
+                // 記述子から renderScale を取得（既定 1）。
+                float renderScale = 1f;
+                int   tid = store.typeId[slot];
+                if (descriptors != null && tid >= 0 && tid < descriptors.Count && descriptors[tid] != null)
+                    renderScale = descriptors[tid].RenderScale;
+
+                _positions[i]  = new Vector2(pos.x, pos.y);
+                _velocities[i] = new Vector2(vel.x, vel.y);
+                _colors[i]     = new Vector4(col.x, col.y, col.z, col.w);
+                _scales[i]     = rad * renderScale * scale; // 可视直径 = 物理半径 × renderScale × 全局系数（QCorner 跨度 1）。 // visual diameter (QCorner span 1). // 可視直径。
+            }
+        }
+
+        // ── GPU 上传 GPU upload GPU アップロード ──────────────────────────────
+
+        private void UploadBuffers(int activeCount)
+        {
+            _positionBuffer.SetData(_positions,  0, 0, activeCount);
+            _velocityBuffer.SetData(_velocities, 0, 0, activeCount);
+            _colorBuffer.SetData(   _colors,     0, 0, activeCount);
+            _scaleBuffer.SetData(   _scales,     0, 0, activeCount);
+        }
+
+        // ── 材质参数 Material params マテリアルパラメータ ─────────────────────
+
+        private void ApplyMaterial()
+        {
+            material.SetBuffer(_idPositions,  _positionBuffer);
+            material.SetBuffer(_idVelocities, _velocityBuffer);
+            material.SetBuffer(_idColors,     _colorBuffer);
+            material.SetBuffer(_idScales,     _scaleBuffer);
+            material.SetFloat(_idVelocityMax, velocityDisplayMax);
+            material.SetInteger(_idColourMode, (int)colourMode);
+
+            if (colourMode == ColourMode.VelocityGradient)
+            {
+                if (_gradientDirty)
+                {
+                    _gradientDirty = false;
+                    BakeGradient(ref _gradientTexture, gradientResolution, colourMap);
+                }
+                material.SetTexture(_idColourMap, _gradientTexture);
+            }
+        }
+
+        // ── 工具 Utility ユーティリティ ───────────────────────────────────────
+
+        /// <summary>
+        /// 将 Gradient 烘焙成 Texture2D（参照 ParticleDisplay2D.TextureFromGradient）。
+        /// Bake a Gradient into a Texture2D (mirrors ParticleDisplay2D.TextureFromGradient).
+        /// Gradient を Texture2D にベイク（ParticleDisplay2D.TextureFromGradient を参照）。
+        /// </summary>
+        public static void BakeGradient(ref Texture2D texture, int width,
+            Gradient gradient, FilterMode filterMode = FilterMode.Bilinear)
+        {
+            width = Mathf.Max(2, width);
+            if (!texture || texture.width != width)
+            {
+                texture = new Texture2D(width, 1, TextureFormat.RGBA32, false)
+                {
+                    wrapMode   = TextureWrapMode.Clamp,
+                    filterMode = filterMode,
+                };
+            }
+
+            gradient ??= new Gradient();
+            var cols = new Color[width];
+            for (int i = 0; i < width; i++)
+                cols[i] = gradient.Evaluate(i / (width - 1f));
+
+            texture.SetPixels(cols);
+            texture.Apply();
+        }
+
+        // ── Unity 回调 Unity callbacks Unity コールバック ──────────────────────
+
+        private void OnEnable()
+        {
+            // 注册到实例表，供 Liquid2DPass 的 Overlay Pass 在 Effect 之后绘制。
+            // Register into the instance list for Liquid2DPass's Overlay Pass to draw after Effect.
+            // Liquid2DPass の Overlay Pass が Effect の後に描画するためインスタンス表へ登録します。
+            if (!_instances.Contains(this)) _instances.Add(this);
+        }
+
+        private void OnDisable()
+        {
+            _instances.Remove(this);
+        }
+
+        private void OnValidate()
+        {
+            _gradientDirty = true;
+        }
+
+        private void OnDestroy()
+        {
+            ReleaseBuffers();
+            if (_gradientTexture)
+            {
+                Destroy(_gradientTexture);
+                _gradientTexture = null;
+            }
+        }
+
+        private void ReleaseBuffers()
+        {
+            _positionBuffer?.Dispose(); _positionBuffer = null;
+            _velocityBuffer?.Dispose(); _velocityBuffer = null;
+            _colorBuffer?.Dispose();    _colorBuffer    = null;
+            _scaleBuffer?.Dispose();    _scaleBuffer    = null;
+            _bufferCapacity = -1;
+        }
+    }
+}

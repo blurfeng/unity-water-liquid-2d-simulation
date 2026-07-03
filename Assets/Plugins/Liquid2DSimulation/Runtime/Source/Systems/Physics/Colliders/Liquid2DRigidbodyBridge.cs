@@ -32,13 +32,13 @@ namespace Fs.Liquid2D
              "在接触质心处施加阻力以产生力矩（来流偏置一侧时物体会旋转/翻倒/摇摆）。关闭则在质心施力、只平移不旋转。",
              "Apply drag at the contact centroid to produce torque (off-center flow rotates/tips/bobs the body). Off = applied at center of mass, translate only.",
              "接触質心で抗力を加え力矩を生む（偏った来流で回転/転倒/揺動）。オフなら質心で施加し平行移動のみ。")]
-        private bool applyTorque;
+        private bool applyTorque = true;
 
         [SerializeField, Min(0f), LocalizationTooltip(
              "单步速度变化上限（世界单位/秒，0=不限制）。钳制流体每个物理步对本物体速度的改变量，防止偶发尖峰把物体弹飞。相对速度阻力本身自限，通常不会触发。",
              "Max speed change per step (world units/s; 0 = unlimited). Clamps the fluid's velocity change on this body per physics step against rare spikes. Relative-velocity drag is self-limiting, so this rarely triggers.",
              "1 ステップの速度変化上限（ワールド単位/秒、0=無制限）。稀なスパイク対策。相対速度抗力は自己制限的で通常作動しません。")]
-        private float maxSpeedChange = 4f;
+        private float maxSpeedChange = 6f;
 
         [Header("Buoyancy")]
         [SerializeField, LocalizationTooltip(
