@@ -1,9 +1,14 @@
 # Changelog
 
-## [Unreleased]
+## [1.2.0] - 2026-07-03
+### Added
+- **Unity 2022.3 support (single-source).** One `Runtime` / `Editor` codebase now targets both Unity 6 (URP 17 / Render Graph) and Unity 2022.3 (URP 14) through `#if UNITY_6000_0_OR_NEWER` version macros. On 2022.3 the render pass runs on the classic imperative URP pipeline (no Render Graph) with an identical result. The `2022.3` branch is installed via the `#2022.3` git-URL suffix; the code is shared across both engines, only the Samples differ per version.
+- **`RenderingLayerMask` support on Unity 2022.3.** Unity 2022.3 has no built-in `RenderingLayerMask` struct, so a compatible shim plus a custom PropertyDrawer was added: it reads the configured rendering-layer names from URP Global Settings and shows the same checkbox mask popup as Unity 6. On 2022.3 the layer names are edited under `Project Settings → Graphics → URP Global Settings → Rendering Layers (3D)`; usage is otherwise identical to Unity 6.
 ### Changed
 - Colliders now accept **multiple** `nameTag`s: the single-tag field became a `List<string>`, and a collider blocks any particle group matching **any** tag in its list (empty list = all particles). Matching uses a per-collider group bitmask (`Liquid2DColliderData.GroupId` → `GroupMask`) rebuilt once per frame, so the per-particle solver cost is unchanged; the CPU (Burst) and GPU (compute) paths are both updated. The distinct-group count is capped at 32 (int mask); a collider tag resolving beyond that is ignored and logs a one-time warning.
 - **Data-breaking:** the collider's legacy single `nameTag` field was removed with no migration path — colliders that had a tag set in existing scenes/prefabs load as an empty list (i.e. affect all particles) and must be re-tagged.
+- Lowered the declared minimum dependencies to the Unity 2022.3 baseline: `unity` `2022.3` and `com.unity.render-pipelines.universal` `14.0.12` (previously `6000.2` / URP `17.2.0`). Assembly definition references were switched from GUIDs to explicit names.
+- The sample UI (`HandlerUI`) now creates its `EventSystem` with the input module matching the active input backend (new Input System or legacy), so it no longer relies on the legacy Input Manager being enabled.
 
 ## [1.1.0] - 2026-07-02
 ### Added
