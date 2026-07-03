@@ -334,8 +334,9 @@ Additionally, `Liquid2DEdgeCollider` / `Liquid2DCustomCollider` / `Liquid2DMeshC
 ![](Documents/collider_1.png)
 
 > [!TIP]
-> Each collider has an optional `nameTag`: when left empty it applies to **all** particles; when filled in it **only blocks the particle group matching that tag**.  
-> This lets you create effects like "certain fluids can pass through certain objects."
+> Each collider has an optional list of `nameTag`s: when left empty it applies to **all** particles; when filled in it **only blocks particle groups matching ANY tag in the list** (multiple tags allowed; matching any one applies).  
+> This lets you create effects like "certain fluids can pass through certain objects."  
+> Note: limited by the `int` bitmask, the number of distinct `nameTag`s globally is capped at 32; tags beyond that are ignored and log a one-time warning.
 
 ### Collider Interaction Mode (Push / Submerge)
 Every collider can switch between two interaction modes via the `Collider Mode` field, which decides how fluid particles behave when they meet it:

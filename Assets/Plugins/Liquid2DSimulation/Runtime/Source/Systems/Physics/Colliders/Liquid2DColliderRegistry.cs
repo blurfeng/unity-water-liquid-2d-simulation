@@ -27,6 +27,11 @@ namespace Fs.Liquid2D
         private static readonly Dictionary<ILiquid2DForceReceiver, int> _receiverToBody =
             new Dictionary<ILiquid2DForceReceiver, int>();
 
+        // 已告警过越界（组 id ≥ 32，超出 int 位掩码上限）的碰撞器标签，按标签去重，避免每帧重复刷屏。
+        // Collider tags already warned as overflowing the 32-group int bitmask (group id ≥ 32); deduped per tag to avoid per-frame spam.
+        // int ビットマスク上限（グループ id ≥ 32）超過として警告済みのタグ。タグ単位で去重し毎フレームの重複警告を防ぐ。
+        private static readonly HashSet<string> _overflowWarnedTags = new HashSet<string>();
+
         /// <summary>当前注册的碰撞体数。 // Number of registered colliders. // 登録コライダー数。</summary>
         public static int Count => _active.Count;
 
@@ -88,12 +93,38 @@ namespace Fs.Liquid2D
                     }
                 }
 
-                // nameTag → groupId 组过滤：空 nameTag 作用于全部（matchAll），否则仅作用于匹配组。
-                // nameTag → groupId filter: empty nameTag affects all (matchAll); otherwise only the matching group.
-                // nameTag → groupId 絞り込み：空は全作用、それ以外は一致グループのみ。
-                string tag = c.NameTag;
-                bool matchAll = string.IsNullOrEmpty(tag);
-                int group = matchAll || groupResolver == null ? 0 : groupResolver(tag);
+                // nameTag 列表 → groupMask 组过滤：空列表（或全为空标签）作用于全部（matchAll）；否则把每个非空标签解析出的 groupId
+                // 以 OR 并入位掩码，命中列表中任一组即作用（OR 语义）。位掩码用 int，故全局最多 32 个不同组（组 id 由 GetGroup 密集自 0 递增）。
+                // nameTag list → groupMask filter: an empty list (or all-blank tags) affects all (matchAll); otherwise each non-empty
+                // tag's groupId is OR-ed into the mask, matching ANY group in the list (OR). The int mask caps total groups at 32.
+                // nameTag リスト → groupMask 絞り込み：空リスト（または全空）は全作用、それ以外は各非空タグの groupId を OR。int なので最大 32 グループ。
+                var tags = c.NameTags;
+                int groupMask = 0;
+                bool matchAll = true;
+                if (groupResolver != null && tags != null)
+                {
+                    for (int t = 0; t < tags.Count; t++)
+                    {
+                        string tag = tags[t];
+                        if (string.IsNullOrEmpty(tag)) continue;
+                        matchAll = false;
+                        int gid = groupResolver(tag);
+                        if ((uint)gid < 32u)
+                        {
+                            groupMask |= 1 << gid;
+                        }
+                        else if (_overflowWarnedTags.Add(tag))
+                        {
+                            // 组 id 超过 int 位掩码上限（32），该标签无法参与过滤 → 按标签去重告警一次。
+                            // Group id exceeds the int bitmask limit (32); this tag can't participate in filtering → warn once per tag.
+                            // グループ id が int ビットマスク上限（32）を超過。該当タグは絞り込みに参加不可 → タグ単位で一度だけ警告。
+                            UnityEngine.Debug.LogWarning(
+                                $"[Liquid2D] 碰撞器 nameTag \"{tag}\" 解析出的组 id {gid} 超过位掩码上限 32，该标签的碰撞过滤将被忽略；" +
+                                $"请将全局不同 nameTag 数量控制在 32 以内。 / Collider nameTag \"{tag}\" resolved to group id {gid}, " +
+                                $"exceeding the 32-group bitmask limit; this tag's collision filtering is ignored. Keep the total number of distinct nameTags <= 32.");
+                        }
+                    }
+                }
 
                 byte colMode = (byte)c.ColliderMode;
                 float subCoupling = c.SubmergeCoupling;
@@ -112,7 +143,7 @@ namespace Fs.Liquid2D
                     var d = _dataScratch[j];
                     d.Dynamic = dynFlag;
                     d.BodyIndex = bodyIdx;
-                    d.GroupId = group;
+                    d.GroupMask = groupMask;
                     d.MatchAll = (byte)(matchAll ? 1 : 0);
                     d.ColliderMode = colMode;
                     d.SubmergeCoupling = subCoupling;

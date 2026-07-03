@@ -16,10 +16,10 @@ namespace Fs.Liquid2D
     public abstract class Liquid2DCollider : MonoBehaviour
     {
         [SerializeField, LocalizationTooltip(
-             "作用的粒子组标签。留空=作用于全部粒子；填写后仅阻挡 nameTag 匹配的粒子（其它粒子穿过）。",
-             "Particle group tag to act on. Empty = affects all particles; set = only blocks particles whose nameTag matches (others pass through).",
-             "作用する粒子グループのタグ。空=全粒子に作用、設定時は nameTag 一致の粒子のみ阻止（他は通過）。")]
-        private string nameTag = string.Empty;
+             "作用的粒子组标签（可配置多个）。留空=作用于全部粒子；填写后仅阻挡 nameTag 命中列表中任一标签的粒子（其它粒子穿过）。",
+             "Particle group tags to act on (multiple allowed). Empty = affects all particles; set = only blocks particles whose nameTag matches ANY tag in the list (others pass through).",
+             "作用する粒子グループのタグ（複数可）。空=全粒子に作用、設定時はリスト内のいずれかに一致する粒子のみ阻止（他は通過）。")]
+        private List<string> _nameTags = new List<string>();
 
         [SerializeField, LocalizationTooltip(
              "碰撞交互模式。Push（推离，默认）：将粒子持续推出碰撞体外，粒子无法穿透。Submerge（淹没）：粒子可穿过碰撞体，流体自然覆盖之；碰撞器运动时排开流体产生水花，双向耦合保持不变。",
@@ -69,8 +69,8 @@ namespace Fs.Liquid2D
         private bool _hasPrevCenter;
         private float _lastSampleTime; // 上次采样的 fixedTime，用于检测中间跳过的固定步。 // fixedTime of the last sample, to detect skipped fixed steps. // 前回サンプルの fixedTime。
 
-        /// <summary>作用的粒子组标签（空=作用于全部）。 // Particle group tag to act on (empty = all). // 作用する粒子グループのタグ（空=全部）。</summary>
-        public string NameTag => nameTag;
+        /// <summary>作用的粒子组标签列表（空列表=作用于全部；命中列表中任一标签即作用）。 // Particle group tags to act on (empty list = all; matches ANY tag in the list). // 作用する粒子グループのタグ一覧（空=全部、いずれか一致で作用）。</summary>
+        public IReadOnlyList<string> NameTags => _nameTags;
 
         /// <summary>碰撞交互模式（Push=推离，Submerge=淹没）。 // Collision interaction mode (Push=eject, Submerge=pass-through with impulse). // 衝突相互作用モード。</summary>
         public Liquid2DColliderMode ColliderMode => _colliderMode;

@@ -126,7 +126,7 @@ namespace Fs.Liquid2D
                 AddWorldPoint(pointsAccum, _cachedLocalPoints[i0]);
                 AddWorldPoint(pointsAccum, _cachedLocalPoints[i1]);
                 AddWorldPoint(pointsAccum, _cachedLocalPoints[i2]);
-                dataOut.Add(data); // 其余字段（Dynamic/BodyIndex/GroupId/ColliderMode/…）由注册表在 BuildBuffer 中按碰撞器统一回填。 // remaining fields filled per-collider by the registry. // 残りはレジストリが回填。
+                dataOut.Add(data); // 其余字段（Dynamic/BodyIndex/GroupMask/ColliderMode/…）由注册表在 BuildBuffer 中按碰撞器统一回填。 // remaining fields filled per-collider by the registry. // 残りはレジストリが回填。
             }
         }
 

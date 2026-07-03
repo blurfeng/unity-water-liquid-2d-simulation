@@ -73,8 +73,8 @@ StructuredBuffer<MaterialData> Materials;
 struct MixData { int enabled; float speed; int withMovement; float maxSpeed; float interval; };
 StructuredBuffer<MixData> MixDatas;
 
-// ---- 碰撞体（与 Liquid2DGpuCollider 对齐）。末尾 groupId/matchAll 用于组过滤；colliderMode: 0=Push, 1=Submerge；velocity 为碰撞器线速度（淹没模式排开流体用）。 ----
-struct GpuCollider { int shape; float2 center; float2 size; float rotation; float radius; int pointStart; int pointCount; int dynamic; int bodyIndex; int groupId; int matchAll; int colliderMode; float submergeCoupling; float submergeSplashStrength; float submergeSplashThreshold; float submergeSplashRange; float submergeFluidDensityThreshold; float submergeCoverage; float2 velocity; };
+// ---- 碰撞体（与 Liquid2DGpuCollider 对齐）。末尾 groupMask/matchAll 用于组过滤（groupMask 为组位掩码，第 g 位=作用于组 g）；colliderMode: 0=Push, 1=Submerge；velocity 为碰撞器线速度（淹没模式排开流体用）。 ----
+struct GpuCollider { int shape; float2 center; float2 size; float rotation; float radius; int pointStart; int pointCount; int dynamic; int bodyIndex; int groupMask; int matchAll; int colliderMode; float submergeCoupling; float submergeSplashStrength; float submergeSplashThreshold; float submergeSplashRange; float submergeFluidDensityThreshold; float submergeCoverage; float2 velocity; };
 StructuredBuffer<GpuCollider> Colliders;
 StructuredBuffer<float2> ColliderPoints;
 
@@ -667,8 +667,8 @@ void IntegrateCollide(uint3 id : SV_DispatchThreadID)
     for (int ci = 0; ci < numColliders; ci++)
     {
         GpuCollider col = Colliders[ci];
-        // 组过滤：matchAll（空 nameTag）作用全部，否则仅作用 groupId 匹配的粒子。 // Group filter. // グループ絞り込み。
-        if (col.matchAll == 0 && col.groupId != gi) continue;
+        // 组过滤：matchAll（空 nameTag 列表）作用全部，否则仅作用 groupMask 命中位的粒子组（第 gi 位）。 // Group filter (bitmask). // グループ絞り込み（ビットマスク）。
+        if (col.matchAll == 0 && (col.groupMask & (1 << gi)) == 0) continue;
         // Submerge 膨胀探测半径 pr+band（band=1.5×半径）多探一圈，区分表面外壳层与内部覆盖；Push 用真实半径。 // Submerge inflates query radius to pr+band to separate outer shell from interior; Push uses true radius. // Submerge は探知半径を膨張。
         float band = pr * 1.5;
         float queryR = col.colliderMode == 0 ? pr : pr + band;

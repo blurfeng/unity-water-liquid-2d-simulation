@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+### Changed
+- Colliders now accept **multiple** `nameTag`s: the single-tag field became a `List<string>`, and a collider blocks any particle group matching **any** tag in its list (empty list = all particles). Matching uses a per-collider group bitmask (`Liquid2DColliderData.GroupId` → `GroupMask`) rebuilt once per frame, so the per-particle solver cost is unchanged; the CPU (Burst) and GPU (compute) paths are both updated. The distinct-group count is capped at 32 (int mask); a collider tag resolving beyond that is ignored and logs a one-time warning.
+- **Data-breaking:** the collider's legacy single `nameTag` field was removed with no migration path — colliders that had a tag set in existing scenes/prefabs load as an empty list (i.e. affect all particles) and must be re-tagged.
+
 ## [1.1.0] - 2026-07-02
 ### Added
 - `Liquid2DSimulation.ClearAll()` to instantly remove every fluid particle at runtime.
