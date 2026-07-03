@@ -20,7 +20,7 @@ namespace Fs.Liquid2D
         public int PointCount;
         public int Dynamic;
         public int BodyIndex;
-        public int GroupId;
+        public int GroupMask;
         public int MatchAll;
         public int ColliderMode;
         public float SubmergeCoupling;
@@ -42,7 +42,7 @@ namespace Fs.Liquid2D
             PointCount = c.PointCount,
             Dynamic = c.Dynamic,
             BodyIndex = c.BodyIndex,
-            GroupId = c.GroupId,
+            GroupMask = c.GroupMask,
             MatchAll = c.MatchAll,
             ColliderMode = c.ColliderMode,
             SubmergeCoupling = c.SubmergeCoupling,

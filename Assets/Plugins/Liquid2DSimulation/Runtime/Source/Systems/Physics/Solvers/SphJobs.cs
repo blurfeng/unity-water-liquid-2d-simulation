@@ -445,8 +445,8 @@ namespace Fs.Liquid2D
                 for (int ci = 0; ci < Colliders.Length; ci++)
                 {
                     var col = Colliders[ci];
-                    // 组过滤：matchAll（空 nameTag）作用全部，否则仅作用 groupId 匹配的粒子。 // Group filter. // グループ絞り込み。
-                    if (col.MatchAll == 0 && col.GroupId != gi) continue;
+                    // 组过滤：matchAll（空 nameTag 列表）作用全部，否则仅作用 GroupMask 命中位的粒子组（第 gi 位）。 // Group filter (bitmask). // グループ絞り込み（ビットマスク）。
+                    if (col.MatchAll == 0 && (col.GroupMask & (1 << gi)) == 0) continue;
 
                     // Submerge 用膨胀探测半径 pr+band（band=1.5×粒子半径）多探出一圈，用于区分「表面外壳层」与「内部覆盖」；Push 用真实半径。
                     // Submerge inflates the query radius to pr+band (band = 1.5×particle radius) to also catch a ring outside the surface, used to tell the outer shell from interior coverage; Push uses the true radius.

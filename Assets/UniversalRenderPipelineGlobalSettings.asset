@@ -15,8 +15,9 @@ MonoBehaviour:
   k_AssetVersion: 3
   m_RenderingLayerNames:
   - Default
-  - Liquid
-  m_ValidRenderingLayers: 3
+  - LiquidObstructor
+  - LiquidOccluder
+  m_ValidRenderingLayers: 7
   lightLayerName0: 
   lightLayerName1: 
   lightLayerName2: 

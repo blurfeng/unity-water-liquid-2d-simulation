@@ -1,11 +1,14 @@
 ﻿using System;
 using Fs.Liquid2D.Localization;
 using UnityEngine;
-// 单源版本别名：U6 用 RenderingLayerMask struct（URP16+/2023.1+），2022 用 uint（URP14 的 FilteringSettings.renderingLayerMask 即 uint）。
+// 单源版本别名：
+//   U6  → 引擎内置 RenderingLayerMask struct（URP16+/2023.1+，自带遮罩下拉）。
+//   2022 → 本仓库兼容垫片 Fs.Liquid2D.RenderingLayerMask（隐式 ↔ uint；配套 RenderingLayerMaskDrawer
+//          从 URP Global Settings 读渲染层名画勾选下拉）。两者都可直接当 uint 喂给 FilteringSettings.renderingLayerMask。
 #if UNITY_6000_0_OR_NEWER
 using LayerMaskType = UnityEngine.RenderingLayerMask;
 #else
-using LayerMaskType = System.UInt32;
+using LayerMaskType = Fs.Liquid2D.RenderingLayerMask;
 #endif
 
 namespace Fs.Liquid2D

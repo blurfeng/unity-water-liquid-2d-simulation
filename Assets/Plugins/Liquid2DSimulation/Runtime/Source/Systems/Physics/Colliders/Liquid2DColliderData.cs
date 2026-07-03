@@ -58,10 +58,10 @@ namespace Fs.Liquid2D
         /// <summary>动态体在冲量累积数组中的索引（dynamic==0 时为 -1）。 // Index into the impulse-accumulation array (-1 when not dynamic). // 力積累積配列内のインデックス。</summary>
         public int BodyIndex;
 
-        /// <summary>作用的目标粒子组（nameTag 解析得到）。 // Target particle group (resolved from nameTag). // 作用対象グループ。</summary>
-        public int GroupId;
+        /// <summary>作用的目标粒子组位掩码：第 g 位为 1 表示作用于组 g（由 nameTag 列表逐个解析组 id 后 OR 得到）。int 掩码上限 32 组。 // Target particle-group bitmask: bit g set = acts on group g (OR-ed from the nameTag list). Caps at 32 groups. // 対象グループのビットマスク：ビット g が 1 でグループ g に作用。最大 32 グループ。</summary>
+        public int GroupMask;
 
-        /// <summary>1=作用于全部粒子（空 nameTag）；0=仅作用于 groupId 匹配的粒子。 // 1 = affects all particles (empty nameTag); 0 = only matching groupId. // 1=全粒子、0=groupId 一致のみ。</summary>
+        /// <summary>1=作用于全部粒子（空 nameTag 列表）；0=仅作用于 GroupMask 命中位的粒子组。 // 1 = affects all particles (empty nameTag list); 0 = only groups whose bit is set in GroupMask. // 1=全粒子、0=GroupMask 該当ビットのグループのみ。</summary>
         public byte MatchAll;
 
         /// <summary>
