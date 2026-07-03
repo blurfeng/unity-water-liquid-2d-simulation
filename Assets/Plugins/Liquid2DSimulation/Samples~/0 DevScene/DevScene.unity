@@ -171,10 +171,10 @@ MonoBehaviour:
   maxSpawnCount: 0
   spawnedCount: 0
   liquidParticles:
-  - Descriptor: {fileID: 11400000, guid: 6ce639905edfc904baf604e25405e47b, type: 2}
+  - Descriptor: {fileID: 11400000, guid: 24707084a7a0c1947a44ab2da64e0aba, type: 2}
     Weight: 1
     Lifetime: 0
-    IsInit: 0
+    IsInit: 1
   nozzleWidth: 1
   flowRate: 300
   flowRateFactor: 1
@@ -278,7 +278,7 @@ Transform:
   m_GameObject: {fileID: 500300}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -12, y: -7, z: 0}
+  m_LocalPosition: {x: 0, y: -7, z: 0}
   m_LocalScale: {x: 25, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -296,7 +296,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4604536c1b2ac6644b9380bdbb57c3fd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  nameTag: 
+  _nameTags: []
   _colliderMode: 0
   _submergeCoupling: 0.25
   _submergeSplashStrength: 1
@@ -353,7 +353,7 @@ SpriteRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_MaskInteraction: 0
-  m_Sprite: {fileID: 7482667652216324306, guid: 78e394043d724814e890d7de7b6ead06, type: 3}
+  m_Sprite: {fileID: 7482667652216324306, guid: 95638f4b1a7c5284e906b577f0499c09, type: 3}
   m_Color: {r: 0.75, g: 0.9656862, b: 1, a: 0.02745098}
   m_FlipX: 0
   m_FlipY: 0
@@ -437,7 +437,7 @@ Transform:
   m_GameObject: {fileID: 500400}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -24, y: -3.5, z: 0}
+  m_LocalPosition: {x: -12, y: -3.5, z: 0}
   m_LocalScale: {x: 1, y: 8, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -455,7 +455,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4604536c1b2ac6644b9380bdbb57c3fd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  nameTag: 
+  _nameTags: []
   _colliderMode: 0
   _submergeCoupling: 0.25
   _submergeSplashStrength: 1
@@ -512,7 +512,7 @@ SpriteRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_MaskInteraction: 0
-  m_Sprite: {fileID: 7482667652216324306, guid: 78e394043d724814e890d7de7b6ead06, type: 3}
+  m_Sprite: {fileID: 7482667652216324306, guid: 95638f4b1a7c5284e906b577f0499c09, type: 3}
   m_Color: {r: 0.75, g: 0.9656862, b: 1, a: 0.02745098}
   m_FlipX: 0
   m_FlipY: 0
@@ -596,7 +596,7 @@ Transform:
   m_GameObject: {fileID: 500500}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: -3.5, z: 0}
+  m_LocalPosition: {x: 12, y: -3.5, z: 0}
   m_LocalScale: {x: 1, y: 8, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -614,7 +614,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4604536c1b2ac6644b9380bdbb57c3fd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  nameTag: 
+  _nameTags: []
   _colliderMode: 0
   _submergeCoupling: 0.25
   _submergeSplashStrength: 1
@@ -671,7 +671,7 @@ SpriteRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_MaskInteraction: 0
-  m_Sprite: {fileID: 7482667652216324306, guid: 78e394043d724814e890d7de7b6ead06, type: 3}
+  m_Sprite: {fileID: 7482667652216324306, guid: 95638f4b1a7c5284e906b577f0499c09, type: 3}
   m_Color: {r: 0.75, g: 0.9656862, b: 1, a: 0.02745098}
   m_FlipX: 0
   m_FlipY: 0
@@ -904,7 +904,7 @@ Transform:
   m_GameObject: {fileID: 471646946}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 12, y: 0, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -942,7 +942,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 562006140e2865f47b7ec723464d44bc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DBounds
-  nameTag: 
+  _nameTags: []
   _colliderMode: 0
   _submergeCoupling: 0.25
   _submergeSplashStrength: 1
@@ -1023,9 +1023,9 @@ GameObject:
   m_Component:
   - component: {fileID: 994501413}
   - component: {fileID: 994501412}
+  - component: {fileID: 994501409}
   - component: {fileID: 994501411}
   - component: {fileID: 994501410}
-  - component: {fileID: 994501409}
   - component: {fileID: 994501408}
   m_Layer: 0
   m_Name: Rigidbody2
@@ -1119,7 +1119,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4604536c1b2ac6644b9380bdbb57c3fd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DBoxCollider
-  nameTag: 
+  _nameTags: []
   _colliderMode: 1
   _submergeCoupling: 0.25
   _submergeSplashStrength: 1
@@ -1141,11 +1141,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DRigidbodyBridge
   dragCoefficient: 3
   applyTorque: 1
-  maxSpeedChange: 8
+  maxSpeedChange: 6
   useBuoyancy: 1
   bodyVolume: 0
   fullSubmersionContacts: 12
-  submergedLinearDrag: 1
+  submergedLinearDrag: 2
   submergedAngularDrag: 1
   submergeForceDeadzone: 0.05
 --- !u!212 &994501412
@@ -1197,7 +1197,7 @@ SpriteRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_MaskInteraction: 0
-  m_Sprite: {fileID: 7482667652216324306, guid: 78e394043d724814e890d7de7b6ead06, type: 3}
+  m_Sprite: {fileID: 7482667652216324306, guid: 95638f4b1a7c5284e906b577f0499c09, type: 3}
   m_Color: {r: 1, g: 0.7666199, b: 0.4575472, a: 1}
   m_FlipX: 0
   m_FlipY: 0
@@ -1251,7 +1251,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 063b086f05072a444b98bba3d042d0e0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DMeshCollider
-  nameTag: 
+  _nameTags: []
   _colliderMode: 0
   _submergeCoupling: 0.25
   _submergeSplashStrength: 1
@@ -1449,7 +1449,7 @@ MonoBehaviour:
   gravityAttenuation: 1
   falloff: 1
   forceMode: 0
-  interactionCamera: {fileID: 0}
+  interactionCamera: {fileID: 1088916024}
   enablePull: 1
   enablePush: 1
 --- !u!4 &1101620319
@@ -1477,9 +1477,9 @@ GameObject:
   m_Component:
   - component: {fileID: 1488928532}
   - component: {fileID: 1488928531}
+  - component: {fileID: 1488928530}
   - component: {fileID: 1488928529}
   - component: {fileID: 1488928528}
-  - component: {fileID: 1488928530}
   - component: {fileID: 1488928533}
   m_Layer: 0
   m_Name: Rigidbody1
@@ -1500,7 +1500,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4604536c1b2ac6644b9380bdbb57c3fd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DBoxCollider
-  nameTag: 
+  _nameTags: []
   _colliderMode: 1
   _submergeCoupling: 0.25
   _submergeSplashStrength: 1
@@ -1522,11 +1522,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DRigidbodyBridge
   dragCoefficient: 3
   applyTorque: 1
-  maxSpeedChange: 8
+  maxSpeedChange: 6
   useBuoyancy: 1
   bodyVolume: 0
   fullSubmersionContacts: 12
-  submergedLinearDrag: 1
+  submergedLinearDrag: 2
   submergedAngularDrag: 1
   submergeForceDeadzone: 0.05
 --- !u!50 &1488928530
@@ -1605,7 +1605,7 @@ SpriteRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_MaskInteraction: 0
-  m_Sprite: {fileID: 7482667652216324306, guid: 78e394043d724814e890d7de7b6ead06, type: 3}
+  m_Sprite: {fileID: 7482667652216324306, guid: 95638f4b1a7c5284e906b577f0499c09, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
@@ -1785,7 +1785,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8411cc57852125d448f1b34e5f3283b5, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DEdgeCollider
-  nameTag: 
+  _nameTags: []
   _colliderMode: 0
   _submergeCoupling: 0.25
   _submergeSplashStrength: 1
@@ -1884,7 +1884,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.LiquidRegionSpawner
   spawnOnStart: 1
   particles:
-  - Descriptor: {fileID: 11400000, guid: 6ce639905edfc904baf604e25405e47b, type: 2}
+  - Descriptor: {fileID: 11400000, guid: 24707084a7a0c1947a44ab2da64e0aba, type: 2}
     Weight: 1
     Lifetime: 0
     IsInit: 1
@@ -2116,15 +2116,15 @@ SceneRoots:
   - {fileID: 500201}
   - {fileID: 437264683}
   - {fileID: 1101620319}
-  - {fileID: 500101}
   - {fileID: 1656945275}
+  - {fileID: 500101}
   - {fileID: 1646027099}
   - {fileID: 1041098852}
   - {fileID: 596802843}
-  - {fileID: 1088916025}
-  - {fileID: 2084783509}
   - {fileID: 414023487}
   - {fileID: 1488928532}
   - {fileID: 994501413}
-  - {fileID: 471646947}
   - {fileID: 953099531}
+  - {fileID: 1088916025}
+  - {fileID: 2084783509}
+  - {fileID: 471646947}
