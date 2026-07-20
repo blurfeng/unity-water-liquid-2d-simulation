@@ -2,6 +2,8 @@
 
 <p align="center">
   <img alt="GitHub Release" src="https://img.shields.io/github/v/release/blurfeng/unity-water-liquid-2d-simulation?color=blue">
+  <img alt="Unity" src="https://img.shields.io/badge/Unity-6000.3-black?logo=unity">
+  <img alt="Unity" src="https://img.shields.io/badge/Unity-2022.3-black?logo=unity">
   <img alt="GitHub Downloads (all assets, all releases)" src="https://img.shields.io/github/downloads/blurfeng/unity-water-liquid-2d-simulation/total?color=green">
   <img alt="GitHub Repo License" src="https://img.shields.io/badge/license-MIT-blueviolet">
   <img alt="GitHub Repo Issues" src="https://img.shields.io/github/issues/blurfeng/unity-water-liquid-2d-simulation?color=yellow">
@@ -91,7 +93,7 @@ Liquid 2D Simulation 是一款面向 `Unity` 的 2D 流体模拟系统，开箱�
 | Volume 运行时修改                  | 支持在运行时通过 Volume 修改流体粒子的渲染效果。                                                |
 
 ## 💻 环境要求
-- `Unity 6000.2` 或更新的版本
+- `Unity 6000.3` 或更新的版本
 - **`Unity 2022.3` 也已完整支持**（见 [🌳 分支](#-分支)）；源码为**单源设计**，同一套代码通过版本宏同时支持两个引擎版本
 - URP 2D 渲染管线。Unity 6 使用 Render Graph 框架渲染；Unity 2022.3 使用命令式 URP 14 渲染（无 Render Graph），最终效果一致
 - 与着色器兼容的平台

@@ -2,6 +2,8 @@
 
 <p align="center">
   <img alt="GitHub Release" src="https://img.shields.io/github/v/release/blurfeng/unity-water-liquid-2d-simulation?color=blue">
+  <img alt="Unity" src="https://img.shields.io/badge/Unity-6000.3-black?logo=unity">
+  <img alt="Unity" src="https://img.shields.io/badge/Unity-2022.3-black?logo=unity">
   <img alt="GitHub Downloads (all assets, all releases)" src="https://img.shields.io/github/downloads/blurfeng/unity-water-liquid-2d-simulation/total?color=green">
   <img alt="GitHub Repo License" src="https://img.shields.io/badge/license-MIT-blueviolet">
   <img alt="GitHub Repo Issues" src="https://img.shields.io/github/issues/blurfeng/unity-water-liquid-2d-simulation?color=yellow">
@@ -91,7 +93,7 @@ In practice, the particle fusion effect is achieved by stacking and clipping the
 | Runtime tweaking via Volume       | Supports modifying the fluid particles' rendering effects at runtime through Volumes.                         |
 
 ## 💻 Requirements
-- `Unity 6000.2` or newer
+- `Unity 6000.3` or newer
 - **`Unity 2022.3` is also fully supported** (see [🌳 Branches](#-branches)); the source is **single-source**, with one codebase supporting both engine versions via version macros
 - URP 2D rendering pipeline. Unity 6 uses the Render Graph framework; Unity 2022.3 uses the classic imperative URP 14 rendering (no Render Graph), with the same result
 - A platform compatible with the shaders

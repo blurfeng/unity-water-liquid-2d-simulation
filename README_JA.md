@@ -2,6 +2,8 @@
 
 <p align="center">
   <img alt="GitHub Release" src="https://img.shields.io/github/v/release/blurfeng/unity-water-liquid-2d-simulation?color=blue">
+  <img alt="Unity" src="https://img.shields.io/badge/Unity-6000.3-black?logo=unity">
+  <img alt="Unity" src="https://img.shields.io/badge/Unity-2022.3-black?logo=unity">
   <img alt="GitHub Downloads (all assets, all releases)" src="https://img.shields.io/github/downloads/blurfeng/unity-water-liquid-2d-simulation/total?color=green">
   <img alt="GitHub Repo License" src="https://img.shields.io/badge/license-MIT-blueviolet">
   <img alt="GitHub Repo Issues" src="https://img.shields.io/github/issues/blurfeng/unity-water-liquid-2d-simulation?color=yellow">
@@ -91,7 +93,7 @@ Liquid 2D Simulation は `Unity` 向けの 2D 流体シミュレーションシ�
 | Volume による実行時変更           | 実行時に Volume を通じて流体パーティクルの描画効果を変更可能。                                  |
 
 ## 💻 動作環境
-- `Unity 6000.2` 以降のバージョン
+- `Unity 6000.3` 以降のバージョン
 - **`Unity 2022.3` も完全に対応しています**（[🌳 ブランチ](#-ブランチ) を参照）。ソースコードは**単一ソース設計**で、同一のコードがバージョンマクロにより両方のエンジンバージョンに対応します
 - URP 2D レンダーパイプライン。Unity 6 は Render Graph フレームワークで描画し、Unity 2022.3 は命令型 URP 14 で描画します（Render Graph なし）。最終的な表現は同じです
 - シェーダーと互換性のあるプラットフォーム
