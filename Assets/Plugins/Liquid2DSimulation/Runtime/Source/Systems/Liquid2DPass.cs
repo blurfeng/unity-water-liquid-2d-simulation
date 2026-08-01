@@ -28,7 +28,6 @@ namespace Fs.Liquid2D
             internal static readonly int ObstructorTex = Shader.PropertyToID("_ObstructorTex");
             internal static readonly int OccluderTex = Shader.PropertyToID("_OccluderTex");
             internal static readonly int OpacityValue = Shader.PropertyToID("_OpacityValue");
-            internal static readonly int CoverColorId = Shader.PropertyToID("_CoverColor");
             internal static readonly int EdgeEnd = Shader.PropertyToID("_EdgeEnd");
             internal static readonly int EdgeMixStart = Shader.PropertyToID("_EdgeMixStart");
             internal static readonly int EdgeColor = Shader.PropertyToID("_EdgeColor");
@@ -711,8 +710,8 @@ namespace Fs.Liquid2D
             var speedArr = store.renderSpeeds; // 渐变 Speed / FoamWithSpeed 用（平滑速度）。 // for gradient Speed / FoamWithSpeed (smoothed speed). // Speed 用（平滑）。
             var densArr = store.densities;     // 渐变 Foam / FoamWithSpeed 用（平滑密度）。 // for gradient Foam / FoamWithSpeed (smoothed density). // Foam 用（平滑）。
 
-            // 是否需在上传前把 store 的手调 sRGB 色转 linear（对齐 _CoverColor 的 SetColor）。循环外缓存，避免每粒子查询色彩空间。
-            // Whether to convert the store's authored sRGB colors to linear before upload (aligning with _CoverColor's SetColor). Cached outside the loop to avoid a per-particle color-space query. // 上传前に sRGB→linear が要るか。ループ外でキャッシュ。
+            // 是否需在上传前把 store 的手调 sRGB 色转 linear（对齐 CPU 绘制路径与渐变 LUT 的上传边界）。循环外缓存，避免每粒子查询色彩空间。
+            // Whether to convert the store's authored sRGB colors to linear before upload (aligning with the CPU draw path and the gradient LUT's upload boundary). Cached outside the loop to avoid a per-particle color-space query. // 上传前に sRGB→linear が要るか。ループ外でキャッシュ。
             bool toLinear = Liquid2DColorSpace.IsLinear;
 
             for (int t = 0; t < descriptors.Count; t++)
@@ -992,14 +991,6 @@ namespace Fs.Liquid2D
             SetKeyword(data.MaterialEffect, "_OPACITY_MULTIPLY", data.Settings.OpacityMode == EOpacityMode.Multiply);
             SetKeyword(data.MaterialEffect, "_OPACITY_REPLACE", data.Settings.OpacityMode == EOpacityMode.Replace);
             mpb.SetFloat(ShaderIds.OpacityValue, data.Settings.OpacityValue); // 透明度值。 // Opacity value. //透明度値。
-            
-            // 覆盖颜色。仅 Override 模式生效；None 时把 alpha 置 0（shader 用 alpha 作强度，等价于不覆盖）。
-            // Cover color. Only effective in Override mode; None forces alpha 0 (the shader uses alpha as intensity, i.e. no override).
-            // カバー色。Override モードのみ有効。None のときは alpha を 0 にします（shader は alpha を強度として使用＝上書きなし）。
-            Color coverColor = data.Settings.CoverColorMode == ECoverColorMode.Override
-                ? data.Settings.CoverColor
-                : new Color(data.Settings.CoverColor.r, data.Settings.CoverColor.g, data.Settings.CoverColor.b, 0f);
-            mpb.SetColor(ShaderIds.CoverColorId, coverColor);
 
             SetKeyword(data.MaterialEffect, "_EDGE_ENABLE", data.Settings.Edge.Enable);
             if (data.Settings.Edge.Enable)

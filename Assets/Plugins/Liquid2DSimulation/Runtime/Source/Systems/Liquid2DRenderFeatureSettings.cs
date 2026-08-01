@@ -308,19 +308,7 @@ namespace Fs.Liquid2D
              "Opacity value, applied to the final fluid color according to the mode.",
              "透明度値、モードに従って最終的な流体色に適用されます。")]
         public float OpacityValue = 1f;
-        
-        [LocalizationTooltip(
-             "整体覆盖色模式。None=不覆盖，保留每粒子色（含渐变/混色）；Override=用下方 CoverColor 覆盖整片水体色调。此项与描述符的逐粒子颜色模式正交，叠加在其之上。",
-             "Whole-body cover color mode. None = no override, keep per-particle color (incl. gradient/mixing); Override = tint the whole fluid body with the CoverColor below. Orthogonal to the descriptor's per-particle color mode, layered on top of it.",
-             "全体カバー色モード。None = カバーなし、粒子ごとの色（渐变/混色を含む）を保持。Override = 下の CoverColor で流体全体を上書き。記述子の粒子ごとカラーモードとは直交し、その上に重畳します。")]
-        public ECoverColorMode CoverColorMode = ECoverColorMode.Override;
 
-        [ColorUsage(true, true), LocalizationTooltip(
-              "覆盖颜色。仅当 CoverColorMode=Override 时生效，作为流体的整体色调覆盖每粒子颜色。alpha为强度，1时完全覆盖，0时不覆盖。",
-             "Cover color. Effective only when CoverColorMode=Override, tinting the whole fluid over per-particle color. Alpha is intensity, 1 for full override, 0 for none.",
-             "カバーカラー。CoverColorMode=Override のときのみ有効。流体全体のトーンとして粒子色を上書きします。アルファは強度、1で完全上書き、0で上書きなし。")]
-        public Color CoverColor = Color.clear;
-        
         [LocalizationTooltip(
              "流体模糊设置。过强的模糊会让流体粒子尺寸变小，建议适当调整流体粒子尺寸或材质边缘不透明度以获得更好的效果。",
              "Fluid blur settings. Excessive blur can make fluid particles appear smaller, it is recommended to adjust fluid particle size or material edge opacity for better results.",
@@ -362,8 +350,6 @@ namespace Fs.Liquid2D
             Cutoff = src.Cutoff;
             OpacityMode = src.OpacityMode;
             OpacityValue = src.OpacityValue;
-            CoverColorMode = src.CoverColorMode;
-            CoverColor = src.CoverColor;
             Blur.CopyFrom(src.Blur);
             Distort.CopyFrom(src.Distort);
             Edge.CopyFrom(src.Edge);

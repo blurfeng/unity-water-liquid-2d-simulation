@@ -1,13 +1,9 @@
 namespace Fs.Liquid2D
 {
     /// <summary>
-    /// 粒子基础色来源模式（描述符层，逐粒子决定每个粒子写入流体纹理的颜色）。与整体覆盖色
-    /// <see cref="ECoverColorMode"/> 正交：本模式决定每粒子色，覆盖色随后叠加在整片水体上。
+    /// 粒子基础色来源模式（描述符层，逐粒子决定每个粒子写入流体纹理的颜色）。
     /// Per-particle base color source mode (descriptor level; decides each particle's color written into the fluid texture).
-    /// Orthogonal to the whole-body <see cref="ECoverColorMode"/>: this mode decides the per-particle color, the cover color
-    /// is layered over the whole fluid afterwards.
-    /// 粒子基礎色のソースモード（記述子層、各粒子が流体テクスチャに書き込む色を決定）。全体カバー色
-    /// <see cref="ECoverColorMode"/> とは直交します。
+    /// 粒子基礎色のソースモード（記述子層、各粒子が流体テクスチャに書き込む色を決定）。
     /// </summary>
     public enum EParticleColorMode
     {
@@ -66,27 +62,5 @@ namespace Fs.Liquid2D
         /// t = saturate(foamT) × saturate(|velocity| / GradientSpeedMax)。FoamStart/FoamEnd と GradientSpeedMax を併用。
         /// </summary>
         FoamWithSpeed = 2,
-    }
-
-    /// <summary>
-    /// 整体覆盖色模式（Feature/Volume 层，作用于合成后的整片水体，叠加在每粒子色之上）。
-    /// Whole-body cover color mode (feature/volume level; applied to the composited fluid body, layered over per-particle color).
-    /// 全体カバー色モード（Feature/Volume 層、合成後の流体全体に適用、粒子色の上に重畳）。
-    /// </summary>
-    public enum ECoverColorMode
-    {
-        /// <summary>
-        /// 不覆盖：保留每粒子色（含渐变/混色）。
-        /// None: keep the per-particle color (including gradient/mixing).
-        /// カバーなし：粒子ごとの色（渐变/混色を含む）を保持。
-        /// </summary>
-        None = 0,
-
-        /// <summary>
-        /// 覆盖：用 <see cref="Liquid2DRenderFeatureSettings.CoverColor"/> 覆盖整片水体色调（alpha 为强度）。
-        /// Override: tint the whole fluid body with <see cref="Liquid2DRenderFeatureSettings.CoverColor"/> (alpha is intensity).
-        /// 上書き：<see cref="Liquid2DRenderFeatureSettings.CoverColor"/> で流体全体を上書き（alpha が強度）。
-        /// </summary>
-        Override = 1,
     }
 }

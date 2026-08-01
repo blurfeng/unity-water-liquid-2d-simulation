@@ -98,8 +98,7 @@ CBUFFER_START(UnityPerMaterial)
 
             half _Cutoff; // 透明度裁剪阈值。 // Transparency cutoff threshold. // 透明度クリップ閾値。
             half _OpacityValue; // 透明度值，用法和模式相关。 // Opacity value, usage depends on mode. // 透明度値、使用方法はモードに依存。
-            half4 _CoverColor; // 叠加颜色。 // Overlay color. // オーバーレイカラー。
-            
+
             // 水体扰动相关参数。 // Water distortion related parameters. // 水体歪み関連パラメータ。
             #if defined(_DISTORT_ENABLE)
             // 计算扰动方式。 // Calculate distortion method. // 歪み計算方式。
@@ -166,10 +165,6 @@ CBUFFER_END
                 // Clip pixels with transparency below threshold to create fluid edge effects.
                 // 閾値以下の透明度のピクセルをクリップして流体エッジ効果を作成。
                 clip(col.a - _Cutoff);
-
-                // ---- 颜色处理 // Color processing // カラー処理 ---- //
-                // 覆盖颜色，用于整体调节流体颜色。 // Overlay color for overall fluid color adjustment. // 流体カラー全体調整用のオーバーレイカラー。
-                col.rgb = lerp(col.rgb, _CoverColor.rgb, _CoverColor.a);
 
                 // ---- 边缘颜色-计算lerp值 // Edge color - calculate lerp value // エッジカラー - lerp値計算 ---- //
                 #if defined(_EDGE_ENABLE)

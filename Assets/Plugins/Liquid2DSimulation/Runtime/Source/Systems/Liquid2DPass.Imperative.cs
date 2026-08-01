@@ -34,7 +34,6 @@ namespace Fs.Liquid2D
             internal static readonly int ObstructorTex = Shader.PropertyToID("_ObstructorTex");
             internal static readonly int OccluderTex = Shader.PropertyToID("_OccluderTex");
             internal static readonly int OpacityValue = Shader.PropertyToID("_OpacityValue");
-            internal static readonly int CoverColorId = Shader.PropertyToID("_CoverColor");
             internal static readonly int EdgeEnd = Shader.PropertyToID("_EdgeEnd");
             internal static readonly int EdgeMixStart = Shader.PropertyToID("_EdgeMixStart");
             internal static readonly int EdgeColor = Shader.PropertyToID("_EdgeColor");
@@ -311,8 +310,8 @@ namespace Fs.Liquid2D
             var colorArr = store.colors;
             var typeArr = store.typeId;
 
-            // 是否需在上传前把 store 的手调 sRGB 色转 linear（对齐 _CoverColor 的 SetColor）。循环外缓存，避免每粒子查询色彩空间。
-            // Whether to convert the store's authored sRGB colors to linear before upload (aligning with _CoverColor's SetColor). // 上传前に sRGB→linear が要るか。
+            // 是否需在上传前把 store 的手调 sRGB 色转 linear（对齐 CPU 绘制路径与渐变 LUT 的上传边界）。循环外缓存，避免每粒子查询色彩空间。
+            // Whether to convert the store's authored sRGB colors to linear before upload (aligning with the CPU draw path and the gradient LUT's upload boundary). // 上传前に sRGB→linear が要るか。
             bool toLinear = Liquid2DColorSpace.IsLinear;
 
             for (int t = 0; t < descriptors.Count; t++)
@@ -484,7 +483,6 @@ namespace Fs.Liquid2D
             SetKeyword(_materialEffect, "_OPACITY_MULTIPLY", _settings.OpacityMode == EOpacityMode.Multiply);
             SetKeyword(_materialEffect, "_OPACITY_REPLACE", _settings.OpacityMode == EOpacityMode.Replace);
             _mpbEffect.SetFloat(ShaderIds.OpacityValue, _settings.OpacityValue);
-            _mpbEffect.SetColor(ShaderIds.CoverColorId, _settings.CoverColor);
 
             // 边缘。 // Edge.
             SetKeyword(_materialEffect, "_EDGE_ENABLE", _settings.Edge.Enable);
