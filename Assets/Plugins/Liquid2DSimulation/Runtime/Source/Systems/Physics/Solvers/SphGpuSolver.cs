@@ -29,6 +29,7 @@ namespace Fs.Liquid2D
         private static readonly int _dt = Shader.PropertyToID("dt");
         private static readonly int _time = Shader.PropertyToID("time");
         private static readonly int _colorMixMode = Shader.PropertyToID("colorMixMode");
+        private static readonly int _initRenderScalarsId = Shader.PropertyToID("initRenderScalars");
         private static readonly int _sortPositions = Shader.PropertyToID("SortPositions");
         private static readonly int _accumulateImpulse = Shader.PropertyToID("accumulateImpulse");
         private static readonly int _numUploads = Shader.PropertyToID("numUploads");
@@ -38,6 +39,7 @@ namespace Fs.Liquid2D
         private static readonly int _velocities1 = Shader.PropertyToID("Velocities");
         private static readonly int _next = Shader.PropertyToID("ColorsNext");
         private static readonly int _densities1 = Shader.PropertyToID("Densities");
+        private static readonly int _renderScalars1 = Shader.PropertyToID("RenderScalars");
         private static readonly int _uploadPos = Shader.PropertyToID("UploadPos");
         private static readonly int _uploadColor = Shader.PropertyToID("UploadColor");
         private static readonly int _predicted1 = Shader.PropertyToID("Predicted");
@@ -94,6 +96,8 @@ namespace Fs.Liquid2D
 
         // 容量级缓冲（slot 索引，扩容时保状态重建）。 // Capacity-level buffers (slot-indexed). // 容量レベルバッファ。
         private ComputeBuffer _positions, _predicted, _velocities, _velNext, _densities, _colors, _colorsNext, _lastMix;
+        // 渲染用平滑标量 float2 (x=密度, y=速度)（EMA，渐变渲染直读）。合并为单缓冲以规避 D3D11 每 kernel 8 UAV 上限（ScatterSpawn 触顶）。 // Render-only smoothed scalars float2 (x=density, y=speed), merged into one buffer to stay within D3D11's 8-UAV-per-kernel limit. // レンダー用平滑スカラー。
+        private ComputeBuffer _renderScalars;
         private ComputeBuffer _radii, _invMass, _typeId, _groupId;
         // count 级。 // count-level.
         private ComputeBuffer _active, _bucketOf, _sortedSlots, _killFlags;
@@ -103,6 +107,8 @@ namespace Fs.Liquid2D
         private ComputeBuffer _blockSums, _scanMismatch;
         // 辅助。 // aux.
         private ComputeBuffer _materials, _mixDatas, _colliders, _points, _forceFields;
+        // 按类型的渲染平滑 EMA 系数（numTypes 级，CPU 上传）。 // Per-type render-smoothing EMA factors (numTypes-level, uploaded by CPU). // 型ごとの平滑係数。
+        private ComputeBuffer _renderGradientKBuf;
         // 动态体接触累积（合并为单个缓冲，规避 D3D11 每 kernel 8 UAV 上限）：每体 _accumStride 个 int 通道，通道定义见 _accum* 常量与 shader ACCUM_*。
         // Per-body contact accumulation merged into one buffer (works around D3D11's 8-UAV-per-kernel limit): _accumStride int channels per body.
         // 動的体の接触累積を単一バッファに統合（D3D11 の 8 UAV 制限回避）。
@@ -133,6 +139,7 @@ namespace Fs.Liquid2D
 
         // 托管暂存。 // Managed scratch.
         private float2[] _pos, _vel; private float4[] _col; private float[] _lastMixA;
+        private float2[] _rsA; // 渲染平滑标量的扩容保连续暂存（读回旧缓冲→写回新缓冲）。 // scratch to preserve RenderScalars across grow (readback old → write new). // 連続保持用暂存。
         private int[] _activeA;
         private Liquid2DGpuCollider[] _colA; private Liquid2DGpuMixData[] _mixA; private float2[] _pointsA;
         private Liquid2DGpuForceField[] _ffA;
@@ -192,7 +199,8 @@ namespace Fs.Liquid2D
             _grewThisStep = false;
             HandleCapacity(ctx, store);
 
-            // 处理生成（含扩容后的全量重传），即使本帧 active 为 0 也要写入。 // Handle spawns (and full re-upload after grow). // 生成処理。
+            // 处理生成（含扩容后的全量重传），即使本帧 active 为 0 也要写入。ScatterSpawn 现把渲染平滑标量置哨兵 (-1)，无需 targetDensity。
+            // Handle spawns (and full re-upload after grow). ScatterSpawn now sets the render scalars to a sentinel (-1); no targetDensity needed. // 生成処理。
             DispatchSpawns(ctx, store, count);
 
             if (count <= 0 || dt <= 0f) { _lastCount = 0; return; }
@@ -223,6 +231,7 @@ namespace Fs.Liquid2D
             _cs.SetFloat(_dt, subDt);
             _cs.SetFloat(_time, ctx.Time);
             _cs.SetInt(_colorMixMode, ctx.MixMode);
+            // 渲染平滑 EMA 系数按类型经 _renderGradientKBuf 上传（见 UploadAux），CopyColor 内按 TypeId 读取。 // Per-type render-smoothing EMA factors are uploaded via _renderGradientKBuf (UploadAux); CopyColor reads by TypeId. // 型ごと係数はバッファで。
 
             int gP = Groups(count);
             int gT = Groups(tableSize);
@@ -356,6 +365,18 @@ namespace Fs.Liquid2D
             if (cap == _capacity && _positions != null) return;
 
             _grewThisStep = true;
+
+            // 渲染平滑标量跨扩容保持连续：先把旧缓冲读回 _rsA（现有粒子的平滑值），扩容重建后再写回新缓冲——
+            // 现有粒子平滑历史不丢，避免扩容那帧从「平滑值」跳变成「瞬时值」引起的跳动。新容量槽与本帧 pending 置哨兵(-1)交给首帧快照。
+            // Preserve the render-smoothing scalars across grow: read the old buffer into _rsA (existing particles' smoothed
+            // values) before recreate, then write it back after — so no jump from smoothed→instantaneous on the grow frame.
+            // New-capacity slots and this frame's pending are set to the sentinel (-1) for first-frame snap.
+            // レンダー平滑スカラーを扩容跨ぎで連続保持（読み戻し→書き戻し）。跳動を防止。
+            int oldCap = _positions != null ? _capacity : 0;
+            EnsureArray(ref _rsA, cap);
+            if (oldCap > 0 && _renderScalars != null)
+                _renderScalars.GetData(_rsA, 0, 0, oldCap);
+
             // 回读保状态时必须跳过本帧 pending（刚生成、尚未上传到 GPU）的 slot：GPU 上对它们没有有效数据，
             // store 才是权威，若回读覆盖会把刚生成粒子的真实状态清成 GPU 上的陈旧/清零值（即「凭空黑/透明粒子」根因）。
             // The readback must skip this frame's pending slots (just spawned, not yet uploaded to GPU): the GPU has no valid
@@ -367,6 +388,7 @@ namespace Fs.Liquid2D
 
             void C(ref ComputeBuffer b, int stride) { b?.Release(); b = new ComputeBuffer(Mathf.Max(1, cap), stride, ComputeBufferType.Structured); }
             C(ref _positions, 8); C(ref _predicted, 8); C(ref _velocities, 8); C(ref _velNext, 8); C(ref _densities, 8);
+            C(ref _renderScalars, 8); // float2 (x=密度, y=速度)。 // float2 (x=density, y=speed). // float2。
             C(ref _colors, 16); C(ref _colorsNext, 16); C(ref _lastMix, 4);
             C(ref _radii, 4); C(ref _invMass, 4); C(ref _typeId, 4); C(ref _groupId, 4);
             _capacity = cap;
@@ -382,6 +404,22 @@ namespace Fs.Liquid2D
             // 新規 ComputeBuffer の VRAM は未定義。全 slot バッファをゼロ初期化し、未カバーの活動 slot がゴミ値（≈黒）を
             // 読むのを防ぎます（活動 slot の実データは後続の全量再アップロードで上書きされます）。
             ClearSlotBuffers(cap);
+
+            // 写回渲染平滑标量：[0,oldCap) 为读回的现有粒子平滑值（保持连续）；[oldCap,cap) 新容量槽与本帧 pending（新生成）置哨兵(-1)，
+            // 由 CopyColor 首帧快照到真实值。随后的全量重传 ScatterSpawn（initRenderScalars=0）不再覆盖 RenderScalars。
+            // Write back the render scalars: [0,oldCap) are the read-back existing smoothed values (continuous); new-capacity
+            // slots and this frame's pending are sentinels (-1) for first-frame snap. The full re-upload's ScatterSpawn
+            // (initRenderScalars=0) will not overwrite RenderScalars. // 書き戻し。
+            var sentinel = new float2(-1f, -1f);
+            for (int s = oldCap; s < cap; s++) _rsA[s] = sentinel;
+            var pending = ctx.GPUPendingSpawns;
+            if (pending != null)
+                for (int p = 0; p < pending.Count; p++)
+                {
+                    int sl = pending[p];
+                    if (sl >= 0 && sl < cap) _rsA[sl] = sentinel;
+                }
+            _renderScalars.SetData(_rsA, 0, 0, cap);
         }
 
         // 清零的复用零数组（仅 ClearSlotBuffers 使用）。 // Reused zero arrays (ClearSlotBuffers only). // ゼロ配列（再利用）。
@@ -397,6 +435,8 @@ namespace Fs.Liquid2D
             System.Array.Clear(_zero1, 0, cap); System.Array.Clear(_zeroI, 0, cap);
             _positions.SetData(_zero2, 0, 0, cap); _predicted.SetData(_zero2, 0, 0, cap); _velocities.SetData(_zero2, 0, 0, cap);
             _velNext.SetData(_zero2, 0, 0, cap); _densities.SetData(_zero2, 0, 0, cap);
+            // _renderScalars 无需在此清零：HandleCapacity 紧接着会对全部 [0,cap) 槽写回（现有=读回保连续、其余=哨兵），完整覆盖。
+            // No need to clear _renderScalars here: HandleCapacity writes back all [0,cap) slots right after (existing=preserved, rest=sentinel), fully covering it. // クリア不要。
             _colors.SetData(_zero4, 0, 0, cap); _colorsNext.SetData(_zero4, 0, 0, cap);
             _lastMix.SetData(_zero1, 0, 0, cap); _radii.SetData(_zero1, 0, 0, cap); _invMass.SetData(_zero1, 0, 0, cap);
             _typeId.SetData(_zeroI, 0, 0, cap); _groupId.SetData(_zeroI, 0, 0, cap);
@@ -472,6 +512,9 @@ namespace Fs.Liquid2D
 
             BindSpawn();
             _cs.SetInt(_numUploads, n);
+            // 增量生成(1)：新粒子的 RenderScalars 置哨兵；扩容全量重传(0)：不覆盖，现有粒子平滑值已由 HandleCapacity 读回保持连续。
+            // Incremental (1): sentinel new particles' RenderScalars; grow full re-upload (0): don't overwrite (HandleCapacity preserved continuity). // 門控。
+            _cs.SetInt(_initRenderScalarsId, full ? 0 : 1);
             _cs.SetFloat(_time, ctx.Time);
             _cs.Dispatch(_kSpawn, Groups(n), 1, 1);
         }
@@ -494,6 +537,7 @@ namespace Fs.Liquid2D
             _cs.SetBuffer(_kSpawn, _velocities1, _velocities); _cs.SetBuffer(_kSpawn, _colors1, _colors);
             _cs.SetBuffer(_kSpawn, _next, _colorsNext); _cs.SetBuffer(_kSpawn, _lastMixTime, _lastMix);
             _cs.SetBuffer(_kSpawn, _densities1, _densities);
+            _cs.SetBuffer(_kSpawn, _renderScalars1, _renderScalars); // ScatterSpawn 初始化平滑标量 (密度, 速度)（读 UploadVel）。 // ScatterSpawn inits the smoothed scalars (reads UploadVel). // 初期化。
         }
 
         private void EnsureCountBuffers(int count)
@@ -515,6 +559,7 @@ namespace Fs.Liquid2D
         private void EnsureAuxBuffers(int numTypes, int numColliders, int numPoints, int numBodies, int numForceFields)
         {
             Ensure(ref _materials, numTypes, 36); Ensure(ref _mixDatas, numTypes, 20);
+            Ensure(ref _renderGradientKBuf, numTypes, 4);
             Ensure(ref _colliders, Mathf.Max(1, numColliders), 88); Ensure(ref _points, Mathf.Max(1, numPoints), 8);
             Ensure(ref _bodyAccum, numBodies * _accumStride, 4);
             Ensure(ref _forceFields, Mathf.Max(1, numForceFields), 44);
@@ -536,6 +581,10 @@ namespace Fs.Liquid2D
         {
             if (ctx.Materials is { IsCreated: true, Length: > 0 })
                 _materials.SetData(ctx.Materials, 0, 0, ctx.Materials.Length);
+
+            // 按类型的渲染平滑 EMA 系数（CopyColor 用）。 // Per-type render-smoothing EMA factors (used by CopyColor). // 型ごとの平滑係数。
+            if (ctx.RenderGradientK is { IsCreated: true, Length: > 0 } && _renderGradientKBuf != null)
+                _renderGradientKBuf.SetData(ctx.RenderGradientK, 0, 0, Mathf.Min(ctx.RenderGradientK.Length, _renderGradientKBuf.count));
 
             EnsureArray(ref _mixA, numTypes);
             int mixN = ctx.MixData.IsCreated ? ctx.MixData.Length : 0;
@@ -580,7 +629,8 @@ namespace Fs.Liquid2D
         private void BindAll()
         {
             Bind("Positions", _positions); Bind("Predicted", _predicted); Bind("Velocities", _velocities);
-            Bind("VelNext", _velNext); Bind("Densities", _densities); Bind("Colors", _colors);
+            Bind("VelNext", _velNext); Bind("Densities", _densities);
+            Bind("RenderScalars", _renderScalars); Bind("RenderGradientK", _renderGradientKBuf); Bind("Colors", _colors);
             Bind("ColorsNext", _colorsNext); Bind("LastMixTime", _lastMix); Bind("Radii", _radii);
             Bind("InvMass", _invMass); Bind("TypeId", _typeId); Bind("GroupId", _groupId);
             Bind("ActiveIndices", _active); Bind("Materials", _materials); Bind("MixDatas", _mixDatas);
@@ -670,10 +720,13 @@ namespace Fs.Liquid2D
         /// 描画層が GPU バッファを直読するため。
         /// </summary>
         public bool TryGetRenderBuffers(out ComputeBuffer positions, out ComputeBuffer colors, out ComputeBuffer radii,
-            out ComputeBuffer typeIds, out ComputeBuffer activeIndices, out ComputeBuffer velocities, out int count)
+            out ComputeBuffer typeIds, out ComputeBuffer activeIndices, out ComputeBuffer velocities,
+            out ComputeBuffer renderScalars, out int count)
         {
             positions = _positions; colors = _colors; radii = _radii; typeIds = _typeId; activeIndices = _active;
             velocities = _velocities;
+            // 渲染读平滑后的标量 float2 (x=密度, y=速度)，非物理原始 _densities（float2）/ _velocities（float2）。 // render reads the smoothed scalars (x=density, y=speed), not the raw physics buffers. // 平滑スカラーを返す。
+            renderScalars = _renderScalars;
             count = _lastCount;
             return _valid && _positions != null && _active != null && _lastCount > 0;
         }
@@ -711,11 +764,11 @@ namespace Fs.Liquid2D
         public void Dispose()
         {
             void R(ComputeBuffer b) => b?.Release();
-            R(_positions); R(_predicted); R(_velocities); R(_velNext); R(_densities); R(_colors); R(_colorsNext); R(_lastMix);
+            R(_positions); R(_predicted); R(_velocities); R(_velNext); R(_densities); R(_renderScalars); R(_colors); R(_colorsNext); R(_lastMix);
             R(_radii); R(_invMass); R(_typeId); R(_groupId);
             R(_active); R(_bucketOf); R(_sortedSlots); R(_killFlags); R(_counts); R(_cellStart); R(_cursor);
             R(_blockSums); R(_scanMismatch);
-            R(_materials); R(_mixDatas); R(_colliders); R(_points); R(_forceFields);
+            R(_materials); R(_mixDatas); R(_renderGradientKBuf); R(_colliders); R(_points); R(_forceFields);
             R(_bodyAccum);
             R(_deadZones); R(_deadZonePoints);
             R(_upSlots); R(_upPos); R(_upVel); R(_upColor);

@@ -208,6 +208,48 @@ namespace Fs.Liquid2D
     }
 
     /// <summary>
+    /// 把求解器每步临时的密度与速度按时间平滑（EMA，按类型 k）写回 store（按 slot），供渲染层做渐变 Foam / Speed / FoamWithSpeed 判断。
+    /// 仅在末子步调度一次。OutDensities/OutSpeeds 是跨帧持久的 EMA 累加器：Out = lerp(上帧值, 本帧原始值, SmoothK[typeId])。
+    /// SmoothK=1 无平滑；越小越平滑，消除 SPH 逐帧抖动引起的颜色闪烁。渲染读 store.densities（密度比）与 store.renderSpeeds（速度）。
+    /// EMA-smooth (per-type k) the solver's per-step density and speed back into the store (by slot) for the render layer's
+    /// gradient Foam / Speed / FoamWithSpeed modes. Scheduled once on the last substep. OutDensities/OutSpeeds are cross-frame
+    /// EMA accumulators: Out = lerp(prev, raw, SmoothK[typeId]). SmoothK=1 = no smoothing; smaller = smoother.
+    /// 密度と速度を EMA（型ごと k）で平滑して store へ書き戻し。OutDensities/OutSpeeds は跨帧 EMA 累加器。
+    /// </summary>
+    [BurstCompile]
+    public struct WriteRenderScalarsJob : IJobParallelFor
+    {
+        [ReadOnly] public NativeArray<int> ActiveIndices;
+        [ReadOnly] public NativeArray<float2> Densities;
+        [ReadOnly] public NativeArray<float2> Velocities;
+        [ReadOnly] public NativeArray<int> TypeId;
+        [ReadOnly] public NativeArray<float> SmoothK; // 按类型 EMA 系数（=1−GradientSmoothing）。 // per-type EMA factor. // 型ごと係数。
+        // 读写：每个活动粒子的 slot i 唯一，线程间不冲突（禁用 ParallelFor 限制仅因按 i 而非 k 索引）。 // Read/write; each active particle's slot i is unique. // 読み書き。
+        [NativeDisableParallelForRestriction] public NativeArray<float> OutDensities;
+        [NativeDisableParallelForRestriction] public NativeArray<float> OutSpeeds;
+
+        public void Execute(int k)
+        {
+            int i = ActiveIndices[k];
+            float rawD = Densities[i].x;
+            float rawS = length(Velocities[i]);
+            float pd = OutDensities[i];
+            if (pd < 0f)
+            {
+                // 哨兵（<0）：spawn 后首帧直接快照到本帧真实值（无收敛瞬变）。 // Sentinel: snap to actual on the first frame after spawn. // 哨兵で快照。
+                OutDensities[i] = rawD;
+                OutSpeeds[i] = rawS;
+            }
+            else
+            {
+                float kk = SmoothK[TypeId[i]];
+                OutDensities[i] = pd + (rawD - pd) * kk;                 // = lerp(prev, raw density, kk)。
+                OutSpeeds[i] = OutSpeeds[i] + (rawS - OutSpeeds[i]) * kk; // = lerp(prev, raw speed, kk)。
+            }
+        }
+    }
+
+    /// <summary>
     /// 压力力：pressure = (density - targetDensity·targetDensityScale)·pressureMultiplier；
     /// nearPressure = nearDensity·nearPressureMultiplier·(0.5+cohesion)（cohesion 越高越易结团/表面张力）。
     /// 邻居梯度累加后 v += (pressureForce/density)·dt。

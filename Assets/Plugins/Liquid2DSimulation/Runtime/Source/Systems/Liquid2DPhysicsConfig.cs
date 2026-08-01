@@ -107,6 +107,10 @@ namespace Fs.Liquid2D
              "グローバル色混合アルゴリズム。LinearRgb：線形 RGB 平均（旧動作、青+黄=灰）。Oklab：知覚均一混合（デフォルト）。Ryb：RYB 顔料色相環、青+黄=緑。")]
         private Liquid2DColorMixMode colorMixMode = Liquid2DColorMixMode.Oklab;
 
+        // 渐变时间平滑量已移至每描述符（Liquid2DParticleRenderSettings.GradientSmoothing），可为不同流体独立配置，此处不再全局设置。
+        // Gradient temporal smoothing moved to per-descriptor (Liquid2DParticleRenderSettings.GradientSmoothing) for per-fluid control; no longer a global setting here.
+        // グラデーション時間平滑は記述子ごと（Liquid2DParticleRenderSettings.GradientSmoothing）に移動。
+
         [SerializeField, LocalizationTooltip(
              "⚠ 性能警告：GPU 模式下每帧把粒子数据从 GPU 全量回读到 CPU。仅在需要让依赖 CPU 数据的功能" +
              "（Liquid2DDebugGizmos 调试可视化、GetPosition/GetVelocity 查询）在 GPU 模式下工作时才开启。" +

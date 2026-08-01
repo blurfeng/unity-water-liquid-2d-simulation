@@ -53,6 +53,17 @@ namespace Fs.Liquid2D
             internal static readonly int ActiveIdxBuf = Shader.PropertyToID("_ActiveIndices");
             internal static readonly int TargetType = Shader.PropertyToID("_TargetType");
             internal static readonly int RenderScale = Shader.PropertyToID("_RenderScale");
+
+            // GPU 渐变颜色映射相关。 // GPU gradient color-mapping related. // GPU 渐変カラーマッピング関連。
+            internal static readonly int RenderScalarsBuf = Shader.PropertyToID("_RenderScalars"); // 平滑标量 float2 (x=密度, y=速度)。 // smoothed scalars float2 (x=density, y=speed). // 平滑スカラー。
+            internal static readonly int GradientLut = Shader.PropertyToID("_GradientLut");
+            internal static readonly int UseGradient = Shader.PropertyToID("_UseGradient");
+            internal static readonly int GradientSource = Shader.PropertyToID("_GradientSource");
+            internal static readonly int GradientSpeedMin = Shader.PropertyToID("_SpeedMin");
+            internal static readonly int GradientSpeedMax = Shader.PropertyToID("_GradientSpeedMax");
+            internal static readonly int RestDensity = Shader.PropertyToID("_RestDensity");
+            internal static readonly int FoamStart = Shader.PropertyToID("_FoamStart");
+            internal static readonly int FoamEnd = Shader.PropertyToID("_FoamEnd");
         }
         
         private static readonly ShaderTagId _shaderTagId = new ShaderTagId("UniversalForward");
@@ -195,6 +206,7 @@ namespace Fs.Liquid2D
             public ComputeBuffer GPURadii;
             public ComputeBuffer GPUTypeIds;
             public ComputeBuffer GPUActive;
+            public ComputeBuffer GPURenderScalars; // 渐变用逐粒子平滑标量 float2 (x=密度, y=速度)。 // per-particle smoothed scalars float2 (x=density, y=speed). // 平滑スカラー。
             public int GPUCount;
             public IReadOnlyList<Liquid2DParticleDescriptor> GPUDescriptors;
 
@@ -239,6 +251,12 @@ namespace Fs.Liquid2D
             // この Feature が当該フレームで描画する生存粒子が無い場合、全画面処理は無駄なので連鎖全体をスキップします。
             if (Liquid2DSimulation.GetRenderableAliveCount(_settings.NameTag) == 0)
                 return;
+
+            // ---- 预热渐变 LUT // Warm up gradient LUTs // 渐変 LUT を予熱 ---- //
+            // 在主线程的 Record 阶段确保 Gradient 模式描述符的 LUT 纹理已烘焙，避免在渲染执行回调内首次创建 Texture2D。
+            // Ensure gradient-mode descriptors' LUT textures are baked here (Record phase, main thread), so no Texture2D is
+            // first-created inside a render exec callback. // Record 段階（メインスレッド）で LUT を焼き込み済みにする。
+            PrepareGradientLuts();
 
             // ---- 获取基础数据 // Get basic data // 基本データを取得する ---- //
             UniversalCameraData cameraData = frameData.Get<UniversalCameraData>();
@@ -308,8 +326,9 @@ namespace Fs.Liquid2D
                 // GPU 常驻模式：取 GPU 缓冲直读绘制（DrawProcedural），否则走 CPU 路径。
                 // GPU resident mode: read GPU buffers and draw via DrawProcedural; otherwise the CPU path.
                 // GPU 常駐モード：GPU バッファを直読して DrawProcedural、それ以外は CPU パス。
+                // 渲染读平滑后的标量 float2 (x=密度, y=速度)，原始 velocity 不再需要（丢弃）。 // Render reads the smoothed scalars (x=density, y=speed); raw velocity no longer needed. // 平滑スカラーを使用。
                 bool hasGpuBuffers = Liquid2DSimulation.TryGetRenderBuffers(out var gpuPos, out var gpuCol, out var gpuRad,
-                    out var gpuType, out var gpuActive, out _, out int gpuCount, out var gpuDesc);
+                    out var gpuType, out var gpuActive, out _, out var gpuScalars, out int gpuCount, out var gpuDesc);
                 passData.GPUMode = Liquid2DSimulation.Mode == Liquid2DSimulationMode.Gpu && hasGpuBuffers;
                 if (passData.GPUMode)
                 {
@@ -319,6 +338,7 @@ namespace Fs.Liquid2D
                     passData.GPURadii = gpuRad;
                     passData.GPUTypeIds = gpuType;
                     passData.GPUActive = gpuActive;
+                    passData.GPURenderScalars = gpuScalars; // 渐变用平滑标量 float2 (x=密度→Foam, y=速度→Speed)。 // smoothed scalars (x=density→Foam, y=speed→Speed). // 平滑スカラー。
                     passData.GPUCount = gpuCount;
                     passData.GPUDescriptors = gpuDesc;
                 }
@@ -629,6 +649,29 @@ namespace Fs.Liquid2D
         }
         
         /// <summary>
+        /// 预热本 Feature 会绘制的 Gradient 模式描述符的渐变 LUT（主线程创建纹理）。仅烘焙尚未烘焙/已失效者，无粒子或非 Gradient 时零开销。
+        /// Warm up gradient LUTs for the Gradient-mode descriptors this feature will draw (creates textures on the main thread).
+        /// Only bakes those not yet baked / invalidated; zero cost when there are no particles or none use Gradient.
+        /// 本 Feature が描画する Gradient モード記述子の LUT を予熱（メインスレッドで作成）。
+        /// </summary>
+        private void PrepareGradientLuts()
+        {
+            if (!Liquid2DSimulation.TryGetRenderData(out _, out _, out _, out var descriptors) || descriptors == null)
+                return;
+            string nameTag = _settings.NameTag;
+            for (int t = 0; t < descriptors.Count; t++)
+            {
+                var d = descriptors[t];
+                if (d == null || !d.IsValid()) continue;
+                var rs = d.RenderSettings;
+                if (rs.ColorMode != EParticleColorMode.Gradient) continue;
+                // 与绘制时一致的 nameTag 门控。 // Same nameTag gate as at draw time. // 描画時と同じ nameTag ゲート。
+                if (!string.IsNullOrEmpty(rs.NameTag) && !rs.NameTag.Equals(nameTag)) continue;
+                rs.EnsureGradientLut();
+            }
+        }
+
+        /// <summary>
         /// 流体粒子绘制 Pass。将所有注册的流体粒子绘制到流体绘制。
         /// Fluid particle drawing Pass. Draw all registered fluid particles to fluid rendering.
         /// 流体粒子描画Pass。登録されたすべての流体粒子を流体レンダリングに描画。
@@ -665,6 +708,8 @@ namespace Fs.Liquid2D
             var radiiArr = store.radii;
             var colorArr = store.colors;
             var typeArr = store.typeId;
+            var speedArr = store.renderSpeeds; // 渐变 Speed / FoamWithSpeed 用（平滑速度）。 // for gradient Speed / FoamWithSpeed (smoothed speed). // Speed 用（平滑）。
+            var densArr = store.densities;     // 渐变 Foam / FoamWithSpeed 用（平滑密度）。 // for gradient Foam / FoamWithSpeed (smoothed density). // Foam 用（平滑）。
 
             for (int t = 0; t < descriptors.Count; t++)
             {
@@ -677,6 +722,18 @@ namespace Fs.Liquid2D
                 // When the descriptor NameTag is not empty, only the Feature with the same NameTag renders it.
                 // 記述子の NameTag が空でない場合、同じ NameTag の Feature のみが描画します。
                 if (!string.IsNullOrEmpty(settings.NameTag) && !settings.NameTag.Equals(nameTag)) continue;
+
+                // 渐变颜色映射参数（逐描述符预算，循环内每粒子按 t 采 CPU LUT 得色）。 // Gradient params (per descriptor; each particle samples the CPU LUT by t). // 渐変パラメータ。
+                bool gradient = settings.ColorMode == EParticleColorMode.Gradient;
+                var gradientSource = settings.GradientSource;
+                float speedMin = settings.GradientSpeedMin;
+                // 速度重映射：t = (speed − Min) / (Max − Min)，裁剪 0..1。低于 Min 视作 0（缓慢移动不出色/泡）。 // Speed remap; below Min → 0 (slow motion produces no color/foam). // 速度リマップ。
+                float speedRangeInv = 1f / Mathf.Max(1e-4f, settings.GradientSpeedMax - settings.GradientSpeedMin);
+                // 该类粒子静止密度 = 全局目标密度 × 材质密度倍率（与求解器 rho0 一致），用于把 SPH 密度归一化为密度比。 // rest density = global target × material scale (matches solver rho0). // 静止密度。
+                float restDensity = Mathf.Max(1e-4f, Liquid2DSimulation.Params.TargetDensity *
+                    (d.Material != null ? Mathf.Max(0.01f, d.Material.TargetDensityScale) : 1f));
+                float foamStart = settings.GradientFoamStart;
+                float foamRangeInv = 1f / Mathf.Max(1e-4f, settings.GradientFoamStart - settings.GradientFoamEnd);
 
                 mpb.Clear();
                 mpb.SetTexture(ShaderIds.MainTexId, settings.Sprite.texture);
@@ -708,8 +765,31 @@ namespace Fs.Liquid2D
                     m.m00 = diameter; m.m11 = diameter;
                     m.m03 = center.x; m.m13 = center.y; m.m23 = center.z;
                     matrices[count] = m;
-                    float4 c = colorArr[slot];
-                    colors[count] = new Vector4(c.x, c.y, c.z, c.w);
+                    // 颜色：Gradient 模式按每粒子标量采 CPU LUT（绕过运行时混色）；否则用 store 的每粒子色。
+                    // Color: Gradient mode samples the CPU LUT by a per-particle scalar (bypassing runtime mixing); otherwise the store's per-particle color. // 色：Gradient は LUT サンプル、否則は store 色。
+                    if (gradient)
+                    {
+                        float tt;
+                        if (gradientSource == EGradientColorSource.Speed)
+                        {
+                            tt = math.saturate((speedArr[slot] - speedMin) * speedRangeInv); // 速度重映射。 // remapped speed. // 速度リマップ。
+                        }
+                        else
+                        {
+                            float foamT = (foamStart - densArr[slot] / restDensity) * foamRangeInv; // 密度亏空→泡沫。 // density deficit → foam. // 密度不足→泡。
+                            tt = gradientSource == EGradientColorSource.FoamWithSpeed
+                                // 泡沫 × 速度门控：静止低密度水面不发泡，运动时才起泡。 // foam × speed gate: still surface doesn't foam, only motion does. // 泡×速度ゲート。
+                                ? math.saturate(foamT) * math.saturate((speedArr[slot] - speedMin) * speedRangeInv)
+                                : foamT; // 纯 Foam。 // pure Foam. // 純 Foam。
+                        }
+                        Color gc = settings.EvaluateGradientCpu(tt); // EvaluateGradientCpu 内部已 saturate(t)。 // clamps t internally. // 内部で saturate。
+                        colors[count] = new Vector4(gc.r, gc.g, gc.b, gc.a);
+                    }
+                    else
+                    {
+                        float4 c = colorArr[slot];
+                        colors[count] = new Vector4(c.x, c.y, c.z, c.w);
+                    }
                     count++;
 
                     if (count == MaxInstancesPerBatch)
@@ -763,6 +843,34 @@ namespace Fs.Liquid2D
                 mpb.SetTexture(ShaderIds.MainTexId, settings.Sprite.texture);
                 mpb.SetInteger(ShaderIds.TargetType, t);
                 mpb.SetFloat(ShaderIds.RenderScale, d.RenderScale);
+
+                // 渐变颜色映射：绑定速度/密度缓冲与 LUT，shader 内按每粒子标量采样（绕过 store 颜色）。速度/密度缓冲恒绑定
+                // （GPU 模式下必有效），_UseGradient=0 时 shader 不会真正采样。
+                // Gradient color mapping: bind velocity/density buffers + LUT; the shader samples by a per-particle scalar
+                // (bypassing the store color). Velocity/density buffers are always bound (valid in GPU mode); the shader never
+                // samples them when _UseGradient=0. // 渐変マッピング：速度/密度バッファと LUT を束縛。
+                bool gradient = settings.ColorMode == EParticleColorMode.Gradient && data.GPURenderScalars != null;
+                mpb.SetInteger(ShaderIds.UseGradient, gradient ? 1 : 0);
+                if (data.GPURenderScalars != null) mpb.SetBuffer(ShaderIds.RenderScalarsBuf, data.GPURenderScalars);
+                if (gradient)
+                {
+                    var lut = settings.GetGradientLut();
+                    mpb.SetTexture(ShaderIds.GradientLut, lut ? lut : Texture2D.blackTexture);
+                    mpb.SetInteger(ShaderIds.GradientSource, (int)settings.GradientSource);
+                    mpb.SetFloat(ShaderIds.GradientSpeedMin, settings.GradientSpeedMin);
+                    mpb.SetFloat(ShaderIds.GradientSpeedMax, settings.GradientSpeedMax);
+                    // 该类粒子静止密度 = 全局目标密度 × 材质密度倍率（与 compute 的 rho0 一致）。 // rest density = global target × material scale (matches the compute's rho0). // 静止密度。
+                    float restDensity = Mathf.Max(1e-4f, Liquid2DSimulation.Params.TargetDensity *
+                        (d.Material != null ? Mathf.Max(0.01f, d.Material.TargetDensityScale) : 1f));
+                    mpb.SetFloat(ShaderIds.RestDensity, restDensity);
+                    mpb.SetFloat(ShaderIds.FoamStart, settings.GradientFoamStart);
+                    mpb.SetFloat(ShaderIds.FoamEnd, settings.GradientFoamEnd);
+                }
+                else
+                {
+                    // 非渐变仍绑定一个占位 LUT，避免采样器未绑定告警（_UseGradient=0 时不会真正采样）。 // Bind a placeholder LUT to avoid unbound-sampler warnings. // 未使用時もプレースホルダ LUT を束縛。
+                    mpb.SetTexture(ShaderIds.GradientLut, Texture2D.blackTexture);
+                }
 
                 // 6 顶点/实例（两三角拼四边形），实例数 = 活动粒子数；Shader 内按 typeId 剔除非本类。
                 // 6 verts/instance (quad), instances = active particle count; shader culls non-matching typeIds.
@@ -880,8 +988,13 @@ namespace Fs.Liquid2D
             SetKeyword(data.MaterialEffect, "_OPACITY_REPLACE", data.Settings.OpacityMode == EOpacityMode.Replace);
             mpb.SetFloat(ShaderIds.OpacityValue, data.Settings.OpacityValue); // 透明度值。 // Opacity value. //透明度値。
             
-            // 覆盖颜色。透明度值是强度。 // Cover color. Opacity value is intensity. // カバー色。透明度値は強度です。
-            mpb.SetColor(ShaderIds.CoverColorId, data.Settings.CoverColor);
+            // 覆盖颜色。仅 Override 模式生效；None 时把 alpha 置 0（shader 用 alpha 作强度，等价于不覆盖）。
+            // Cover color. Only effective in Override mode; None forces alpha 0 (the shader uses alpha as intensity, i.e. no override).
+            // カバー色。Override モードのみ有効。None のときは alpha を 0 にします（shader は alpha を強度として使用＝上書きなし）。
+            Color coverColor = data.Settings.CoverColorMode == ECoverColorMode.Override
+                ? data.Settings.CoverColor
+                : new Color(data.Settings.CoverColor.r, data.Settings.CoverColor.g, data.Settings.CoverColor.b, 0f);
+            mpb.SetColor(ShaderIds.CoverColorId, coverColor);
 
             SetKeyword(data.MaterialEffect, "_EDGE_ENABLE", data.Settings.Edge.Enable);
             if (data.Settings.Edge.Enable)

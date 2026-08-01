@@ -43,6 +43,20 @@ Shader "Custom/URP/2D/Liquid2DParticleGpu"
             int   _TargetType;
             float _RenderScale;
 
+            // 渐变颜色映射（_UseGradient!=0 时启用）。按每粒子标量（速度或密度亏空）采样 _GradientLut，替代 _Colors。
+            // Gradient color mapping (enabled when _UseGradient!=0). Samples _GradientLut by a per-particle scalar
+            // (speed or density deficit), replacing _Colors. // 渐変マッピング（_UseGradient!=0）。
+            StructuredBuffer<float2> _RenderScalars; // 逐粒子平滑标量 (x=密度→Foam, y=速度→Speed)（已 EMA 平滑）。 // per-particle smoothed scalars (x=density→Foam, y=speed→Speed), EMA-smoothed. // 平滑スカラー。
+            TEXTURE2D(_GradientLut);
+            SAMPLER(sampler_GradientLut);
+            int   _UseGradient;     // 0=用 _Colors；非0=用渐变。 // 0=use _Colors; nonzero=gradient. // 0=_Colors、非0=渐変。
+            int   _GradientSource;  // 0=Speed，1=Foam，2=FoamWithSpeed。 // 0=Speed, 1=Foam, 2=FoamWithSpeed. // 0/1/2。
+            float _SpeedMin;        // 速度归一化下限（低于视作 0）。 // speed lower bound (below → 0). // 速度下限。
+            float _GradientSpeedMax;
+            float _RestDensity;     // 该类粒子静止密度（把 SPH 密度归一化为密度比）。 // rest density (normalizes SPH density to a ratio). // 静止密度。
+            float _FoamStart;
+            float _FoamEnd;
+
             TEXTURE2D(_MainTex);
             SAMPLER(sampler_MainTex);
 
@@ -83,7 +97,36 @@ Shader "Custom/URP/2D/Liquid2DParticleGpu"
 
                 OUT.positionCS = TransformWorldToHClip(float3(world, 0));
                 OUT.uv = QUV[vid];
-                OUT.color = _Colors[slot];
+
+                // 颜色：渐变模式按每粒子标量采 LUT（顶点纹理取样，同实例 6 顶点结果一致）；否则用 store 颜色。
+                // Color: gradient mode samples the LUT by a per-particle scalar (vertex texture fetch; identical across the
+                // instance's 6 verts); otherwise the store color. // 色：渐変は LUT サンプル、否則は store 色。
+                if (_UseGradient != 0)
+                {
+                    float2 rscal = _RenderScalars[slot]; // x=平滑密度, y=平滑速度。 // x=smoothed density, y=smoothed speed. // x=密度, y=速度。
+                    // 速度重映射：低于 _SpeedMin 视作 0（缓慢移动不出色/泡）。 // speed remap; below _SpeedMin → 0. // 速度リマップ。
+                    float speedT = saturate((rscal.y - _SpeedMin) / max(1e-4, _GradientSpeedMax - _SpeedMin));
+                    float t;
+                    if (_GradientSource == 0) // Speed
+                    {
+                        t = speedT;
+                    }
+                    else // Foam / FoamWithSpeed：密度亏空。 // density deficit. // 密度不足。
+                    {
+                        float ratio = rscal.x / max(1e-4, _RestDensity);
+                        float foamT = (_FoamStart - ratio) / max(1e-4, _FoamStart - _FoamEnd);
+                        if (_GradientSource == 2) // FoamWithSpeed：泡沫 × 速度门控（静止不发泡）。 // foam × speed gate. // 泡×速度ゲート。
+                            t = saturate(foamT) * speedT;
+                        else // Foam
+                            t = foamT;
+                    }
+                    t = saturate(t);
+                    OUT.color = SAMPLE_TEXTURE2D_LOD(_GradientLut, sampler_GradientLut, float2(t, 0.5), 0);
+                }
+                else
+                {
+                    OUT.color = _Colors[slot];
+                }
                 return OUT;
             }
 

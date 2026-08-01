@@ -67,5 +67,10 @@ namespace Fs.Liquid2D
         /// 記述子が描画可能か（スプライトとマテリアルが揃っているか）。
         /// </summary>
         public bool IsValid() => RenderSettings != null && RenderSettings.IsValid();
+
+#if UNITY_EDITOR
+        // 编辑器改动（如渐变）后使渐变 LUT 失效，下次渲染重建。 // Invalidate the gradient LUT after editor edits (e.g. gradient); rebuilt on next render. // 編集後に LUT を無効化。
+        private void OnValidate() => RenderSettings?.InvalidateGradientLut();
+#endif
     }
 }

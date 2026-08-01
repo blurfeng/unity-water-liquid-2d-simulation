@@ -291,7 +291,7 @@ namespace Fs.Liquid2D
             // GPU 常驻路径：Mode==Gpu 且能取到常驻 GPU 缓冲时，直接 DrawProcedural 读缓冲，绕过 CPU 逐粒子矩阵与回读。
             if (Liquid2DSimulation.Mode == Liquid2DSimulationMode.Gpu
                 && Liquid2DSimulation.TryGetRenderBuffers(out var gpuPositions, out var gpuColors, out var gpuRadii,
-                    out var gpuTypeIds, out var gpuActive, out _, out int gpuCount, out var gpuDescriptors))
+                    out var gpuTypeIds, out var gpuActive, out _, out _, out int gpuCount, out var gpuDescriptors))
             {
                 ExecuteParticlesGpu(cmd, gpuPositions, gpuColors, gpuRadii, gpuTypeIds, gpuActive, gpuCount, gpuDescriptors);
                 return;

@@ -79,6 +79,8 @@ namespace Fs.Liquid2D
         private readonly List<Liquid2DParticleDescriptor> _descriptors = new List<Liquid2DParticleDescriptor>();
         private NativeArray<Liquid2DMaterialData> _materials;
         private NativeArray<Liquid2DMixData> _mixData;
+        // 按类型的渲染平滑 EMA 系数 k（=1−GradientSmoothing，非 Gradient 类型为 1=不平滑）。 // Per-type render-smoothing EMA factor k (=1−GradientSmoothing; 1 for non-Gradient types). // 型ごとの平滑係数。
+        private NativeArray<float> _renderGradientK;
 
         // nameTag → groupId（0 为空标签通配）。 // nameTag → groupId (0 = empty-tag wildcard). // nameTag → groupId。
         private readonly Dictionary<string, int> _nameTagToGroup = new Dictionary<string, int>();
@@ -201,14 +203,23 @@ namespace Fs.Liquid2D
             {
                 if (_materials.IsCreated) _materials.Dispose();
                 if (_mixData.IsCreated) _mixData.Dispose();
+                if (_renderGradientK.IsCreated) _renderGradientK.Dispose();
                 _materials = new NativeArray<Liquid2DMaterialData>(n, Allocator.Persistent);
                 _mixData = new NativeArray<Liquid2DMixData>(n, Allocator.Persistent);
+                _renderGradientK = new NativeArray<float>(n, Allocator.Persistent);
             }
             for (int i = 0; i < _descriptors.Count; i++)
             {
                 var d = _descriptors[i];
                 _materials[i] = d != null && d.Material != null ? d.Material.ToData() : Liquid2DMaterialData.Default;
                 _mixData[i] = BuildMix(d != null ? d.MixSettings : null);
+                // 渲染平滑 EMA 系数：仅 Gradient 模式平滑（k=1−smoothing）；其余类型 k=1（不平滑，渲染也不用）。逐帧回填以支持运行时改动。
+                // Render-smoothing EMA factor: smooth only Gradient-mode types (k=1−smoothing); others k=1 (no smoothing, unused by render). Refilled each frame for runtime edits.
+                // 平滑係数：Gradient のみ平滑、他は k=1。実行時変更のため毎回回填。
+                var rs = d != null ? d.RenderSettings : null;
+                _renderGradientK[i] = rs != null && rs.ColorMode == EParticleColorMode.Gradient
+                    ? 1f - math.clamp(rs.GradientSmoothing, 0f, 1f)
+                    : 1f;
             }
         }
 
@@ -251,6 +262,13 @@ namespace Fs.Liquid2D
 
             var handle = _store.Allocate(position, velocity, new float4(c.r, c.g, c.b, c.a),
                 radius, mass, typeId, group, lifeEnd, now);
+
+            // 渲染平滑标量置哨兵 (-1)：WriteRenderScalarsJob 检测到 <0 即快照到本帧真实密度/速度（无收敛瞬变、无扩容/生成闪色）。
+            // 不用固定初值——任何固定值都可能落在某配置的泡沫带内。CPU 模式渲染读 store；GPU 模式由 ScatterSpawn 置同哨兵。
+            // Sentinel (-1): WriteRenderScalarsJob snaps to the actual value on the first frame (no transient / grow flash),
+            // avoiding a fixed init that could sit inside a foam band. GPU mode sets the same sentinel in ScatterSpawn. // 哨兵。
+            _store.densities[handle.Index] = -1f;
+            _store.renderSpeeds[handle.Index] = -1f;
 
             if (!_groupSlots.TryGetValue(group, out var g))
             {
@@ -426,6 +444,7 @@ namespace Fs.Liquid2D
                 KillFlags = killFlags,
                 Time = now,
                 MixMode = (int)ColorMixMode,
+                RenderGradientK = _renderGradientK, // 按类型的渲染平滑 EMA 系数。 // per-type render-smoothing EMA factors. // 型ごとの平滑係数。
                 DynamicBodyCount = _dynamicReceivers.Count,
                 GPUPendingSpawns = _gpuPendingSpawns,
             };
@@ -604,14 +623,15 @@ namespace Fs.Liquid2D
         /// </summary>
         public static bool TryGetRenderBuffers(out ComputeBuffer positions, out ComputeBuffer colors,
             out ComputeBuffer radii, out ComputeBuffer typeIds, out ComputeBuffer activeIndices,
-            out ComputeBuffer velocities, out int count, out IReadOnlyList<Liquid2DParticleDescriptor> descriptors)
+            out ComputeBuffer velocities, out ComputeBuffer renderScalars, out int count,
+            out IReadOnlyList<Liquid2DParticleDescriptor> descriptors)
         {
-            positions = colors = radii = typeIds = activeIndices = velocities = null; count = 0; descriptors = null;
+            positions = colors = radii = typeIds = activeIndices = velocities = renderScalars = null; count = 0; descriptors = null;
             var inst = _instance;
             if (inst == null) return false;
             descriptors = inst._descriptors;
             if (inst._solver is SphGpuSolver gpu)
-                return gpu.TryGetRenderBuffers(out positions, out colors, out radii, out typeIds, out activeIndices, out velocities, out count);
+                return gpu.TryGetRenderBuffers(out positions, out colors, out radii, out typeIds, out activeIndices, out velocities, out renderScalars, out count);
             return false;
         }
 
@@ -662,6 +682,7 @@ namespace Fs.Liquid2D
             if (_activeIndices.IsCreated) _activeIndices.Dispose();
             if (_materials.IsCreated) _materials.Dispose();
             if (_mixData.IsCreated) _mixData.Dispose();
+            if (_renderGradientK.IsCreated) _renderGradientK.Dispose();
         }
 
 #if UNITY_EDITOR

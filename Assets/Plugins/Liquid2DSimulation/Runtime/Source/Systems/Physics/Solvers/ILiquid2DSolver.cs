@@ -79,6 +79,18 @@ namespace Fs.Liquid2D
         /// <summary>全局颜色混合模式（0=LinearRgb, 1=Oklab, 2=Ryb）。 // Global color-mix mode (0=LinearRgb, 1=Oklab, 2=Ryb). // グローバル色混合モード。</summary>
         public int MixMode;
 
+        /// <summary>
+        /// 按类型（typeId）的渲染平滑 EMA 混合系数 k（= 1 − 该类型 GradientSmoothing，范围 0..1）。每帧把持久化的
+        /// 「渲染密度」「渲染速度」按 EMA 更新：renderX = lerp(renderX, 本帧原始值, k[typeId])。k=1 无平滑；越小越平滑。
+        /// 用于消除渐变模式因 SPH 逐帧抖动导致的颜色闪烁；逐流体独立配置；不影响物理（物理仍用原始 Densities/Velocities）。
+        /// Per-type (typeId) render-smoothing EMA factors k (= 1 − that type's GradientSmoothing, range 0..1). Each frame the
+        /// persisted render density/speed are updated by EMA: renderX = lerp(renderX, this-frame raw, k[typeId]). k=1 = no
+        /// smoothing; smaller = smoother. Per-fluid; removes gradient-mode flicker from per-frame SPH jitter; does not affect
+        /// physics (which still uses raw Densities/Velocities).
+        /// 型ごと（typeId）のレンダー平滑 EMA 係数 k（= 1 − その型の GradientSmoothing）。密度/速度を EMA 更新。物理には影響しません。
+        /// </summary>
+        [ReadOnly] public NativeArray<float> RenderGradientK;
+
         /// <summary>动态碰撞体数量（>0 时 GPU 才回读冲量）。 // Dynamic collider count (GPU reads impulse back only when >0). // 動的コライダー数。</summary>
         public int DynamicBodyCount;
 

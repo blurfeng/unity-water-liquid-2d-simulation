@@ -196,7 +196,7 @@ namespace Fs.Liquid2D
                 material.EnableKeyword(GpuProceduralKeyword);
                 _pendingGpuDraw = Liquid2DSimulation.TryGetRenderBuffers(
                     out _cachedGpuPositions, out _cachedGpuColors, out _cachedGpuRadii, out _cachedGpuTypeIds,
-                    out _cachedGpuActive, out _cachedGpuVelocities, out _cachedGpuCount,
+                    out _cachedGpuActive, out _cachedGpuVelocities, out _, out _cachedGpuCount,
                     out _cachedGpuDescriptors);
                 // 绘制统一交给 Liquid2DPass 的 Overlay Pass（Effect 之后），此处仅缓存。
                 // Drawing is deferred to Liquid2DPass's Overlay Pass (after Effect); only cache here.

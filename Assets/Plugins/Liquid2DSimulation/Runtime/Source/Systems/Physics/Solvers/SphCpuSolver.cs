@@ -168,6 +168,16 @@ namespace Fs.Liquid2D
                             DeadZoneCount = ctx.DeadZoneCount, KillFlags = ctx.KillFlags,
                         }.Schedule(count, 64, h);
                     }
+
+                    // 把末子步密度与速度按类型 EMA 平滑写回 store（供渐变 Foam / Speed / FoamWithSpeed 渲染）。读 _densities（末子步 DensityJob 写、之后未被覆盖）与最终 velocities，写 store.densities/renderSpeeds，与其它 job 不冲突。
+                    // EMA-smooth (per-type) the last-substep density and final velocity into the store (for gradient render). Reads _densities (from the last DensityJob) and final velocities; writes store.densities/renderSpeeds — disjoint from other jobs.
+                    // 末サブステップの密度と速度を型ごと EMA で store へ書戻し。
+                    h = new WriteRenderScalarsJob
+                    {
+                        ActiveIndices = ctx.ActiveIndices, Densities = _densities, Velocities = store.velocities,
+                        TypeId = store.typeId, SmoothK = ctx.RenderGradientK,
+                        OutDensities = store.densities, OutSpeeds = store.renderSpeeds,
+                    }.Schedule(count, 64, h);
                 }
 
                 h.Complete();

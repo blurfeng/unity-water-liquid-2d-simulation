@@ -49,6 +49,11 @@ RWStructuredBuffer<float2> Predicted;
 RWStructuredBuffer<float2> Velocities;
 RWStructuredBuffer<float2> VelNext;
 RWStructuredBuffer<float2> Densities;    // (density, nearDensity)
+// 渲染用平滑标量 (x=密度, y=速度大小)（EMA，跨帧驻留）。仅供渐变渲染读取，物理不用。合并为单个 float2 以规避 D3D11 每 kernel 8 UAV 上限（ScatterSpawn 恰好触顶）。
+// Render-only smoothed scalars (x=density, y=speed) (EMA, resident). For gradient rendering, unused by physics. Merged into one float2 to stay within D3D11's 8-UAV-per-kernel limit (ScatterSpawn was at the cap).
+// レンダー用平滑スカラー (x=密度, y=速度)。D3D11 の 8 UAV 制限回避のため float2 に統合。
+RWStructuredBuffer<float2> RenderScalars;
+StructuredBuffer<float>    RenderGradientK; // 按类型的渲染平滑 EMA 系数（=1−GradientSmoothing，由 CPU 上传）。 // per-type render-smoothing EMA factor (uploaded by CPU). // 型ごとの平滑係数。
 RWStructuredBuffer<float4> Colors;
 RWStructuredBuffer<float4> ColorsNext;
 RWStructuredBuffer<float>  LastMixTime;
@@ -153,6 +158,7 @@ float dt;
 float time;
 float impulseScale;
 int colorMixMode; // 0=LinearRgb, 1=Oklab, 2=Ryb
+int initRenderScalars; // ScatterSpawn 是否初始化 RenderScalars：1=增量生成置哨兵；0=扩容全量重传（由 CPU 侧读回旧值保持连续，不覆盖）。 // whether ScatterSpawn inits RenderScalars: 1=incremental (sentinel), 0=grow full re-upload (CPU preserves continuity). // 初期化フラグ。
 
 // ============ 核函数。 ============
 float Poly6Coef()     { return 4.0f  / (PI * pow(h, 8.0f)); }
@@ -322,6 +328,11 @@ void ScatterSpawn(uint3 id : SV_DispatchThreadID)
     ColorsNext[slot] = c;
     LastMixTime[slot] = time;
     Densities[slot] = float2(0, 0);
+    // 渲染平滑标量：增量生成（initRenderScalars=1）置哨兵 (-1)，CopyColor 检测到 <0 即快照到本帧真实值；
+    // 扩容全量重传（initRenderScalars=0）不覆盖——现有粒子的平滑值由 CPU 侧读回旧缓冲写入新缓冲以保持连续（见 SphGpuSolver.HandleCapacity）。
+    // Render scalars: incremental spawn (initRenderScalars=1) sets sentinel (-1), CopyColor snaps to the actual value; grow
+    // full re-upload (0) does NOT overwrite — existing particles' smoothed values are preserved by the CPU side. // 哨兵/連続保持。
+    if (initRenderScalars != 0) RenderScalars[slot] = float2(-1, -1);
 }
 
 [numthreads(NumThreads,1,1)]
@@ -966,6 +977,24 @@ void CopyColor(uint3 id : SV_DispatchThreadID)
     int k = (int)id.x; if (k >= numParticles) return;
     int i = ActiveIndices[k];
     Colors[i] = ColorsNext[i];
+    // 渲染平滑标量（x=密度, y=速度）：末子步随混色一并更新（本 kernel 在 lastStep 对活动粒子跑一次）。
+    // 哨兵 (<0)=spawn/扩容后首帧，直接快照到本帧真实值（无收敛瞬变、无扩容闪色）；否则按类型系数 EMA（kk=1 时等于原始值）。
+    // Render scalars (x=density, y=speed), updated in the last-substep color copy. Sentinel (<0) = first frame after spawn/grow,
+    // snap to the actual value (no convergence transient / grow flash); otherwise EMA by per-type k. // 哨兵で快照、否則 EMA。
+    float2 rs = RenderScalars[i];
+    float rawD = Densities[i].x;
+    float rawS = length(Velocities[i]);
+    if (rs.x < 0.0)
+    {
+        rs = float2(rawD, rawS);
+    }
+    else
+    {
+        float kk = RenderGradientK[TypeId[i]];
+        rs.x += (rawD - rs.x) * kk;
+        rs.y += (rawS - rs.y) * kk;
+    }
+    RenderScalars[i] = rs;
 }
 
 // 销毁区域多边形内判定（读 DeadZonePoints，与 PointInPoly 同算法）。 // Dead-zone polygon inside test (reads DeadZonePoints). // 破棄領域の多角形内判定。

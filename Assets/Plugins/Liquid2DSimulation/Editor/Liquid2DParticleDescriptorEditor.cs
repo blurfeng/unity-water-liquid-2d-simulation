@@ -27,6 +27,14 @@ namespace Fs.Liquid2D.Editor
         private SerializedProperty _material;
         private SerializedProperty _color;
         private SerializedProperty _nameTag;
+        private SerializedProperty _colorMode;
+        private SerializedProperty _colorGradient;
+        private SerializedProperty _gradientSource;
+        private SerializedProperty _gradientSpeedMin;
+        private SerializedProperty _gradientSpeedMax;
+        private SerializedProperty _gradientFoamStart;
+        private SerializedProperty _gradientFoamEnd;
+        private SerializedProperty _gradientSmoothing;
 
         private void OnEnable()
         {
@@ -40,6 +48,14 @@ namespace Fs.Liquid2D.Editor
                 _material = _renderSettings.FindPropertyRelative("Material");
                 _color = _renderSettings.FindPropertyRelative("Color");
                 _nameTag = _renderSettings.FindPropertyRelative("NameTag");
+                _colorMode = _renderSettings.FindPropertyRelative("ColorMode");
+                _colorGradient = _renderSettings.FindPropertyRelative("ColorGradient");
+                _gradientSource = _renderSettings.FindPropertyRelative("GradientSource");
+                _gradientSpeedMin = _renderSettings.FindPropertyRelative("GradientSpeedMin");
+                _gradientSpeedMax = _renderSettings.FindPropertyRelative("GradientSpeedMax");
+                _gradientFoamStart = _renderSettings.FindPropertyRelative("GradientFoamStart");
+                _gradientFoamEnd = _renderSettings.FindPropertyRelative("GradientFoamEnd");
+                _gradientSmoothing = _renderSettings.FindPropertyRelative("GradientSmoothing");
             }
         }
 
@@ -65,7 +81,8 @@ namespace Fs.Liquid2D.Editor
             DrawNameTagRow();
             DrawSpriteRow();
             DrawMaterialRow();
-            DrawColorRow();
+            DrawSpritePreview();
+            DrawColorModeRows();
 
             EditorGUILayout.Space();
 
@@ -204,7 +221,10 @@ namespace Fs.Liquid2D.Editor
             }
         }
 
-        private void DrawColorRow()
+        // 绘制 Color 字段 + 色相预览块。仅 Simple（简单）颜色模式使用此颜色，故由 DrawColorModeRows 在该模式下调用。
+        // Draw the Color field + hue swatch. Only Simple color mode uses this color, so DrawColorModeRows calls it in that mode.
+        // Color フィールド + 色相プレビューを描画。Simple モードのみ使用。
+        private void DrawColorField()
         {
             EditorGUILayout.BeginHorizontal();
             {
@@ -224,18 +244,128 @@ namespace Fs.Liquid2D.Editor
                         "流体パーティクルの描画カラー（HDR）。プレビューは色相確認のため不透明固定で、実際の透明度は Color のアルファで決まります。")));
             }
             EditorGUILayout.EndHorizontal();
+        }
 
-            // Sprite 缩略图预览。 // Sprite thumbnail preview.
+        // Sprite 缩略图预览（与颜色模式无关，始终显示于 Sprite/Material 之后）。 // Sprite thumbnail preview (mode-independent; always shown after Sprite/Material). // Sprite サムネイル。
+        private void DrawSpritePreview()
+        {
             var sprite = _sprite.objectReferenceValue as Sprite;
-            if (sprite)
+            if (!sprite) return;
+            Texture2D preview = AssetPreview.GetAssetPreview(sprite);
+            if (preview)
             {
-                Texture2D preview = AssetPreview.GetAssetPreview(sprite);
-                if (preview)
+                Rect r = GUILayoutUtility.GetRect(64f, 64f, GUILayout.Width(64f), GUILayout.Height(64f));
+                GUI.DrawTexture(r, preview, ScaleMode.ScaleToFit);
+            }
+        }
+
+        /// <summary>
+        /// 绘制颜色模式及其（仅 Gradient 时的）渐变子配置。RenderSettings 在本编辑器中手绘并被排除于默认绘制之外，
+        /// 故新增字段须在此显式绘制。 // Draw the color mode and (Gradient-only) gradient sub-config. RenderSettings is
+        /// hand-drawn here and excluded from default drawing, so new fields must be drawn explicitly. // カラーモードを描画。
+        /// </summary>
+        private void DrawColorModeRows()
+        {
+            if (_colorMode == null)
+            {
+                // 极端情况下（无 ColorMode 属性）仍需绘制 Color，避免其被完全隐藏。 // Fallback: still draw Color if ColorMode property is missing. // フォールバック。
+                DrawColorField();
+                return;
+            }
+
+            EditorGUILayout.PropertyField(_colorMode, new GUIContent("Color Mode", _colorMode.tooltip));
+
+            EditorGUI.indentLevel++;
+
+            // Simple（简单）模式：Color 生效，显示于此；Gradient 模式：Color 被忽略，改显示渐变配置。
+            // Simple mode: Color applies, shown here; Gradient mode: Color is ignored, gradient config shown instead.
+            // Simple：Color を表示；Gradient：Color を無視し渐変設定を表示。
+            if (_colorMode.enumValueIndex != (int)EParticleColorMode.Gradient)
+            {
+                DrawColorField();
+                EditorGUI.indentLevel--;
+                return;
+            }
+
+            if (_colorGradient != null)
+                EditorGUILayout.PropertyField(_colorGradient, new GUIContent("Color Gradient", _colorGradient.tooltip));
+            if (_gradientSource != null)
+                EditorGUILayout.PropertyField(_gradientSource, new GUIContent("Gradient Source", _gradientSource.tooltip));
+
+            // 按子模式只显示相关参数：Speed→Speed Max；Foam→Foam Start/End；FoamWithSpeed→两者都要。
+            // Show only the relevant params per sub-mode: Speed→Speed Max; Foam→Foam Start/End; FoamWithSpeed→both.
+            // サブモード別に関連パラメータのみ表示：Speed→Speed Max、Foam→Foam Start/End、FoamWithSpeed→両方。
+            int src = _gradientSource != null ? _gradientSource.enumValueIndex : (int)EGradientColorSource.Speed;
+            bool usesFoam = src == (int)EGradientColorSource.Foam || src == (int)EGradientColorSource.FoamWithSpeed;
+            bool usesSpeed = src == (int)EGradientColorSource.Speed || src == (int)EGradientColorSource.FoamWithSpeed;
+
+            if (usesFoam)
+            {
+                if (_gradientFoamStart != null)
+                    EditorGUILayout.PropertyField(_gradientFoamStart, new GUIContent("Foam Start", _gradientFoamStart.tooltip));
+                if (_gradientFoamEnd != null)
+                    EditorGUILayout.PropertyField(_gradientFoamEnd, new GUIContent("Foam End", _gradientFoamEnd.tooltip));
+
+                // FoamEnd 应小于 FoamStart（否则映射退化）。 // FoamEnd should be less than FoamStart (else the mapping degenerates). // FoamEnd < FoamStart。
+                if (_gradientFoamStart != null && _gradientFoamEnd != null
+                    && _gradientFoamEnd.floatValue >= _gradientFoamStart.floatValue)
                 {
-                    Rect r = GUILayoutUtility.GetRect(64f, 64f, GUILayout.Width(64f), GUILayout.Height(64f));
-                    GUI.DrawTexture(r, preview, ScaleMode.ScaleToFit);
+                    EditorGUILayout.HelpBox(
+                        L("Foam End 应小于 Foam Start，否则泡沫映射无效。",
+                            "Foam End should be less than Foam Start, otherwise the foam mapping is invalid.",
+                            "Foam End は Foam Start より小さくしてください。さもないと泡マッピングが無効です。"),
+                        MessageType.Warning);
                 }
             }
+
+            if (usesSpeed && _gradientSpeedMax != null)
+            {
+                // 速度归一化下限（缓慢移动不出色/泡）。 // Speed lower bound (slow motion produces no color/foam). // 速度下限。
+                if (_gradientSpeedMin != null)
+                    EditorGUILayout.PropertyField(_gradientSpeedMin, new GUIContent("Speed Min", _gradientSpeedMin.tooltip));
+
+                // FoamWithSpeed 模式下 Speed Max 语义为「泡沫达到满强度所需的速度」。 // In FoamWithSpeed mode, Speed Max is "the speed at which foam reaches full strength". // FoamWithSpeed では「泡が最大になる速度」。
+                EditorGUILayout.PropertyField(_gradientSpeedMax, new GUIContent("Speed Max", _gradientSpeedMax.tooltip));
+
+                // Speed Min 应小于 Speed Max（否则速度重映射退化）。 // Speed Min should be less than Speed Max. // Speed Min < Speed Max。
+                if (_gradientSpeedMin != null && _gradientSpeedMin.floatValue >= _gradientSpeedMax.floatValue)
+                {
+                    EditorGUILayout.HelpBox(
+                        L("Speed Min 应小于 Speed Max，否则速度重映射无效（几乎所有速度都被归为 0 或 1）。",
+                            "Speed Min should be less than Speed Max, otherwise the speed remap is invalid (almost all speeds collapse to 0 or 1).",
+                            "Speed Min は Speed Max より小さくしてください。さもないと速度リマップが無効になります。"),
+                        MessageType.Warning);
+                }
+
+                // 必须大于 0：0 或负值会让速度归一化溢出（t 恒饱和为 1），所有粒子都采样到渐变末端（最大速度色）。
+                // 自动纠正为 1 使配置立即有效（含旧资产遗留的 0）。
+                // Must be > 0: 0 or negative overflows the speed normalization (t saturates to 1), so every particle samples
+                // the gradient's end (max-speed color). Auto-correct to 1 so the config is immediately valid (covers the
+                // legacy 0 left in old assets). // 0 以下は不可、1 に自動補正。
+                if (_gradientSpeedMax.floatValue <= 0f)
+                {
+                    _gradientSpeedMax.floatValue = 1f;
+                    EditorGUILayout.HelpBox(
+                        L("Speed Max 必须大于 0，否则所有粒子都会采样到渐变末端（最大速度色）。已自动设为 1，请按流体实际速度上限调整。",
+                            "Speed Max must be greater than 0, otherwise every particle samples the gradient's end (max-speed color). Reset to 1; tune it to your fluid's actual peak speed.",
+                            "Speed Max は 0 より大きくしてください。さもないと全粒子がグラデーション末端（最大速度色）を採取します。1 にリセットしました。流体の実際の最大速度に調整してください。"),
+                        MessageType.Warning);
+                }
+                else if (_gradientSpeedMax.floatValue < 1f)
+                {
+                    EditorGUILayout.HelpBox(
+                        L("Speed Max 小于 1：速度略大即达渐变末端，可能大部分粒子都采样到最大速度色。建议按流体实际速度上限设置（如 5~20）。",
+                            "Speed Max below 1: even small speeds reach the gradient end, so most particles may sample the max-speed color. Set it near your fluid's actual peak speed (e.g. 5~20).",
+                            "Speed Max が 1 未満：わずかな速度でグラデーション末端に達し、多くの粒子が最大速度色になります。流体の実際の最大速度（例 5~20）に設定してください。"),
+                        MessageType.Info);
+                }
+            }
+
+            // 渐变时间平滑（所有渐变子模式通用，逐流体独立）。 // Gradient temporal smoothing (all gradient sub-modes; per-fluid). // 全渐変モード共通。
+            if (_gradientSmoothing != null)
+                EditorGUILayout.PropertyField(_gradientSmoothing, new GUIContent("Gradient Smoothing", _gradientSmoothing.tooltip));
+
+            EditorGUI.indentLevel--;
         }
 
         private void DrawScaleAndLifetimeHints()
