@@ -845,8 +845,8 @@ MonoBehaviour:
   displayEnabled: 1
   material: {fileID: 2100000, guid: 6cde42e39ffc3cb45ad10b8a0fe3f1e7, type: 2}
   scale: 0.2
-  colourMode: 0
-  colourMap:
+  colorMode: 0
+  colorMap:
     serializedVersion: 2
     key0: {r: 0.13363299, g: 0.34235913, b: 0.7264151, a: 1}
     key1: {r: 0.2980392, g: 1, b: 0.56327766, a: 1}
