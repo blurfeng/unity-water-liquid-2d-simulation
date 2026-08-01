@@ -46,7 +46,7 @@ namespace Fs.Liquid2D
         /// <summary>计算平台模式。 // Compute mode. // 計算モード。</summary>
         public static Liquid2DSimulationMode Mode = Liquid2DSimulationMode.Gpu;
 
-        /// <summary>全局颜色混合算法模式（由 Liquid2DPhysicsConfig 可在场景级覆盖）。 // Global colour-mixing algorithm mode (can be overridden per-scene by Liquid2DPhysicsConfig). // グローバル色混合アルゴリズムモード。</summary>
+        /// <summary>全局颜色混合算法模式（由 Liquid2DPhysicsConfig 可在场景级覆盖）。 // Global color-mixing algorithm mode (can be overridden per-scene by Liquid2DPhysicsConfig). // グローバル色混合アルゴリズムモード。</summary>
         public static Liquid2DColorMixMode ColorMixMode = Liquid2DColorMixMode.Oklab;
 
         /// <summary>

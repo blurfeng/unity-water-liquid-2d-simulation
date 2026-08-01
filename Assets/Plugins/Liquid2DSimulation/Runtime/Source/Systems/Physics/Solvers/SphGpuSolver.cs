@@ -122,7 +122,7 @@ namespace Fs.Liquid2D
         private bool _grewThisStep;  // 本步是否发生扩容（供诊断埋点）。 // Whether a grow happened this step (for diagnostics). // 本ステップで扩容したか。
 
         // 临时诊断开关：开启后每帧回读颜色，定位首个「凭空变黑」的活动粒子并打印其上下文，然后停打。
-        // Temporary diagnostic toggle: when on, reads colours back each frame, logs the first "spontaneously black" active
+        // Temporary diagnostic toggle: when on, reads colors back each frame, logs the first "spontaneously black" active
         // particle with its context, then stops logging. Leave OFF in production (per-frame readback is a sync stall).
         // 一時診断スイッチ：オンで毎フレーム色を回読し、最初の「突然黒くなった」粒子の文脈を出力後に停止。
         // 仅编辑器：同步全量回读不应进 release 构建（与本项目「编辑器专用代码 #if UNITY_EDITOR」约定一致）。 // Editor-only: the synchronous full readback must not ship in release builds. // エディタ専用。
@@ -274,8 +274,8 @@ namespace Fs.Liquid2D
 
         // 临时诊断：定位首个「凭空变黑」的活动粒子。回读 GPU 颜色，找到 RGB≈0 且 alpha 可见的活动 slot 即打印其
         // slot/typeId/颜色/本步是否扩容，然后停止（避免刷屏）。⚠ 每帧 GPU→CPU 回读，仅排障时开启。
-        // Diagnostic: find the first "spontaneously black" active particle. Reads GPU colours, logs the first active slot whose
-        // RGB≈0 with visible alpha (slot/typeId/colour/grew-this-step), then stops. ⚠ Per-frame readback; debugging only.
+        // Diagnostic: find the first "spontaneously black" active particle. Reads GPU colors, logs the first active slot whose
+        // RGB≈0 with visible alpha (slot/typeId/color/grew-this-step), then stops. ⚠ Per-frame readback; debugging only.
         // 診断：突然黒くなった活動粒子を特定し、文脈を出力後に停止。⚠ 毎フレーム回読、排障時のみ。
 #if UNITY_EDITOR
         private void DebugScanBlack(in Liquid2DSolveContext ctx, int count)
@@ -377,7 +377,7 @@ namespace Fs.Liquid2D
             // 这里把所有逐 slot 缓冲清零，杜绝垃圾值泄漏（随后的全量重传仍会写入活动 slot 的真实数据）。
             // Freshly created ComputeBuffers contain undefined VRAM. The full re-upload only covers "active" slots; if any
             // active slot is missed by ScatterSpawn / re-upload via some edge path, it reads uninitialized memory — surfacing
-            // as a near-black particle appearing from nowhere and spreading through colour mixing. Zero every per-slot buffer
+            // as a near-black particle appearing from nowhere and spreading through color mixing. Zero every per-slot buffer
             // here to prevent garbage leaking (the full re-upload below still writes the real data for active slots).
             // 新規 ComputeBuffer の VRAM は未定義。全 slot バッファをゼロ初期化し、未カバーの活動 slot がゴミ値（≈黒）を
             // 読むのを防ぎます（活動 slot の実データは後続の全量再アップロードで上書きされます）。

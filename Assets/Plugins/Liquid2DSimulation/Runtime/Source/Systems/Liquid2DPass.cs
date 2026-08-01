@@ -604,7 +604,7 @@ namespace Fs.Liquid2D
 
             // Effect Pass 之后，将 Liquid2DDebugParticleDisplay 粒子叠加绘制到相机颜色缓冲，使其覆盖在水体效果之上、
             // 不被扰动 Shader 干扰（Editor + Build 一致）。实例来自组件自维护的静态注册表，避免每帧 FindObjectsByType 全场景扫描。
-            // After the Effect Pass, draw Liquid2DDebugParticleDisplay particles into the camera colour buffer so they appear
+            // After the Effect Pass, draw Liquid2DDebugParticleDisplay particles into the camera color buffer so they appear
             // above the water effect, undisturbed by the distortion shader (same for Editor + Build). Instances come from the
             // component's self-maintained static registry, avoiding a per-frame full-scene FindObjectsByType scan.
             // Effect Pass の後、Liquid2DDebugParticleDisplay の粒子をカメラカラーバッファに描画し、水体エフェクトの上に重ねます

@@ -768,7 +768,7 @@ void IntegrateCollide(uint3 id : SV_DispatchThreadID)
 }
 
 // ============ 颜色混合辅助函数 ============
-// Colour-mixing helper functions.
+// Color-mixing helper functions.
 // 色混合ヘルパー関数。
 
 // ---- Oklab 转换（Björn Ottosson 标准实现）。输入/输出：线性 sRGB [0,1]。 ----
@@ -826,7 +826,7 @@ float3 RybToRgb(float3 ryb)
 // RGB → RYB 逆映射（Newton-Raphson + 解析雅可比，5 次迭代达机器精度）。
 // 精确逆是关键：不精确会让 RybToRgb(RgbToRyb(c))≠c，残差经"亮→RYB坐标减小→更亮"的正反馈把混合色冲到纯白。
 // RGB → RYB inverse (Newton-Raphson + analytic Jacobian, 5 iters → machine precision). Accurate inverse kills the
-// "brighter → smaller RYB → brighter" feedback that drifts mixed colours to white.
+// "brighter → smaller RYB → brighter" feedback that drifts mixed colors to white.
 // RGB → RYB 逆写像（Newton 法 + 解析ヤコビアン、5 回）。白へのドリフトを根絶。
 float3 RgbToRyb(float3 rgb)
 {
@@ -946,7 +946,7 @@ void MixColor(uint3 id : SV_DispatchThreadID)
     else if (colorMixMode == 2) // Ryb (Gossett-Chen 三线性立方体 + 锚定增量，消除往返误差导致的同色漂移/闪烁。)
     {
         // accumRgb.xyz = 邻居 RYB 之和。锚定到自身：同色时增量恒为 0，结果精确等于 ci4。
-        // accumRgb.xyz = sum of neighbour RYBs. Anchor to self: identical colours give a zero delta → exact ci4.
+        // accumRgb.xyz = sum of neighbour RYBs. Anchor to self: identical colors give a zero delta → exact ci4.
         float3 selfRyb = RgbToRyb(ci4.xyz);
         float3 mixedRyb = (accumRgb.xyz + selfRyb) / (wsum + 1.0f);
         float3 deltaRgb = RybToRgb(mixedRyb) - RybToRgb(selfRyb);

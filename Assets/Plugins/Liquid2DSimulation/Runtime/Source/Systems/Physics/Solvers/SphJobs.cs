@@ -693,7 +693,7 @@ namespace Fs.Liquid2D
         // 把混合色逐渐冲到纯白。Newton 把色域内残差降到 ~0，反馈增益归零，杜绝白色爬升。
         // RGB → RYB inverse (Newton-Raphson + analytic Jacobian, 5 iters → machine precision).
         // An accurate inverse is essential: inexactness makes RybToRgb(RgbToRyb(c))≠c, and the residual feeds a
-        // "brighter → smaller RYB → brighter" positive feedback that drifts mixed colours toward pure white.
+        // "brighter → smaller RYB → brighter" positive feedback that drifts mixed colors toward pure white.
         // RGB → RYB 逆写像（Newton 法 + 解析ヤコビアン、5 回で機械精度）。白へのドリフトを根絶。
         private static float3 RgbToRyb(float3 rgb)
         {
@@ -812,7 +812,7 @@ namespace Fs.Liquid2D
                 case 2: // Ryb (Gossett-Chen 三线性立方体 + 锚定增量，消除往返误差导致的同色漂移/闪烁。)
                 {
                     // accumRgb.xyz = 邻居 RYB 之和。锚定到自身：同色时增量恒为 0，结果精确等于 ci。
-                    // accumRgb.xyz = sum of neighbour RYBs. Anchor to self: identical colours give a zero delta → exact ci.
+                    // accumRgb.xyz = sum of neighbour RYBs. Anchor to self: identical colors give a zero delta → exact ci.
                     // accumRgb.xyz = 近傍 RYB の和。自身にアンカー：同色は増分 0 → ci に厳密一致。
                     float3 selfRyb = RgbToRyb(ci.xyz);
                     float3 mixedRyb = (accumRgb.xyz + selfRyb) / (wsum + 1f);

@@ -8,7 +8,7 @@
 //   · CPU mode: dense buffers indexed directly by SV_InstanceID;
 //   · GPU mode (keyword _GPU_PROCEDURAL): resident GPU buffers (slot-indexed),
 //     slot = _ActiveIndices[SV_InstanceID], mirroring the official Feature's Liquid2DParticleGpu path (fully GPU, zero readback).
-// Both paths support simulation-colour and velocity-gradient modes.
+// Both paths support simulation-color and velocity-gradient modes.
 // 流体パーティクル独立表示シェーダー。両パスとも DrawProcedural（mesh 不要）、quad はシェーダー内生成、フラグメントで UV により円形を切り出す。
 Shader "Custom/URP/2D/Liquid2DDebugParticleDisplay"
 {
@@ -42,12 +42,12 @@ Shader "Custom/URP/2D/Liquid2DDebugParticleDisplay"
             // 每粒子结构化缓冲。 // Per-particle structured buffers. // 粒子ごとのストラクチャードバッファ。
             StructuredBuffer<float2> _Positions;   // 世界坐标。 // World position. // ワールド座標。
             StructuredBuffer<float2> _Velocities;  // 世界速度。 // World velocity. // ワールド速度。
-            StructuredBuffer<float4> _Colors;      // RGBA（模拟色）。 // RGBA (simulation colour). // RGBA（シミュレーション色）。
+            StructuredBuffer<float4> _Colors;      // RGBA（模拟色）。 // RGBA (simulation color). // RGBA（シミュレーション色）。
 
-            TEXTURE2D(_ColourMap);  SAMPLER(sampler_ColourMap);
+            TEXTURE2D(_ColorMap);  SAMPLER(sampler_ColorMap);
 
             float _VelocityMax;
-            int   _ColourMode;  // 0 = 速度渐变, 1 = 模拟颜色。 // 0 = velocity gradient, 1 = simulation colour. // 0 = 速度グラデーション、1 = シミュレーション色。
+            int   _ColorMode;  // 0 = 速度渐变, 1 = 模拟颜色。 // 0 = velocity gradient, 1 = simulation color. // 0 = 速度グラデーション、1 = シミュレーション色。
             
 
             // 两个三角形拼出四边形（[-0.5,0.5]）+ [0,1] UV。两路径共用。
@@ -84,11 +84,11 @@ Shader "Custom/URP/2D/Liquid2DDebugParticleDisplay"
             };
 
             // 速度→渐变色采样。 // Sample velocity gradient. // 速度グラデーション採取。
-            float4 ColourFromVelocity(float2 vel)
+            float4 ColorFromVelocity(float2 vel)
             {
                 float speed = length(vel);
                 float t     = saturate(speed / max(_VelocityMax, 1e-4));
-                return SAMPLE_TEXTURE2D_LOD(_ColourMap, sampler_ColourMap, float2(t, 0.5), 0);
+                return SAMPLE_TEXTURE2D_LOD(_ColorMap, sampler_ColorMap, float2(t, 0.5), 0);
             }
 
 #if defined(_GPU_PROCEDURAL)
@@ -113,7 +113,7 @@ Shader "Custom/URP/2D/Liquid2DDebugParticleDisplay"
 
                 OUT.positionCS = TransformWorldToHClip(float3(world, 0.0));
                 OUT.uv         = QUV[vid];
-                OUT.color      = (_ColourMode == 0) ? ColourFromVelocity(_Velocities[slot]) : _Colors[slot];
+                OUT.color      = (_ColorMode == 0) ? ColorFromVelocity(_Velocities[slot]) : _Colors[slot];
                 return OUT;
             }
 #else
@@ -130,7 +130,7 @@ Shader "Custom/URP/2D/Liquid2DDebugParticleDisplay"
 
                 OUT.positionCS = TransformWorldToHClip(float3(world, 0.0));
                 OUT.uv         = QUV[vid];
-                OUT.color      = (_ColourMode == 0) ? ColourFromVelocity(_Velocities[iid]) : _Colors[iid];
+                OUT.color      = (_ColorMode == 0) ? ColorFromVelocity(_Velocities[iid]) : _Colors[iid];
                 return OUT;
             }
 #endif
@@ -148,7 +148,7 @@ Shader "Custom/URP/2D/Liquid2DDebugParticleDisplay"
                 float  alpha        = 1.0 - smoothstep(1.0 - delta, 1.0 + delta, sqrDst);
 
                 // rgb 取实例颜色，alpha 叠加模拟颜色自带透明度，保证本项目两种模式可用。
-                // rgb from the instance colour; alpha multiplied by the simulation colour's own alpha.
+                // rgb from the instance color; alpha multiplied by the simulation color's own alpha.
                 // rgb はインスタンス色、alpha はシミュレーション色の alpha を乗算。
                 return float4(IN.color.rgb, IN.color.a * alpha);
             }

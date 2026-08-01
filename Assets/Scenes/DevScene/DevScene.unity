@@ -296,7 +296,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4604536c1b2ac6644b9380bdbb57c3fd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  nameTag: 
+  _nameTags: []
   _colliderMode: 0
   _submergeCoupling: 0.25
   _submergeSplashStrength: 1
@@ -455,7 +455,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4604536c1b2ac6644b9380bdbb57c3fd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  nameTag: 
+  _nameTags: []
   _colliderMode: 0
   _submergeCoupling: 0.25
   _submergeSplashStrength: 1
@@ -614,7 +614,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4604536c1b2ac6644b9380bdbb57c3fd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  nameTag: 
+  _nameTags: []
   _colliderMode: 0
   _submergeCoupling: 0.25
   _submergeSplashStrength: 1
@@ -845,8 +845,8 @@ MonoBehaviour:
   displayEnabled: 1
   material: {fileID: 2100000, guid: 6cde42e39ffc3cb45ad10b8a0fe3f1e7, type: 2}
   scale: 0.2
-  colourMode: 0
-  colourMap:
+  colorMode: 0
+  colorMap:
     serializedVersion: 2
     key0: {r: 0.13363299, g: 0.34235913, b: 0.7264151, a: 1}
     key1: {r: 0.2980392, g: 1, b: 0.56327766, a: 1}
@@ -942,7 +942,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 562006140e2865f47b7ec723464d44bc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DBounds
-  nameTag: 
+  _nameTags: []
   _colliderMode: 0
   _submergeCoupling: 0.25
   _submergeSplashStrength: 1
@@ -1119,7 +1119,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4604536c1b2ac6644b9380bdbb57c3fd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DBoxCollider
-  nameTag: 
+  _nameTags: []
   _colliderMode: 1
   _submergeCoupling: 0.25
   _submergeSplashStrength: 1
@@ -1251,7 +1251,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 063b086f05072a444b98bba3d042d0e0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DMeshCollider
-  nameTag: 
+  _nameTags: []
   _colliderMode: 0
   _submergeCoupling: 0.25
   _submergeSplashStrength: 1
@@ -1500,7 +1500,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4604536c1b2ac6644b9380bdbb57c3fd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DBoxCollider
-  nameTag: 
+  _nameTags: []
   _colliderMode: 1
   _submergeCoupling: 0.25
   _submergeSplashStrength: 1
@@ -1785,7 +1785,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8411cc57852125d448f1b34e5f3283b5, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DEdgeCollider
-  nameTag: 
+  _nameTags: []
   _colliderMode: 0
   _submergeCoupling: 0.25
   _submergeSplashStrength: 1

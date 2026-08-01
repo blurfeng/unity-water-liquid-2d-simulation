@@ -12,7 +12,7 @@ namespace Fs.Liquid2D
     /// 支持速度渐变与模拟颜色两种着色模式；配套着色器 <c>Custom/URP/2D/Liquid2DParticleDisplay</c>。
     /// Runtime standalone fluid-particle visualization. Renders all active particles via
     /// <c>Graphics.DrawProcedural</c> (the quad is generated in-shader, no mesh required), reading data directly from
-    /// <see cref="Liquid2DSimulation"/> SoA without a URP Render Feature. Supports simulation-colour and velocity-gradient
+    /// <see cref="Liquid2DSimulation"/> SoA without a URP Render Feature. Supports simulation-color and velocity-gradient
     /// shading modes; companion shader: <c>Custom/URP/2D/Liquid2DParticleDisplay</c>.
     /// ランタイム流体パーティクル独立可視化。<c>Graphics.DrawProcedural</c> でアクティブ粒子を描画（quad はシェーダー生成、mesh 不要）。
     /// URP Render Feature 不要で <see cref="Liquid2DSimulation"/> SoA から直接データを取得。
@@ -45,19 +45,19 @@ namespace Fs.Liquid2D
             "可視サイズ全体倍率（最終可視半径 = radius × renderScale × この値）。")]
         private float scale = 0.4f;
 
-        // ── 颜色模式 Colour mode カラーモード ──────────────────────────────────
-        [Header("Colour")]
+        // ── 颜色模式 Color mode カラーモード ──────────────────────────────────
+        [Header("Color")]
         [SerializeField, LocalizationTooltip(
             "颜色模式：VelocityGradient=按速度大小映射渐变色；Simulation=粒子模拟自身颜色。",
-            "Colour mode: Simulation = per-particle simulation colour; VelocityGradient = map speed to gradient.",
+            "Color mode: Simulation = per-particle simulation color; VelocityGradient = map speed to gradient.",
             "カラーモード：Simulation=粒子自身の色；VelocityGradient=速さでグラデーション色。")]
-        private ColourMode colourMode = ColourMode.VelocityGradient;
+        private ColorMode colorMode = ColorMode.VelocityGradient;
 
         [SerializeField, LocalizationTooltip(
-            "速度渐变色（ColourMode = VelocityGradient 时生效）。",
-            "Velocity colour gradient (active when ColourMode = VelocityGradient).",
-            "速度グラデーション色（ColourMode = VelocityGradient のとき有効）。")]
-        private Gradient colourMap;
+            "速度渐变色（ColorMode = VelocityGradient 时生效）。",
+            "Velocity color gradient (active when ColorMode = VelocityGradient).",
+            "速度グラデーション色（ColorMode = VelocityGradient のとき有効）。")]
+        private Gradient colorMap;
 
         [SerializeField, Min(2), LocalizationTooltip(
             "渐变贴图宽度（像素）。",
@@ -67,7 +67,7 @@ namespace Fs.Liquid2D
 
         [SerializeField, LocalizationTooltip(
             "速度渐变上限：速度达到或超过此值时显示渐变末端颜色。",
-            "Velocity gradient upper bound: at or above this speed the gradient end colour is shown.",
+            "Velocity gradient upper bound: at or above this speed the gradient end color is shown.",
             "速度グラデーション上限：この速度以上でグラデーション末端色を表示。")]
         private float velocityDisplayMax = 10f;
         
@@ -77,18 +77,18 @@ namespace Fs.Liquid2D
             "現在フレームのアクティブ粒子数（デバッグ表示のみ）。")]
         private int currentParticleCount;
 
-        // ── 颜色模式枚举 ColourMode enum カラーモード列挙 ──────────────────────
+        // ── 颜色模式枚举 ColorMode enum カラーモード列挙 ──────────────────────
         /// <summary>
         /// 粒子颜色显示模式。
-        /// Particle colour display mode.
+        /// Particle color display mode.
         /// パーティクルカラー表示モード。
         /// </summary>
-        public enum ColourMode
+        public enum ColorMode
         {
-            /// <summary>按速度大小映射渐变色图。 // Map speed to gradient colour map. // 速さでグラデーションカラーマップにマッピング。</summary>
+            /// <summary>按速度大小映射渐变色图。 // Map speed to gradient color map. // 速さでグラデーションカラーマップにマッピング。</summary>
             VelocityGradient = 0,
             
-            /// <summary>使用粒子模拟自身颜色（RGBA）。 // Use per-particle simulation colour (RGBA). // 粒子自身のシミュレーション色（RGBA）。</summary>
+            /// <summary>使用粒子模拟自身颜色（RGBA）。 // Use per-particle simulation color (RGBA). // 粒子自身のシミュレーション色（RGBA）。</summary>
             Simulation = 1,
         }
 
@@ -125,9 +125,9 @@ namespace Fs.Liquid2D
         private static readonly int _idVelocities  = Shader.PropertyToID("_Velocities");
         private static readonly int _idColors      = Shader.PropertyToID("_Colors");
         private static readonly int _idScales      = Shader.PropertyToID("_Scales");
-        private static readonly int _idColourMap   = Shader.PropertyToID("_ColourMap");
+        private static readonly int _idColorMap   = Shader.PropertyToID("_ColorMap");
         private static readonly int _idVelocityMax = Shader.PropertyToID("_VelocityMax");
-        private static readonly int _idColourMode  = Shader.PropertyToID("_ColourMode");
+        private static readonly int _idColorMode  = Shader.PropertyToID("_ColorMode");
 
         // GPU 常驻路径专用。 // GPU resident path only. // GPU 常駐パス専用。
         private static readonly int _idRadii        = Shader.PropertyToID("_Radii");
@@ -238,10 +238,10 @@ namespace Fs.Liquid2D
             ComputeBuffer positions, ComputeBuffer colors, ComputeBuffer radii, ComputeBuffer typeIds,
             ComputeBuffer active, ComputeBuffer velocities)
         {
-            if (colourMode == ColourMode.VelocityGradient && _gradientDirty)
+            if (colorMode == ColorMode.VelocityGradient && _gradientDirty)
             {
                 _gradientDirty = false;
-                BakeGradient(ref _gradientTexture, gradientResolution, colourMap);
+                BakeGradient(ref _gradientTexture, gradientResolution, colorMap);
             }
 
             _gpuMpb ??= new MaterialPropertyBlock();
@@ -253,10 +253,10 @@ namespace Fs.Liquid2D
             _gpuMpb.SetBuffer(_idActiveIndices, active);
             if (velocities != null) _gpuMpb.SetBuffer(_idVelocities, velocities);
             _gpuMpb.SetFloat(_idVelocityMax, velocityDisplayMax);
-            _gpuMpb.SetInteger(_idColourMode, (int)colourMode);
+            _gpuMpb.SetInteger(_idColorMode, (int)colorMode);
             _gpuMpb.SetFloat(_idDisplayScale, scale);
-            if (colourMode == ColourMode.VelocityGradient && _gradientTexture != null)
-                _gpuMpb.SetTexture(_idColourMap, _gradientTexture);
+            if (colorMode == ColorMode.VelocityGradient && _gradientTexture != null)
+                _gpuMpb.SetTexture(_idColorMap, _gradientTexture);
         }
 
         /// <summary>
@@ -380,16 +380,16 @@ namespace Fs.Liquid2D
             material.SetBuffer(_idColors,     _colorBuffer);
             material.SetBuffer(_idScales,     _scaleBuffer);
             material.SetFloat(_idVelocityMax, velocityDisplayMax);
-            material.SetInteger(_idColourMode, (int)colourMode);
+            material.SetInteger(_idColorMode, (int)colorMode);
 
-            if (colourMode == ColourMode.VelocityGradient)
+            if (colorMode == ColorMode.VelocityGradient)
             {
                 if (_gradientDirty)
                 {
                     _gradientDirty = false;
-                    BakeGradient(ref _gradientTexture, gradientResolution, colourMap);
+                    BakeGradient(ref _gradientTexture, gradientResolution, colorMap);
                 }
-                material.SetTexture(_idColourMap, _gradientTexture);
+                material.SetTexture(_idColorMap, _gradientTexture);
             }
         }
 
