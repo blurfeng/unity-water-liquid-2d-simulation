@@ -135,14 +135,13 @@ namespace Fs.Liquid2D.Editor
                 Color prev = GUI.backgroundColor;
                 GUI.backgroundColor = statusColor;
                 EditorGUILayout.PropertyField(_nameTag, new GUIContent(
-                    L("名称标签 NameTag", "NameTag", "名前タグ NameTag"),
+                    "NameTag",
                     _nameTag.tooltip));
                 GUI.backgroundColor = prev;
 
                 using (new EditorGUI.DisabledScope(!matched || !locatedData))
                 {
-                    if (GUILayout.Button(new GUIContent(
-                            L("定位 RendererData", "Locate RendererData", "RendererData を表示"),
+                    if (GUILayout.Button(new GUIContent("Locate RendererData",
                             L("在 Project 中选中并高亮对应的 RendererData 资源。",
                                 "Select and ping the matching RendererData asset in the Project window.",
                                 "対応する RendererData アセットを Project で選択・ハイライトします。")),
@@ -164,7 +163,7 @@ namespace Fs.Liquid2D.Editor
                 {
                     int current = tags.IndexOf(tag);
                     int picked = EditorGUILayout.Popup(new GUIContent(
-                            L("可用列表", "Available", "利用可能"),
+                            "Available",
                             L("当前 URP 中所有 Liquid2DFeature 的 NameTag，选择即写入上方字段。",
                                 "All Liquid2DFeature NameTags in the current URP; selecting one writes it into the field above.",
                                 "現在の URP の全 Liquid2DFeature の NameTag。選択すると上のフィールドに反映されます。")),
@@ -181,14 +180,12 @@ namespace Fs.Liquid2D.Editor
 
         private void DrawSpriteRow()
         {
-            DrawRequiredObjectRow(_sprite,
-                L("贴图 Sprite", "Sprite", "スプライト Sprite"));
+            DrawRequiredObjectRow(_sprite, "Sprite");
         }
 
         private void DrawMaterialRow()
         {
-            DrawRequiredObjectRow(_material,
-                L("材质 Material", "Material", "マテリアル Material"));
+            DrawRequiredObjectRow(_material, "Material");
         }
 
         private void DrawRequiredObjectRow(SerializedProperty prop, string label)
@@ -211,8 +208,7 @@ namespace Fs.Liquid2D.Editor
         {
             EditorGUILayout.BeginHorizontal();
             {
-                EditorGUILayout.PropertyField(_color, new GUIContent(
-                    L("颜色 Color", "Color", "カラー Color"), _color.tooltip));
+                EditorGUILayout.PropertyField(_color, new GUIContent("Color", _color.tooltip));
 
                 // 颜色预览块（HDR 颜色钳制到可显示范围）。 // Color preview swatch (HDR clamped for display).
                 Rect r = GUILayoutUtility.GetRect(40f, EditorGUIUtility.singleLineHeight,
@@ -260,7 +256,7 @@ namespace Fs.Liquid2D.Editor
             if (_defaultLifetime != null && Mathf.Approximately(_defaultLifetime.floatValue, 0f))
             {
                 EditorGUILayout.HelpBox(
-                    L("DefaultLifetime = 0：寿命无限（不会自动消亡）。",
+                    L("DefaultLifetime = 0：存活时间无限（不会自动消亡）。",
                         "DefaultLifetime = 0: infinite lifetime (particles never auto-expire).",
                         "DefaultLifetime = 0：寿命は無限（自動消滅しません）。"),
                     MessageType.None);
