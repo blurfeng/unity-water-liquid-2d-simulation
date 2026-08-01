@@ -288,7 +288,7 @@ namespace Fs.Liquid2D.Editor
             }
 
             if (_colorGradient != null)
-                EditorGUILayout.PropertyField(_colorGradient, new GUIContent("Color Gradient", _colorGradient.tooltip));
+                DrawGradientWithCopyPaste(_colorGradient, new GUIContent("Color Gradient", _colorGradient.tooltip));
             if (_gradientSource != null)
                 EditorGUILayout.PropertyField(_gradientSource, new GUIContent("Gradient Source", _gradientSource.tooltip));
 
@@ -394,6 +394,139 @@ namespace Fs.Liquid2D.Editor
         }
 
         // ---------------------------------------------------------------------------------------------------------
+
+        // systemCopyBuffer 中渐变数据的标记前缀，用于校验粘贴内容合法性。 // Marker prefix for gradient data in systemCopyBuffer; validates paste content. // 貼り付け内容の検証用マーカー。
+        private const string _gradientClipboardPrefix = "Liquid2DGradient:";
+
+        /// <summary>
+        /// 绘制 Gradient 字段并补回右键 Copy/Paste 菜单。<see cref="GradientUsageAttribute"/>(HDR) 会使 Unity 内置的
+        /// 属性右键 Copy/Paste 丢失，此处在渐变行 rect 上捕获 ContextClick 自行还原该交互。
+        /// Draw a Gradient field and restore the right-click Copy/Paste menu. A <see cref="GradientUsageAttribute"/> (HDR)
+        /// drops Unity's built-in property Copy/Paste, so we capture ContextClick over the field rect and rebuild it.
+        /// Gradient フィールドを描画し、右クリック Copy/Paste メニューを復元する（HDR で失われるため自前で再現）。
+        /// </summary>
+        private void DrawGradientWithCopyPaste(SerializedProperty prop, GUIContent label)
+        {
+            EditorGUILayout.PropertyField(prop, label);
+
+            Event evt = Event.current;
+            Rect rect = GUILayoutUtility.GetLastRect();
+            if (evt.type != EventType.ContextClick || !rect.Contains(evt.mousePosition))
+                return;
+
+            // 捕获属性路径的副本供闭包使用（prop 在延迟回调触发时可能已失效）。 // Snapshot the path for the deferred menu callbacks (prop may be invalid when they fire). // 遅延コールバック用にパスを退避。
+            string propertyPath = prop.propertyPath;
+            bool canPaste = TryParseGradientFromClipboard(out _);
+
+            GenericMenu menu = new GenericMenu();
+            menu.AddItem(new GUIContent("Copy"), false, () => CopyGradientToClipboard(propertyPath));
+            if (canPaste)
+                menu.AddItem(new GUIContent("Paste"), false, () => PasteGradientFromClipboard(propertyPath));
+            else
+                menu.AddDisabledItem(new GUIContent("Paste"));
+            menu.ShowAsContext();
+
+            evt.Use();
+        }
+
+        private void CopyGradientToClipboard(string propertyPath)
+        {
+            SerializedProperty prop = serializedObject.FindProperty(propertyPath);
+            Gradient gradient = prop != null ? prop.gradientValue : null;
+            if (gradient == null)
+                return;
+            EditorGUIUtility.systemCopyBuffer = _gradientClipboardPrefix + JsonUtility.ToJson(GradientClipboardData.From(gradient));
+        }
+
+        private void PasteGradientFromClipboard(string propertyPath)
+        {
+            if (!TryParseGradientFromClipboard(out Gradient gradient))
+                return;
+            SerializedProperty prop = serializedObject.FindProperty(propertyPath);
+            if (prop == null)
+                return;
+            prop.gradientValue = gradient;
+            serializedObject.ApplyModifiedProperties();
+        }
+
+        /// <summary>
+        /// 尝试从系统剪贴板解析出 Gradient（校验标记前缀与 JSON）。 // Try to parse a Gradient from the system clipboard (validates prefix + JSON). // クリップボードから Gradient を解析。
+        /// </summary>
+        private static bool TryParseGradientFromClipboard(out Gradient gradient)
+        {
+            gradient = null;
+            string buffer = EditorGUIUtility.systemCopyBuffer;
+            if (string.IsNullOrEmpty(buffer) || !buffer.StartsWith(_gradientClipboardPrefix))
+                return false;
+
+            try
+            {
+                var data = JsonUtility.FromJson<GradientClipboardData>(buffer.Substring(_gradientClipboardPrefix.Length));
+                gradient = data != null ? data.ToGradient() : null;
+                return gradient != null;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Gradient 的可 JSON 序列化载体（含 HDR 颜色）。 // JSON-serializable carrier for a Gradient (HDR colors included). // Gradient の JSON 用データ。
+        /// </summary>
+        [System.Serializable]
+        private class GradientClipboardData
+        {
+            public int Mode;
+            public Color[] ColorKeyColors;
+            public float[] ColorKeyTimes;
+            public float[] AlphaKeyAlphas;
+            public float[] AlphaKeyTimes;
+
+            public static GradientClipboardData From(Gradient gradient)
+            {
+                var colorKeys = gradient.colorKeys;
+                var alphaKeys = gradient.alphaKeys;
+                var data = new GradientClipboardData
+                {
+                    Mode = (int)gradient.mode,
+                    ColorKeyColors = new Color[colorKeys.Length],
+                    ColorKeyTimes = new float[colorKeys.Length],
+                    AlphaKeyAlphas = new float[alphaKeys.Length],
+                    AlphaKeyTimes = new float[alphaKeys.Length],
+                };
+                for (int i = 0; i < colorKeys.Length; i++)
+                {
+                    data.ColorKeyColors[i] = colorKeys[i].color;
+                    data.ColorKeyTimes[i] = colorKeys[i].time;
+                }
+                for (int i = 0; i < alphaKeys.Length; i++)
+                {
+                    data.AlphaKeyAlphas[i] = alphaKeys[i].alpha;
+                    data.AlphaKeyTimes[i] = alphaKeys[i].time;
+                }
+                return data;
+            }
+
+            public Gradient ToGradient()
+            {
+                if (ColorKeyColors == null || ColorKeyTimes == null || AlphaKeyAlphas == null || AlphaKeyTimes == null
+                    || ColorKeyColors.Length != ColorKeyTimes.Length || AlphaKeyAlphas.Length != AlphaKeyTimes.Length)
+                    return null;
+
+                var colorKeys = new GradientColorKey[ColorKeyColors.Length];
+                for (int i = 0; i < colorKeys.Length; i++)
+                    colorKeys[i] = new GradientColorKey(ColorKeyColors[i], ColorKeyTimes[i]);
+
+                var alphaKeys = new GradientAlphaKey[AlphaKeyAlphas.Length];
+                for (int i = 0; i < alphaKeys.Length; i++)
+                    alphaKeys[i] = new GradientAlphaKey(AlphaKeyAlphas[i], AlphaKeyTimes[i]);
+
+                var gradient = new Gradient { mode = (GradientMode)Mode };
+                gradient.SetKeys(colorKeys, alphaKeys);
+                return gradient;
+            }
+        }
 
         /// <summary>
         /// 按系统语言选择文案（中/英/日）。 // Pick text by system language (zh/en/ja).
