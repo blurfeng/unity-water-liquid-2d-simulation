@@ -26,8 +26,6 @@ MonoBehaviour:
     Cutoff: 0.45
     OpacityMode: 0
     OpacityValue: 1
-    CoverColorMode: 1
-    CoverColor: {r: 0, g: 0, b: 0, a: 0}
     Blur:
       Iterations: 7
       BlurSpread: 0.6
@@ -140,8 +138,6 @@ MonoBehaviour:
     Cutoff: 0.14
     OpacityMode: 0
     OpacityValue: 1
-    CoverColorMode: 1
-    CoverColor: {r: 0, g: 0, b: 0, a: 0}
     Blur:
       Iterations: 4
       BlurSpread: 0.6
@@ -194,8 +190,6 @@ MonoBehaviour:
     Cutoff: 0.45
     OpacityMode: 0
     OpacityValue: 1
-    CoverColorMode: 1
-    CoverColor: {r: 0, g: 0, b: 0, a: 0}
     Blur:
       Iterations: 4
       BlurSpread: 0.6
@@ -247,9 +241,7 @@ MonoBehaviour:
       m_Bits: 4
     Cutoff: 0.6
     OpacityMode: 1
-    OpacityValue: 0.3
-    CoverColorMode: 0
-    CoverColor: {r: 0, g: 0.43137255, b: 1, a: 1}
+    OpacityValue: 0.6
     Blur:
       Iterations: 3
       BlurSpread: 0.6

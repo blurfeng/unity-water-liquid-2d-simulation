@@ -51,9 +51,11 @@ MonoBehaviour:
       m_NumColorKeys: 2
       m_NumAlphaKeys: 2
     GradientSource: 1
+    GradientSpeedMin: 0.2
     GradientSpeedMax: 10
     GradientFoamStart: 0.7
     GradientFoamEnd: 0.2
+    GradientSmoothing: 0.93
     NameTag: PixelMilk
   MixSettings:
     MixColors: 0
