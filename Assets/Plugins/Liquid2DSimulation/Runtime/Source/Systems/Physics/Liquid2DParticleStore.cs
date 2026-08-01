@@ -29,6 +29,7 @@ namespace Fs.Liquid2D
         internal NativeArray<float4> colorsNext;  // 混色双缓冲（混色写）。 // mix double-buffer (mix writes). // 混色ダブルバッファ（混色書き）。
         internal NativeArray<float> densities;    // 每粒子渲染密度（EMA 时间平滑，求解器每步写入，供渐变 Foam 模式渲染判断空气混入量）。 // per-particle render density (EMA-smoothed, written by the solver each step; for gradient Foam-mode rendering). // 粒子ごとのレンダー密度（EMA 平滑、Foam モード用）。
         internal NativeArray<float> renderSpeeds; // 每粒子渲染速度大小（EMA 时间平滑，供渐变 Speed / FoamWithSpeed 模式渲染）。 // per-particle render speed magnitude (EMA-smoothed, for gradient Speed / FoamWithSpeed rendering). // 粒子ごとのレンダー速度（EMA 平滑、Speed 用）。
+        internal NativeArray<float> renderFoam;   // 每粒子泡沫累加器 F（FoamWithSpeed 用，跨帧持久：生成时快升、静止后按持久度慢降）。扩容由 NativeArray.Copy 自动保连续。 // per-particle foam accumulator F (FoamWithSpeed; persistent: fast attack, slow release by persistence). Grow preserved by NativeArray.Copy. // 泡累加器 F。
         internal NativeArray<float> radii;
         internal NativeArray<float> invMass;
         internal NativeArray<int> typeId;        // → 描述符/材质表。 // → descriptor/material table. // → 記述子/マテリアル表。
@@ -83,6 +84,7 @@ namespace Fs.Liquid2D
             colorsNext = new NativeArray<float4>(cap, a);
             densities = new NativeArray<float>(cap, a);
             renderSpeeds = new NativeArray<float>(cap, a);
+            renderFoam = new NativeArray<float>(cap, a);
             radii = new NativeArray<float>(cap, a);
             invMass = new NativeArray<float>(cap, a);
             typeId = new NativeArray<int>(cap, a);
@@ -110,6 +112,7 @@ namespace Fs.Liquid2D
             Grow(ref colorsNext, newCap);
             Grow(ref densities, newCap);
             Grow(ref renderSpeeds, newCap);
+            Grow(ref renderFoam, newCap);
             Grow(ref radii, newCap);
             Grow(ref invMass, newCap);
             Grow(ref typeId, newCap);
@@ -260,6 +263,7 @@ namespace Fs.Liquid2D
             if (colorsNext.IsCreated) colorsNext.Dispose();
             if (densities.IsCreated) densities.Dispose();
             if (renderSpeeds.IsCreated) renderSpeeds.Dispose();
+            if (renderFoam.IsCreated) renderFoam.Dispose();
             if (radii.IsCreated) radii.Dispose();
             if (invMass.IsCreated) invMass.Dispose();
             if (typeId.IsCreated) typeId.Dispose();

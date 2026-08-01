@@ -5,6 +5,29 @@ using Unity.Mathematics;
 namespace Fs.Liquid2D
 {
     /// <summary>
+    /// FoamWithSpeed 渐变来源的「泡沫累加器」逐类型生成参数（预算好的常量，避免热循环里除法）。字段顺序/布局必须与
+    /// Compute Shader（Liquid2DSph.compute）中的 <c>struct FoamGenParams</c> 逐字段一致（GPU 直接 SetData 上传）。
+    /// Per-type generation params for the FoamWithSpeed "foam accumulator" (precomputed to avoid divides in the hot loop).
+    /// The field order/layout MUST match <c>struct FoamGenParams</c> in the compute shader (Liquid2DSph.compute) exactly (uploaded via SetData).
+    /// FoamWithSpeed「泡累加器」の型ごと生成パラメータ。フィールド順は compute の FoamGenParams と一致必須。
+    /// </summary>
+    public struct Liquid2DFoamGenParams
+    {
+        /// <summary>起泡上界（密度比）。 // foam upper bound (density ratio). // 泡立ち上界。</summary>
+        public float FoamStart;
+        /// <summary>= 1/(FoamStart − FoamEnd)，密度亏空归一化。 // foam-deficit normalization. // 密度不足の正規化。</summary>
+        public float FoamRangeInv;
+        /// <summary>速度门控下限。 // speed-gate lower bound. // 速度ゲート下限。</summary>
+        public float SpeedMin;
+        /// <summary>= 1/(SpeedMax − SpeedMin)，速度门控归一化。 // speed-gate normalization. // 速度ゲート正規化。</summary>
+        public float SpeedRangeInv;
+        /// <summary>= 1/静止密度，把 SPH 密度归一化为密度比。 // 1/rest density. // 静止密度の逆数。</summary>
+        public float InvRestDensity;
+        /// <summary>每帧衰减系数 = exp(−fixedDeltaTime/持久度秒)；0=不持久（F=gen）。 // per-step decay; 0 = not persistent. // 減衰係数。</summary>
+        public float Decay;
+    }
+
+    /// <summary>
     /// 一次求解所需的上下文。store 为托管侧 SoA 容器；其余为 Job 可用的 NativeArray 视图。
     /// Context for a single solve. store is the managed-side SoA container; the rest are Job-usable NativeArray views.
     /// 1回の解法に必要なコンテキスト。store はマネージド側 SoA コンテナ、他は Job が使える NativeArray ビュー。
@@ -90,6 +113,19 @@ namespace Fs.Liquid2D
         /// 型ごと（typeId）のレンダー平滑 EMA 係数 k（= 1 − その型の GradientSmoothing）。密度/速度を EMA 更新。物理には影響しません。
         /// </summary>
         [ReadOnly] public NativeArray<float> RenderGradientK;
+
+        /// <summary>
+        /// 按类型（typeId）的 FoamWithSpeed 泡沫累加器生成参数（预算好的常量，供求解器每帧更新持久化泡沫值 F）。
+        /// 生成量 gen = saturate((FoamStart − 平滑密度·InvRestDensity)·FoamRangeInv) × saturate((平滑速度 − SpeedMin)·SpeedRangeInv)；
+        /// 累加器 F = max(F·Decay, gen)（快升慢降）。Decay = exp(−fixedDeltaTime/持久度秒)，0=不持久（F=gen，等于旧的瞬时 FoamWithSpeed）。
+        /// 仅 FoamWithSpeed 类型读取 F；其余类型 Decay=0，F 恒为瞬时值且不被渲染读取。不影响物理。
+        /// Per-type (typeId) FoamWithSpeed foam-accumulator generation params (precomputed constants; the solver updates the
+        /// persistent foam value F each frame). gen = saturate((FoamStart − smoothedDensity·InvRestDensity)·FoamRangeInv) ×
+        /// saturate((smoothedSpeed − SpeedMin)·SpeedRangeInv); F = max(F·Decay, gen). Decay = exp(−fixedDeltaTime/persistenceSec),
+        /// 0 = not persistent (F = gen, the old instantaneous FoamWithSpeed). Only FoamWithSpeed types read F. Does not affect physics.
+        /// 型ごと（typeId）の FoamWithSpeed 泡累加器生成パラメータ。gen と累加器 F を毎フレーム更新。物理には影響しません。
+        /// </summary>
+        [ReadOnly] public NativeArray<Liquid2DFoamGenParams> RenderFoamParams;
 
         /// <summary>动态碰撞体数量（>0 时 GPU 才回读冲量）。 // Dynamic collider count (GPU reads impulse back only when >0). // 動的コライダー数。</summary>
         public int DynamicBodyCount;

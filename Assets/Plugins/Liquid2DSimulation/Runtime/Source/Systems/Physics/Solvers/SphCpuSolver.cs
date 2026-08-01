@@ -175,8 +175,8 @@ namespace Fs.Liquid2D
                     h = new WriteRenderScalarsJob
                     {
                         ActiveIndices = ctx.ActiveIndices, Densities = _densities, Velocities = store.velocities,
-                        TypeId = store.typeId, SmoothK = ctx.RenderGradientK,
-                        OutDensities = store.densities, OutSpeeds = store.renderSpeeds,
+                        TypeId = store.typeId, SmoothK = ctx.RenderGradientK, FoamParams = ctx.RenderFoamParams,
+                        OutDensities = store.densities, OutSpeeds = store.renderSpeeds, OutFoam = store.renderFoam,
                     }.Schedule(count, 64, h);
                 }
 

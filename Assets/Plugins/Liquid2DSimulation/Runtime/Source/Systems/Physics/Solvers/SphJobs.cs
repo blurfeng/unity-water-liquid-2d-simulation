@@ -224,28 +224,49 @@ namespace Fs.Liquid2D
         [ReadOnly] public NativeArray<float2> Velocities;
         [ReadOnly] public NativeArray<int> TypeId;
         [ReadOnly] public NativeArray<float> SmoothK; // 按类型 EMA 系数（=1−GradientSmoothing）。 // per-type EMA factor. // 型ごと係数。
+        [ReadOnly] public NativeArray<Liquid2DFoamGenParams> FoamParams; // 按类型的 FoamWithSpeed 泡沫累加器生成参数。 // per-type FoamWithSpeed foam-accumulator gen params. // 泡累加器生成パラメータ。
         // 读写：每个活动粒子的 slot i 唯一，线程间不冲突（禁用 ParallelFor 限制仅因按 i 而非 k 索引）。 // Read/write; each active particle's slot i is unique. // 読み書き。
         [NativeDisableParallelForRestriction] public NativeArray<float> OutDensities;
         [NativeDisableParallelForRestriction] public NativeArray<float> OutSpeeds;
+        [NativeDisableParallelForRestriction] public NativeArray<float> OutFoam; // FoamWithSpeed 泡沫累加器 F（跨帧持久：快升慢降）。 // foam accumulator F (persistent: fast attack, slow release). // 泡累加器 F。
 
         public void Execute(int k)
         {
             int i = ActiveIndices[k];
+            int type = TypeId[i];
             float rawD = Densities[i].x;
             float rawS = length(Velocities[i]);
             float pd = OutDensities[i];
-            if (pd < 0f)
+
+            float smD, smS; // 本帧平滑后的密度/速度（供泡沫生成量用，与渲染读取一致）。 // this-frame smoothed density/speed (for foam gen, matching what render reads). // 平滑後密度/速度。
+            bool firstFrame = pd < 0f;
+            if (firstFrame)
             {
                 // 哨兵（<0）：spawn 后首帧直接快照到本帧真实值（无收敛瞬变）。 // Sentinel: snap to actual on the first frame after spawn. // 哨兵で快照。
-                OutDensities[i] = rawD;
-                OutSpeeds[i] = rawS;
+                smD = rawD;
+                smS = rawS;
+                OutDensities[i] = smD;
+                OutSpeeds[i] = smS;
             }
             else
             {
-                float kk = SmoothK[TypeId[i]];
-                OutDensities[i] = pd + (rawD - pd) * kk;                 // = lerp(prev, raw density, kk)。
-                OutSpeeds[i] = OutSpeeds[i] + (rawS - OutSpeeds[i]) * kk; // = lerp(prev, raw speed, kk)。
+                float kk = SmoothK[type];
+                smD = pd + (rawD - pd) * kk;                  // = lerp(prev, raw density, kk)。
+                smS = OutSpeeds[i] + (rawS - OutSpeeds[i]) * kk; // = lerp(prev, raw speed, kk)。
+                OutDensities[i] = smD;
+                OutSpeeds[i] = smS;
             }
+
+            // FoamWithSpeed 泡沫累加器：本帧生成量 gen = 密度亏空 × 速度门控（与旧的绘制时公式逐位一致）；
+            // F = max(F·Decay, gen)（生成时快升、静止后按持久度慢降；Decay=0 时 F=gen，等于旧的瞬时行为）。仅 FoamWithSpeed 类型读取。
+            // FoamWithSpeed accumulator: gen = density-deficit × speed-gate (bit-identical to the old draw-time formula);
+            // F = max(F·Decay, gen) (fast attack, slow release; Decay=0 → F=gen, the old instantaneous behavior). Only FoamWithSpeed reads it.
+            // 泡累加器：gen = 密度不足 × 速度ゲート、F = max(F·Decay, gen)。
+            var fp = FoamParams[type];
+            float deficit = saturate((fp.FoamStart - smD * fp.InvRestDensity) * fp.FoamRangeInv);
+            float speedGate = saturate((smS - fp.SpeedMin) * fp.SpeedRangeInv);
+            float gen = deficit * speedGate;
+            OutFoam[i] = firstFrame ? gen : max(OutFoam[i] * fp.Decay, gen);
         }
     }
 

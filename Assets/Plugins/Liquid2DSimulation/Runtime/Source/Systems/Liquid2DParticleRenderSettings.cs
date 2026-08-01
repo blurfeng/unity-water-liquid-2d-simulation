@@ -72,6 +72,12 @@ namespace Fs.Liquid2D
              "Foam モード：満泡の下界。密度比がこの値まで下がると泡が最大（t=1）。飛沫/水滴≈0.1~0.2。FoamStart より小さくします。")]
         public float GradientFoamEnd = 1f;
 
+        [Min(0f), LocalizationTooltip(
+             "FoamWithSpeed 模式：泡沫持久度（秒，时间常数）。泡沫在稀疏 + 运动处生成后，即使流体静止/密度不再变化也会按此时长逐渐消退（模拟卷入的空气逃逸）：约经过此时长衰减到 37%，约 3 倍时长基本消失。0=不持久（生成即瞬时，等于旧行为）；海浪白沫≈0.4~1.2；奶泡/洗涤泡≈3~8；啤酒顶泡≈8~20。仅 FoamWithSpeed 使用；不影响物理。",
+             "FoamWithSpeed mode: foam persistence (seconds, time constant). After foam is generated at sparse + moving regions, it fades over this duration even if the fluid goes still / density stops changing (mimics entrained air escaping): decays to ~37% after this long, mostly gone after ~3×. 0 = not persistent (instantaneous, the old behavior); sea whitecaps≈0.4~1.2; milk/detergent foam≈3~8; beer head≈8~20. Used by FoamWithSpeed only; does not affect physics.",
+             "FoamWithSpeed モード：泡の持続時間（秒、時定数）。泡は疎 + 運動の箇所で生成後、流体が静止/密度が変化しなくなってもこの時間で徐々に消えます（巻き込んだ空気の逃逸を模倣）：この時間で約 37%、約 3 倍でほぼ消滅。0=非持続（瞬時、旧動作）。波の白泡≈0.4~1.2、ミルク/洗剤泡≈3~8、ビールの泡≈8~20。FoamWithSpeed のみ使用、物理には影響しません。")]
+        public float GradientFoamPersistence = 0.6f;
+
         [Range(0f, 1f), LocalizationTooltip(
              "渐变时间平滑量（仅 ColorMode=Gradient 生效，逐流体独立）。对渲染用的密度与速度按 EMA 每帧平滑，消除 SPH 逐帧抖动引起的颜色闪烁。0=不平滑（可能闪烁）；越大越平滑但对变化响应越慢。不影响物理。",
              "Gradient temporal smoothing (effective only when ColorMode=Gradient; per-fluid). EMA-smooths the render density and speed each frame to remove color flicker from per-frame SPH jitter. 0 = no smoothing (may flicker); higher = smoother but slower to respond. Does not affect physics.",

@@ -54,7 +54,7 @@ namespace Fs.Liquid2D
             internal static readonly int RenderScale = Shader.PropertyToID("_RenderScale");
 
             // GPU 渐变颜色映射相关。 // GPU gradient color-mapping related. // GPU 渐変カラーマッピング関連。
-            internal static readonly int RenderScalarsBuf = Shader.PropertyToID("_RenderScalars"); // 平滑标量 float2 (x=密度, y=速度)。 // smoothed scalars float2 (x=density, y=speed). // 平滑スカラー。
+            internal static readonly int RenderScalarsBuf = Shader.PropertyToID("_RenderScalars"); // 平滑标量 float3 (x=密度, y=速度, z=FoamWithSpeed 泡沫累加器 F)。 // smoothed scalars float3 (x=density, y=speed, z=FoamWithSpeed accumulator F). // 平滑スカラー。
             internal static readonly int GradientLut = Shader.PropertyToID("_GradientLut");
             internal static readonly int UseGradient = Shader.PropertyToID("_UseGradient");
             internal static readonly int GradientSource = Shader.PropertyToID("_GradientSource");
@@ -205,7 +205,7 @@ namespace Fs.Liquid2D
             public ComputeBuffer GPURadii;
             public ComputeBuffer GPUTypeIds;
             public ComputeBuffer GPUActive;
-            public ComputeBuffer GPURenderScalars; // 渐变用逐粒子平滑标量 float2 (x=密度, y=速度)。 // per-particle smoothed scalars float2 (x=density, y=speed). // 平滑スカラー。
+            public ComputeBuffer GPURenderScalars; // 渐变用逐粒子平滑标量 float3 (x=密度, y=速度, z=FoamWithSpeed 泡沫累加器 F)。 // per-particle scalars float3 (x=density, y=speed, z=FoamWithSpeed accumulator F). // 平滑スカラー。
             public int GPUCount;
             public IReadOnlyList<Liquid2DParticleDescriptor> GPUDescriptors;
 
@@ -337,7 +337,7 @@ namespace Fs.Liquid2D
                     passData.GPURadii = gpuRad;
                     passData.GPUTypeIds = gpuType;
                     passData.GPUActive = gpuActive;
-                    passData.GPURenderScalars = gpuScalars; // 渐变用平滑标量 float2 (x=密度→Foam, y=速度→Speed)。 // smoothed scalars (x=density→Foam, y=speed→Speed). // 平滑スカラー。
+                    passData.GPURenderScalars = gpuScalars; // 渐变用平滑标量 float3 (x=密度→Foam, y=速度→Speed, z=FoamWithSpeed 累加器 F)。 // smoothed scalars (x=density→Foam, y=speed→Speed, z=FoamWithSpeed accumulator F). // 平滑スカラー。
                     passData.GPUCount = gpuCount;
                     passData.GPUDescriptors = gpuDesc;
                 }
@@ -707,8 +707,9 @@ namespace Fs.Liquid2D
             var radiiArr = store.radii;
             var colorArr = store.colors;
             var typeArr = store.typeId;
-            var speedArr = store.renderSpeeds; // 渐变 Speed / FoamWithSpeed 用（平滑速度）。 // for gradient Speed / FoamWithSpeed (smoothed speed). // Speed 用（平滑）。
-            var densArr = store.densities;     // 渐变 Foam / FoamWithSpeed 用（平滑密度）。 // for gradient Foam / FoamWithSpeed (smoothed density). // Foam 用（平滑）。
+            var speedArr = store.renderSpeeds; // 渐变 Speed 用（平滑速度）。 // for gradient Speed (smoothed speed). // Speed 用（平滑）。
+            var densArr = store.densities;     // 渐变 Foam 用（平滑密度，纯密度亏空静态贴图）。 // for gradient Foam (smoothed density, pure density-deficit map). // Foam 用（平滑）。
+            var foamArr = store.renderFoam;    // 渐变 FoamWithSpeed 用（持久化泡沫累加器 F，求解器每帧算好）。 // for gradient FoamWithSpeed (persistent foam accumulator F). // FoamWithSpeed 用。
 
             // 是否需在上传前把 store 的手调 sRGB 色转 linear（对齐 CPU 绘制路径与渐变 LUT 的上传边界）。循环外缓存，避免每粒子查询色彩空间。
             // Whether to convert the store's authored sRGB colors to linear before upload (aligning with the CPU draw path and the gradient LUT's upload boundary). Cached outside the loop to avoid a per-particle color-space query. // 上传前に sRGB→linear が要るか。ループ外でキャッシュ。
@@ -777,13 +778,15 @@ namespace Fs.Liquid2D
                         {
                             tt = math.saturate((speedArr[slot] - speedMin) * speedRangeInv); // 速度重映射。 // remapped speed. // 速度リマップ。
                         }
+                        else if (gradientSource == EGradientColorSource.FoamWithSpeed)
+                        {
+                            // 求解器算好的持久化泡沫累加器 F（生成快升、静止按持久度慢降）。 // solver's persistent foam accumulator F. // 泡累加器 F。
+                            tt = foamArr[slot];
+                        }
                         else
                         {
-                            float foamT = (foamStart - densArr[slot] / restDensity) * foamRangeInv; // 密度亏空→泡沫。 // density deficit → foam. // 密度不足→泡。
-                            tt = gradientSource == EGradientColorSource.FoamWithSpeed
-                                // 泡沫 × 速度门控：静止低密度水面不发泡，运动时才起泡。 // foam × speed gate: still surface doesn't foam, only motion does. // 泡×速度ゲート。
-                                ? math.saturate(foamT) * math.saturate((speedArr[slot] - speedMin) * speedRangeInv)
-                                : foamT; // 纯 Foam。 // pure Foam. // 純 Foam。
+                            // Foam（=1）：纯密度亏空静态贴图（不看速度、无持久度）。 // Foam: pure density-deficit static map. // 純密度不足。
+                            tt = (foamStart - densArr[slot] / restDensity) * foamRangeInv;
                         }
                         Color gc = settings.EvaluateGradientCpu(tt); // EvaluateGradientCpu 内部已 saturate(t)。 // clamps t internally. // 内部で saturate。
                         colors[count] = new Vector4(gc.r, gc.g, gc.b, gc.a);

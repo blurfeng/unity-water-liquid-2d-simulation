@@ -46,7 +46,7 @@ Shader "Custom/URP/2D/Liquid2DParticleGpu"
             // 渐变颜色映射（_UseGradient!=0 时启用）。按每粒子标量（速度或密度亏空）采样 _GradientLut，替代 _Colors。
             // Gradient color mapping (enabled when _UseGradient!=0). Samples _GradientLut by a per-particle scalar
             // (speed or density deficit), replacing _Colors. // 渐変マッピング（_UseGradient!=0）。
-            StructuredBuffer<float2> _RenderScalars; // 逐粒子平滑标量 (x=密度→Foam, y=速度→Speed)（已 EMA 平滑）。 // per-particle smoothed scalars (x=density→Foam, y=speed→Speed), EMA-smoothed. // 平滑スカラー。
+            StructuredBuffer<float3> _RenderScalars; // 逐粒子平滑标量 (x=密度→Foam, y=速度→Speed, z=FoamWithSpeed 泡沫累加器 F)。 // per-particle scalars (x=density→Foam, y=speed→Speed, z=FoamWithSpeed accumulator F). // 平滑スカラー。
             TEXTURE2D(_GradientLut);
             SAMPLER(sampler_GradientLut);
             int   _UseGradient;     // 0=用 _Colors；非0=用渐变。 // 0=use _Colors; nonzero=gradient. // 0=_Colors、非0=渐変。
@@ -118,22 +118,20 @@ Shader "Custom/URP/2D/Liquid2DParticleGpu"
                 // instance's 6 verts); otherwise the store color. // 色：渐変は LUT サンプル、否則は store 色。
                 if (_UseGradient != 0)
                 {
-                    float2 rscal = _RenderScalars[slot]; // x=平滑密度, y=平滑速度。 // x=smoothed density, y=smoothed speed. // x=密度, y=速度。
-                    // 速度重映射：低于 _SpeedMin 视作 0（缓慢移动不出色/泡）。 // speed remap; below _SpeedMin → 0. // 速度リマップ。
-                    float speedT = saturate((rscal.y - _SpeedMin) / max(1e-4, _GradientSpeedMax - _SpeedMin));
+                    float3 rscal = _RenderScalars[slot]; // x=平滑密度, y=平滑速度, z=FoamWithSpeed 泡沫累加器 F。 // x=smoothed density, y=smoothed speed, z=FoamWithSpeed accumulator F. // x=密度, y=速度, z=泡F。
                     float t;
-                    if (_GradientSource == 0) // Speed
+                    if (_GradientSource == 0) // Speed：速度重映射，低于 _SpeedMin 视作 0。 // Speed: remap; below _SpeedMin → 0. // 速度リマップ。
                     {
-                        t = speedT;
+                        t = saturate((rscal.y - _SpeedMin) / max(1e-4, _GradientSpeedMax - _SpeedMin));
                     }
-                    else // Foam / FoamWithSpeed：密度亏空。 // density deficit. // 密度不足。
+                    else if (_GradientSource == 2) // FoamWithSpeed：直接用求解器算好的持久化泡沫累加器 F（生成快升、静止按持久度慢降）。 // use the solver's persistent foam accumulator F. // 泡累加器 F。
+                    {
+                        t = rscal.z;
+                    }
+                    else // Foam（=1）：纯密度亏空静态贴图（不看速度、无持久度）。 // Foam: pure density-deficit static map. // 純密度不足。
                     {
                         float ratio = rscal.x / max(1e-4, _RestDensity);
-                        float foamT = (_FoamStart - ratio) / max(1e-4, _FoamStart - _FoamEnd);
-                        if (_GradientSource == 2) // FoamWithSpeed：泡沫 × 速度门控（静止不发泡）。 // foam × speed gate. // 泡×速度ゲート。
-                            t = saturate(foamT) * speedT;
-                        else // Foam
-                            t = foamT;
+                        t = (_FoamStart - ratio) / max(1e-4, _FoamStart - _FoamEnd);
                     }
                     t = saturate(t);
                     OUT.color = SAMPLE_TEXTURE2D_LOD(_GradientLut, sampler_GradientLut, float2(t, 0.5), 0);

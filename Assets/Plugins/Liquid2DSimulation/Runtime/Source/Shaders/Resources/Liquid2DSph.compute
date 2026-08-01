@@ -49,11 +49,14 @@ RWStructuredBuffer<float2> Predicted;
 RWStructuredBuffer<float2> Velocities;
 RWStructuredBuffer<float2> VelNext;
 RWStructuredBuffer<float2> Densities;    // (density, nearDensity)
-// 渲染用平滑标量 (x=密度, y=速度大小)（EMA，跨帧驻留）。仅供渐变渲染读取，物理不用。合并为单个 float2 以规避 D3D11 每 kernel 8 UAV 上限（ScatterSpawn 恰好触顶）。
-// Render-only smoothed scalars (x=density, y=speed) (EMA, resident). For gradient rendering, unused by physics. Merged into one float2 to stay within D3D11's 8-UAV-per-kernel limit (ScatterSpawn was at the cap).
-// レンダー用平滑スカラー (x=密度, y=速度)。D3D11 の 8 UAV 制限回避のため float2 に統合。
-RWStructuredBuffer<float2> RenderScalars;
+// 渲染用平滑标量 (x=密度, y=速度大小, z=FoamWithSpeed 泡沫累加器 F)（EMA/累加，跨帧驻留）。仅供渐变渲染读取，物理不用。合并为单个缓冲以规避 D3D11 每 kernel 8 UAV 上限（ScatterSpawn 恰好触顶）。
+// Render-only smoothed scalars (x=density, y=speed, z=FoamWithSpeed accumulator F) (EMA/accumulate, resident). For gradient rendering, unused by physics. Merged into one buffer to stay within D3D11's 8-UAV-per-kernel limit (ScatterSpawn was at the cap).
+// レンダー用平滑スカラー (x=密度, y=速度, z=泡累加器 F)。D3D11 の 8 UAV 制限回避のため単一バッファに統合。
+RWStructuredBuffer<float3> RenderScalars;
 StructuredBuffer<float>    RenderGradientK; // 按类型的渲染平滑 EMA 系数（=1−GradientSmoothing，由 CPU 上传）。 // per-type render-smoothing EMA factor (uploaded by CPU). // 型ごとの平滑係数。
+// 按类型的 FoamWithSpeed 泡沫累加器生成参数（与 C# Liquid2DFoamGenParams 逐字段一致）。 // Per-type FoamWithSpeed foam-accumulator gen params (matches C# Liquid2DFoamGenParams field-for-field). // 型ごとの泡累加器生成パラメータ。
+struct FoamGenParams { float foamStart; float foamRangeInv; float speedMin; float speedRangeInv; float invRestDensity; float decay; };
+StructuredBuffer<FoamGenParams> RenderFoamParams;
 RWStructuredBuffer<float4> Colors;
 RWStructuredBuffer<float4> ColorsNext;
 RWStructuredBuffer<float>  LastMixTime;
@@ -332,7 +335,7 @@ void ScatterSpawn(uint3 id : SV_DispatchThreadID)
     // 扩容全量重传（initRenderScalars=0）不覆盖——现有粒子的平滑值由 CPU 侧读回旧缓冲写入新缓冲以保持连续（见 SphGpuSolver.HandleCapacity）。
     // Render scalars: incremental spawn (initRenderScalars=1) sets sentinel (-1), CopyColor snaps to the actual value; grow
     // full re-upload (0) does NOT overwrite — existing particles' smoothed values are preserved by the CPU side. // 哨兵/連続保持。
-    if (initRenderScalars != 0) RenderScalars[slot] = float2(-1, -1);
+    if (initRenderScalars != 0) RenderScalars[slot] = float3(-1, -1, 0); // x=y=-1 哨兵（首帧快照密度/速度）；z=0 泡沫累加器起点。 // sentinel x=y=-1; z=0 foam start. // 哨兵。
 }
 
 [numthreads(NumThreads,1,1)]
@@ -977,23 +980,32 @@ void CopyColor(uint3 id : SV_DispatchThreadID)
     int k = (int)id.x; if (k >= numParticles) return;
     int i = ActiveIndices[k];
     Colors[i] = ColorsNext[i];
-    // 渲染平滑标量（x=密度, y=速度）：末子步随混色一并更新（本 kernel 在 lastStep 对活动粒子跑一次）。
-    // 哨兵 (<0)=spawn/扩容后首帧，直接快照到本帧真实值（无收敛瞬变、无扩容闪色）；否则按类型系数 EMA（kk=1 时等于原始值）。
-    // Render scalars (x=density, y=speed), updated in the last-substep color copy. Sentinel (<0) = first frame after spawn/grow,
-    // snap to the actual value (no convergence transient / grow flash); otherwise EMA by per-type k. // 哨兵で快照、否則 EMA。
-    float2 rs = RenderScalars[i];
+    // 渲染平滑标量（x=密度, y=速度, z=FoamWithSpeed 泡沫累加器 F）：末子步随混色一并更新（本 kernel 在 lastStep 对活动粒子跑一次）。
+    // 哨兵 (x<0)=spawn/扩容后首帧，密度/速度直接快照到本帧真实值（无收敛瞬变、无扩容闪色）；否则按类型系数 EMA（kk=1 时等于原始值）。
+    // 泡沫累加器：gen = 密度亏空 × 速度门控（与 CPU/旧绘制公式一致）；F = max(F·decay, gen)（快升慢降；decay=0 时 F=gen，等于旧瞬时行为）。
+    // Render scalars (x=density, y=speed, z=FoamWithSpeed accumulator F), updated in the last-substep color copy. Sentinel (x<0)
+    // = first frame after spawn/grow → snap density/speed; else EMA. Foam: gen = deficit × speed-gate; F = max(F·decay, gen). // 哨兵で快照、否則 EMA。
+    float3 rs = RenderScalars[i];
+    int type = TypeId[i];
     float rawD = Densities[i].x;
     float rawS = length(Velocities[i]);
-    if (rs.x < 0.0)
+    bool firstFrame = rs.x < 0.0;
+    if (firstFrame)
     {
-        rs = float2(rawD, rawS);
+        rs.x = rawD;
+        rs.y = rawS;
     }
     else
     {
-        float kk = RenderGradientK[TypeId[i]];
+        float kk = RenderGradientK[type];
         rs.x += (rawD - rs.x) * kk;
         rs.y += (rawS - rs.y) * kk;
     }
+    FoamGenParams fp = RenderFoamParams[type];
+    float deficit = saturate((fp.foamStart - rs.x * fp.invRestDensity) * fp.foamRangeInv);
+    float speedGate = saturate((rs.y - fp.speedMin) * fp.speedRangeInv);
+    float gen = deficit * speedGate;
+    rs.z = firstFrame ? gen : max(rs.z * fp.decay, gen);
     RenderScalars[i] = rs;
 }
 

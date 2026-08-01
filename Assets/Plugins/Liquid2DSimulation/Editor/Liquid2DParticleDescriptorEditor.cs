@@ -34,6 +34,7 @@ namespace Fs.Liquid2D.Editor
         private SerializedProperty _gradientSpeedMax;
         private SerializedProperty _gradientFoamStart;
         private SerializedProperty _gradientFoamEnd;
+        private SerializedProperty _gradientFoamPersistence;
         private SerializedProperty _gradientSmoothing;
 
         private void OnEnable()
@@ -55,6 +56,7 @@ namespace Fs.Liquid2D.Editor
                 _gradientSpeedMax = _renderSettings.FindPropertyRelative("GradientSpeedMax");
                 _gradientFoamStart = _renderSettings.FindPropertyRelative("GradientFoamStart");
                 _gradientFoamEnd = _renderSettings.FindPropertyRelative("GradientFoamEnd");
+                _gradientFoamPersistence = _renderSettings.FindPropertyRelative("GradientFoamPersistence");
                 _gradientSmoothing = _renderSettings.FindPropertyRelative("GradientSmoothing");
             }
         }
@@ -357,6 +359,20 @@ namespace Fs.Liquid2D.Editor
                         L("Speed Max 小于 1：速度略大即达渐变末端，可能大部分粒子都采样到最大速度色。建议按流体实际速度上限设置（如 5~20）。",
                             "Speed Max below 1: even small speeds reach the gradient end, so most particles may sample the max-speed color. Set it near your fluid's actual peak speed (e.g. 5~20).",
                             "Speed Max が 1 未満：わずかな速度でグラデーション末端に達し、多くの粒子が最大速度色になります。流体の実際の最大速度（例 5~20）に設定してください。"),
+                        MessageType.Info);
+                }
+            }
+
+            // 泡沫持久度（仅 FoamWithSpeed）：泡沫生成后按此时长逐渐消退，0=瞬时（旧行为）。 // Foam persistence (FoamWithSpeed only): foam fades over this duration; 0 = instantaneous (old behavior). // 泡持続（FoamWithSpeed のみ）。
+            if (src == (int)EGradientColorSource.FoamWithSpeed && _gradientFoamPersistence != null)
+            {
+                EditorGUILayout.PropertyField(_gradientFoamPersistence, new GUIContent("Foam Persistence", _gradientFoamPersistence.tooltip));
+                if (_gradientFoamPersistence.floatValue <= 0f)
+                {
+                    EditorGUILayout.HelpBox(
+                        L("Foam Persistence = 0：泡沫无持久度，随生成量瞬时变化（等于旧行为）。设为 >0 可让泡沫在流体静止后按此时长（秒）逐渐消退：海浪≈0.4~1.2、奶泡≈3~8、啤酒≈8~20。",
+                            "Foam Persistence = 0: foam has no persistence and follows the instantaneous generation (the old behavior). Set > 0 so foam fades over this many seconds after the fluid settles: sea≈0.4~1.2, milk≈3~8, beer≈8~20.",
+                            "Foam Persistence = 0：泡は持続せず生成量に瞬時追従（旧動作）。>0 にすると流体が静止後この秒数で徐々に消えます：波≈0.4~1.2、ミルク≈3~8、ビール≈8~20。"),
                         MessageType.Info);
                 }
             }
