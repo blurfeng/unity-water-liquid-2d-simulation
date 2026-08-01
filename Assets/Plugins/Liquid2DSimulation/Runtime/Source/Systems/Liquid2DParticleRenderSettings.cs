@@ -28,7 +28,7 @@ namespace Fs.Liquid2D
              "流体粒子颜色。仅 ColorMode=Simple（简单模式）时作为每粒子基础色（并叠加运行时混色）；Gradient 模式下不使用此颜色（由渐变决定）。",
              "Fluid particle color. Used as the per-particle base color (with runtime mixing) only when ColorMode=Simple; ignored in Gradient mode (the gradient decides the color).",
              "流体パーティクルカラー。ColorMode=Simple（シンプル）のときのみ粒子ごとの基礎色として使用（実行時混色を加味）。Gradient モードでは使用されません（グラデーションが色を決定）。")]
-        public Color Color = new Color(0f, 1f, 4f, 1f);
+        public Color Color = new Color(0f, 0.4f, 1f, 1f);
 
         [LocalizationTooltip(
              "粒子颜色模式。Simple（简单）=使用上方 Color（+运行时混色），默认行为；Gradient=按每粒子标量（速度/空气混入量）采样下方渐变，此时不使用 Color 与运行时混色。",
