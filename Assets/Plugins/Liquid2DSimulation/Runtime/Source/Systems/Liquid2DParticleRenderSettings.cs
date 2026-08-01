@@ -36,7 +36,7 @@ namespace Fs.Liquid2D
              "粒子カラーモード。Simple（シンプル）= 上の Color を使用（+実行時混色）、既定動作。Gradient = 下の Gradient を粒子ごとのスカラー（速度/混入空気量）でサンプリング（Color と実行時混色は不使用）。")]
         public EParticleColorMode ColorMode = EParticleColorMode.Simple;
 
-        [LocalizationTooltip(
+        [GradientUsage(true), LocalizationTooltip(
              "颜色渐变（仅 ColorMode=Gradient 生效）。按每粒子标量从左(0)到右(1)采样，支持 HDR。",
              "Color gradient (effective only when ColorMode=Gradient). Sampled left(0)→right(1) by a per-particle scalar; HDR supported.",
              "カラーグラデーション（ColorMode=Gradient のときのみ有効）。粒子ごとのスカラーで左(0)→右(1)をサンプリング、HDR 対応。")]
