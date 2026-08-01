@@ -311,6 +311,10 @@ namespace Fs.Liquid2D
             var colorArr = store.colors;
             var typeArr = store.typeId;
 
+            // 是否需在上传前把 store 的手调 sRGB 色转 linear（对齐 _CoverColor 的 SetColor）。循环外缓存，避免每粒子查询色彩空间。
+            // Whether to convert the store's authored sRGB colors to linear before upload (aligning with _CoverColor's SetColor). // 上传前に sRGB→linear が要るか。
+            bool toLinear = Liquid2DColorSpace.IsLinear;
+
             for (int t = 0; t < descriptors.Count; t++)
             {
                 var d = descriptors[t];
@@ -340,8 +344,8 @@ namespace Fs.Liquid2D
                     m.m00 = diameter; m.m11 = diameter;
                     m.m03 = center.x; m.m13 = center.y; m.m23 = center.z;
                     _matricesCache[count] = m;
-                    float4 c = colorArr[slot];
-                    _colorArrayCache[count] = new Vector4(c.x, c.y, c.z, c.w);
+                    // store 存的是手调 sRGB 值；线性项目下按 SetColor 的口径转 linear 再上传。 // The store holds authored sRGB values; convert to linear per SetColor in linear projects. // store は sRGB 値。線形項目では linear へ。
+                    _colorArrayCache[count] = Liquid2DColorSpace.ToGpuUpload(colorArr[slot], toLinear);
                     count++;
 
                     if (count == MaxInstancesPerBatch)

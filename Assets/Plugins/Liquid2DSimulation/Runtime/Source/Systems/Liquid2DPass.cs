@@ -711,6 +711,10 @@ namespace Fs.Liquid2D
             var speedArr = store.renderSpeeds; // 渐变 Speed / FoamWithSpeed 用（平滑速度）。 // for gradient Speed / FoamWithSpeed (smoothed speed). // Speed 用（平滑）。
             var densArr = store.densities;     // 渐变 Foam / FoamWithSpeed 用（平滑密度）。 // for gradient Foam / FoamWithSpeed (smoothed density). // Foam 用（平滑）。
 
+            // 是否需在上传前把 store 的手调 sRGB 色转 linear（对齐 _CoverColor 的 SetColor）。循环外缓存，避免每粒子查询色彩空间。
+            // Whether to convert the store's authored sRGB colors to linear before upload (aligning with _CoverColor's SetColor). Cached outside the loop to avoid a per-particle color-space query. // 上传前に sRGB→linear が要るか。ループ外でキャッシュ。
+            bool toLinear = Liquid2DColorSpace.IsLinear;
+
             for (int t = 0; t < descriptors.Count; t++)
             {
                 var d = descriptors[t];
@@ -787,8 +791,9 @@ namespace Fs.Liquid2D
                     }
                     else
                     {
-                        float4 c = colorArr[slot];
-                        colors[count] = new Vector4(c.x, c.y, c.z, c.w);
+                        // store 存的是手调 sRGB 值；线性项目下按 SetColor 的口径转 linear 再上传（渐变分支的 LUT 已烘焙为上传值，不走这里）。
+                        // The store holds authored sRGB values; in linear projects convert to linear per SetColor's convention before upload (the gradient branch's LUT is already baked to upload values). // store は sRGB 値。線形項目では SetColor に合わせ linear へ。
+                        colors[count] = Liquid2DColorSpace.ToGpuUpload(colorArr[slot], toLinear);
                     }
                     count++;
 

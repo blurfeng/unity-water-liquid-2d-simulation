@@ -60,6 +60,21 @@ Shader "Custom/URP/2D/Liquid2DParticleGpu"
             TEXTURE2D(_MainTex);
             SAMPLER(sampler_MainTex);
 
+            // sRGB→linear（逐通道，含 HDR>1 分支）。曲线与 C# Mathf.GammaToLinearSpace / Color.linear / Material.SetColor 完全一致，
+            // 使 _Colors（store 的手调 sRGB 工作色）在绘制读取的边界转换后，与 CPU 路径及 _CoverColor 表现一致。仅线性色彩空间需要。
+            // sRGB→linear (per channel, with an HDR >1 branch). The curve matches C# Mathf.GammaToLinearSpace / Color.linear /
+            // Material.SetColor exactly, so _Colors (the store's authored sRGB working color) — converted at this draw-time read
+            // boundary — matches the CPU path and _CoverColor. Only needed in linear color space.
+            // sRGB→linear（チャンネルごと、HDR>1 分岐あり）。曲線は C# の Mathf.GammaToLinearSpace / Color.linear / Material.SetColor と一致。
+            float3 Liquid2DSRGBToLinear(float3 c)
+            {
+                float3 lo   = c / 12.92;                                 // c <= 0.04045
+                float3 mid  = pow(max((c + 0.055) / 1.055, 0.0), 2.4);   // 0.04045 < c < 1
+                float3 hi   = pow(max(c, 0.0), 2.2);                     // c >= 1（HDR，与 GammaToLinearSpace 一致用 2.2）
+                float3 midHi = (c < 1.0) ? mid : hi;
+                return (c <= 0.04045) ? lo : midHi;
+            }
+
             struct Varying
             {
                 float4 positionCS : SV_POSITION;
@@ -125,7 +140,14 @@ Shader "Custom/URP/2D/Liquid2DParticleGpu"
                 }
                 else
                 {
-                    OUT.color = _Colors[slot];
+                    // store 的手调 sRGB 工作色；线性项目下在此绘制读取边界转 linear（与 CPU 路径/_CoverColor 对齐）。渐变分支采样的 LUT 已烘焙为上传值，不在此转换。
+                    // The store's authored sRGB working color; convert to linear at this draw-time read boundary in linear projects (aligned with the CPU path / _CoverColor). The gradient branch's sampled LUT is already baked to upload values and is not converted here.
+                    // store の手調整 sRGB 作業色。線形項目ではこの描画読み取り境界で linear へ。
+                    float4 sc = _Colors[slot];
+                    #ifndef UNITY_COLORSPACE_GAMMA
+                    sc.rgb = Liquid2DSRGBToLinear(sc.rgb);
+                    #endif
+                    OUT.color = sc;
                 }
                 return OUT;
             }

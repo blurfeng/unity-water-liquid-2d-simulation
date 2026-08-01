@@ -140,14 +140,20 @@ namespace Fs.Liquid2D
             if (ColorGradient == null) ColorGradient = new Gradient();
 
             if (_lutCpu == null || _lutCpu.Length != GradientLutSize) _lutCpu = new Color[GradientLutSize];
+            // 烘焙时即把手调的 sRGB 渐变色转成「上传值」（线性项目做 sRGB→linear），与 store 逐粒子色的上传边界、以及 _CoverColor 走的 SetColor 完全对齐，
+            // 使渐变色与 CoverColor 在相同取值下表现一致。CPU 与 GPU 渐变路径共用本 LUT，一次烘焙即两端到位（绘制时不再逐粒子转换）。
+            // Bake the authored sRGB gradient colors into upload values here (sRGB→linear in linear projects), aligned with the
+            // per-particle store color's upload boundary and _CoverColor's SetColor, so gradient and cover colors match at the same
+            // authored value. The CPU and GPU gradient paths share this LUT — one bake covers both (no per-particle conversion at draw).
+            // 焼き込み時に手調整の sRGB 渐变色を「アップロード値」へ変換（線形項目では sRGB→linear）。store 粒子色や _CoverColor と整合。
             for (int i = 0; i < GradientLutSize; i++)
-                _lutCpu[i] = ColorGradient.Evaluate(i / (float)(GradientLutSize - 1));
+                _lutCpu[i] = Liquid2DColorSpace.ToGpuUpload(ColorGradient.Evaluate(i / (float)(GradientLutSize - 1)));
 
             if (!_lutGpu)
             {
-                // linear=true：LUT 直接持有 Gradient 的原始颜色值（与 CPU 路径把 Color 原样喂给 shader 一致），采样不做 sRGB 转换。
-                // linear=true: the LUT holds the gradient's raw color values (matching the CPU path feeding Color straight to the shader); sampling does no sRGB conversion.
-                // linear=true：LUT は Gradient の生の色値を保持（CPU パスと一致）、サンプリングで sRGB 変換なし。
+                // linear=true：LUT 已在上方按色彩空间烘焙为「上传值」（线性项目为 linear），故纹理数据本身即为最终值，采样不再做 sRGB 转换。
+                // linear=true: the LUT already holds upload-space values baked above (linear in linear projects), so the texture data is final and sampling does no sRGB conversion.
+                // linear=true：LUT は上で「アップロード値」に焼き込み済み（線形項目では linear）、サンプリングで sRGB 変換なし。
                 _lutGpu = new Texture2D(GradientLutSize, 1, TextureFormat.RGBAHalf, false, true)
                 {
                     name = "Liquid2DGradientLut",
