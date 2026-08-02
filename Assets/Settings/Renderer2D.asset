@@ -260,7 +260,7 @@ MonoBehaviour:
       NoiseCoordOffset: 4
     Edge:
       Enable: 1
-      EdgeRange: 0.8
+      EdgeRange: 0.55
       EdgeIntensity: 0.1
       EdgeColor: {r: 0.5518868, g: 0.8222361, b: 1, a: 0.627451}
       BlendType: 0
