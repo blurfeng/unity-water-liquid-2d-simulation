@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.3.0] - 2026-08-02
+### Added
+- **Color Mode (Simple / Gradient).** Each particle descriptor can now choose how its base color is produced. `Simple` keeps the previous flat color; `Gradient` samples an HDR gradient per particle from a physical scalar (speed / density / impact) every frame, driving dynamic looks like flow, foam, and translucent wave crests. See the README "Color Mode" section for the full parameter set.
+### Fixed
+- Fixed a color-space mismatch: particle colors uploaded via `SetVectorArray` / `ComputeBuffer` were not sRGB→linear converted in linear-color-space projects (unlike `SetColor`), so they rendered darker than material colors like the edge color. Particle colors are now converted at the GPU-upload boundary to match.
+
 ## [1.2.0] - 2026-07-03
 ### Added
 - **Unity 2022.3 support (single-source).** One `Runtime` / `Editor` codebase now targets both Unity 6 (URP 17 / Render Graph) and Unity 2022.3 (URP 14) through `#if UNITY_6000_0_OR_NEWER` version macros. On 2022.3 the render pass runs on the classic imperative URP pipeline (no Render Graph) with an identical result. The `2022.3` branch is installed via the `#2022.3` git-URL suffix; the code is shared across both engines, only the Samples differ per version.
