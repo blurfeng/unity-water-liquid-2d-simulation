@@ -55,7 +55,7 @@ RWStructuredBuffer<float2> Densities;    // (density, nearDensity)
 RWStructuredBuffer<float3> RenderScalars;
 StructuredBuffer<float>    RenderGradientK; // 按类型的渲染平滑 EMA 系数（=1−GradientSmoothing，由 CPU 上传）。 // per-type render-smoothing EMA factor (uploaded by CPU). // 型ごとの平滑係数。
 // 按类型的动态泡沫参数（与 C# Liquid2DDynamicFoamParams 逐字段一致）。generation = 密度门 × 动态因子（mode==1 速度门控 / 否则 冲击=密度上升率）。 // Per-type dynamic-foam params (matches C# Liquid2DDynamicFoamParams field-for-field). // 型ごとの動的泡パラメータ。
-struct DynamicFoamParams { float invRestDensity; float impactStrength; float decay; float foamStart; float foamRangeInv; float speedMin; float speedRangeInv; int mode; };
+struct DynamicFoamParams { float invRestDensity; float impactStrength; float impactRiseMin; float decay; float foamStart; float foamRangeInv; float speedMin; float speedRangeInv; int mode; };
 StructuredBuffer<DynamicFoamParams> RenderDynamicFoamParams;
 RWStructuredBuffer<float4> Colors;
 RWStructuredBuffer<float4> ColorsNext;
@@ -1013,7 +1013,8 @@ void CopyColor(uint3 id : SV_DispatchThreadID)
     else
     {
         float rise = firstFrame ? 0.0 : (rs.x - prevD);
-        dynamicFactor = saturate(rise * dp.invRestDensity * dp.impactStrength);
+        // 死区：归一化上升率低于 impactRiseMin 的部分不产泡，排除轻微扰动的伪冲击波。riseMin=0 时与旧式等价。 // deadzone; equivalent to the old formula when riseMin=0. // デッドゾーン、riseMin=0 で旧式と等価。
+        dynamicFactor = saturate((rise * dp.invRestDensity - dp.impactRiseMin) * dp.impactStrength);
     }
     float generation = densityGate * dynamicFactor;
     rs.z = firstFrame ? 0.0 : max(rs.z * dp.decay, generation);

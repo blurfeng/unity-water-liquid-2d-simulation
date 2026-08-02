@@ -8,11 +8,11 @@ namespace Fs.Liquid2D
     /// Impact 渐变来源的「冲击泡沫累加器」逐类型参数（预算好的常量）。字段顺序/布局必须与 Compute Shader
     /// （Liquid2DSph.compute）中的 <c>struct DynamicFoamParams</c> 逐字段一致（GPU 直接 SetData 上传）。
     /// 动态泡沫（DensityWithImpact / DensityWithSpeed）逐类型参数（预算好的常量）。生成量 = 密度区域门 × 动态因子：
-    /// 区域门 = 密度亏空(FoamStart/FoamRangeInv，FoamStart 卡在内部/水底密度以下→排除内部)；动态因子 = Mode==1 ? 速度门控(saturate((平滑速度−SpeedMin)·SpeedRangeInv)) : 冲击(saturate((Δ平滑密度·InvRestDensity)·ImpactStrength))。
+    /// 区域门 = 密度亏空(FoamStart/FoamRangeInv，FoamStart 卡在内部/水底密度以下→排除内部)；动态因子 = Mode==1 ? 速度门控(saturate((平滑速度−SpeedMin)·SpeedRangeInv)) : 冲击(saturate((Δ平滑密度·InvRestDensity − ImpactRiseMin)·ImpactStrength))。
     /// F = max(F·Decay, 生成量)。内部/水底（区域门0）不产泡；平静/未压实（动态因子0）不产泡且已有泡消退。
     /// Per-type params for the dynamic foam (DensityWithImpact / DensityWithSpeed), precomputed. Field order/layout MUST match
     /// <c>struct DynamicFoamParams</c> in Liquid2DSph.compute (uploaded via SetData). generation = densityGate × dynamicFactor:
-    /// densityGate = density deficit (FoamStart/FoamRangeInv); dynamicFactor = Mode==1 ? speedGate(saturate((smoothedSpeed−SpeedMin)·SpeedRangeInv)) : impact(saturate((Δsmoothed·InvRestDensity)·ImpactStrength)).
+    /// densityGate = density deficit (FoamStart/FoamRangeInv); dynamicFactor = Mode==1 ? speedGate(saturate((smoothedSpeed−SpeedMin)·SpeedRangeInv)) : impact(saturate((Δsmoothed·InvRestDensity − ImpactRiseMin)·ImpactStrength)).
     /// F = max(F·Decay, generation).
     /// 動的泡（DensityWithImpact / DensityWithSpeed）の型ごとパラメータ。generation = 密度領域ゲート × 動的因子。フィールド順は compute の DynamicFoamParams と一致必須。
     /// </summary>
@@ -22,6 +22,8 @@ namespace Fs.Liquid2D
         public float InvRestDensity;
         /// <summary>冲击灵敏度（Mode==0/DensityWithImpact）。 // impact sensitivity (Mode==0). // 衝撃感度。</summary>
         public float ImpactStrength;
+        /// <summary>冲击死区：归一化上升率下限，低于此值冲击项为 0（Mode==0/DensityWithImpact）。 // impact deadzone: normalized rise-rate floor (Mode==0). // 衝撃デッドゾーン下限。</summary>
+        public float ImpactRiseMin;
         /// <summary>每帧衰减系数 = exp(−fixedDeltaTime/持久度秒)；0=不持久（F=生成量）。 // per-step decay; 0 = not persistent. // 減衰係数。</summary>
         public float Decay;
         /// <summary>区域门上界（密度比）：密度比低于此值才算有效区域（应卡在内部/水底密度以下以排除内部）。 // gate upper bound. // 領域ゲート上界。</summary>

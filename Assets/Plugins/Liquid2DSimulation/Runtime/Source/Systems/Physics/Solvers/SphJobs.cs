@@ -265,10 +265,13 @@ namespace Fs.Liquid2D
             float dynamicFactor;
             if (dp.Mode == 1) // DensityWithSpeed：速度门控。 // speed gate. // 速度ゲート。
                 dynamicFactor = saturate((smS - dp.SpeedMin) * dp.SpeedRangeInv);
-            else // DensityWithImpact：冲击=密度上升率。 // impact = density rise rate. // 衝撃。
+            else // DensityWithImpact：冲击=密度上升率（减去死区 ImpactRiseMin 后再乘灵敏度）。 // impact = density rise rate minus the ImpactRiseMin deadzone. // 衝撃。
             {
                 float rise = firstFrame ? 0f : (smD - pd);
-                dynamicFactor = saturate(rise * dp.InvRestDensity * dp.ImpactStrength);
+                // 死区：归一化上升率低于 ImpactRiseMin 的部分不产泡，排除轻微扰动的伪冲击波。RiseMin=0 时与旧式等价。
+                // Deadzone: rise below ImpactRiseMin produces no foam, excluding weak disturbances' false shockwave. Equivalent to the old formula when RiseMin=0.
+                // デッドゾーン：ImpactRiseMin 未満は泡なし。RiseMin=0 で旧式と等価。
+                dynamicFactor = saturate((rise * dp.InvRestDensity - dp.ImpactRiseMin) * dp.ImpactStrength);
             }
             float generation = densityGate * dynamicFactor;
             OutFoam[i] = firstFrame ? 0f : max(OutFoam[i] * dp.Decay, generation);

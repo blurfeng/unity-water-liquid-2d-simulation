@@ -563,7 +563,7 @@ namespace Fs.Liquid2D
         {
             Ensure(ref _materials, numTypes, 36); Ensure(ref _mixDatas, numTypes, 20);
             Ensure(ref _renderGradientKBuf, numTypes, 4);
-            Ensure(ref _renderDynamicFoamParamsBuf, numTypes, 32); // DynamicFoamParams：7 float + 1 int = 32 bytes（与 Liquid2DDynamicFoamParams / compute struct 对齐）。 // 8×4 = 32 bytes. // 32 バイト。
+            Ensure(ref _renderDynamicFoamParamsBuf, numTypes, 36); // DynamicFoamParams：8 float + 1 int = 36 bytes（与 Liquid2DDynamicFoamParams / compute struct 对齐）。 // 9×4 = 36 bytes. // 36 バイト。
             Ensure(ref _colliders, Mathf.Max(1, numColliders), 88); Ensure(ref _points, Mathf.Max(1, numPoints), 8);
             Ensure(ref _bodyAccum, numBodies * _accumStride, 4);
             Ensure(ref _forceFields, Mathf.Max(1, numForceFields), 44);

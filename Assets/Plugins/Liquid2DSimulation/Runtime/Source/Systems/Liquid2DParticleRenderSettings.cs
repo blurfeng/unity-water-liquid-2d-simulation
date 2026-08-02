@@ -79,6 +79,12 @@ namespace Fs.Liquid2D
         public float GradientImpactStrength = 20f;
 
         [Min(0f), LocalizationTooltip(
+             "DensityWithImpact 模式：冲击死区（最小上升率下限）。冲击项 = saturate((平滑密度每步上升率 / 静止密度 − 此值) × ImpactStrength)。「每步上升率/静止密度」低于此值的区域完全不产泡，用于排除「密度从低到高但变化很小」的轻微扰动（避免看起来像冲击波的伪发白）；超过此值的部分从 0 起缓慢升起，无边界突跳。0=无死区（等同旧行为）。典型 0.002~0.02，按观感微调。注意：与 ImpactStrength 单位一致（都作用在归一化上升率上），死区在乘 ImpactStrength 之前扣除；Gradient Smoothing 越大单步上升越小，需相应调小此值。仅 DensityWithImpact 使用；不影响物理。",
+             "DensityWithImpact mode: impact deadzone (minimum rise-rate floor). impact = saturate((smoothed-density rise per step / rest − this) × ImpactStrength). Regions whose per-step normalized rise is below this value produce no foam, excluding weak 'low-to-high but tiny' disturbances (avoids shockwave-like false whitening); above it foam rises from 0 with no boundary jump. 0 = no deadzone (legacy behavior). Typically 0.002~0.02; tune visually. Note: same unit as ImpactStrength (both act on the normalized rise); the deadzone is subtracted before multiplying by ImpactStrength. A larger Gradient Smoothing shrinks the per-step rise, so lower this accordingly. DensityWithImpact only; does not affect physics.",
+             "DensityWithImpact モード：衝撃デッドゾーン（最小上昇率の下限）。衝撃 = saturate((平滑密度の1ステップ上昇率/静止密度 − この値)×ImpactStrength)。1ステップの正規化上昇率がこの値未満の領域は泡を出さず、「低→高だが変化が小さい」微弱な擾乱を除外（衝撃波的な偽の白飛びを回避）。超えた分は 0 から立ち上がり境界のポップなし。0=デッドゾーン無し（旧挙動と同一）。目安 0.002~0.02。ImpactStrength と同じ単位（正規化上昇率に作用）で、乗算前に差し引きます。Gradient Smoothing が大きいほど1ステップ上昇が小さくなるため相応に小さく。DensityWithImpact のみ使用。")]
+        public float GradientImpactRiseMin = 0.003f;
+
+        [Min(0f), LocalizationTooltip(
              "DensityWithImpact / DensityWithSpeed 模式：泡沫持久度（秒，时间常数）。生成泡沫后，即使不再产生也会按此时长逐渐消退（模拟卷入的空气逃逸）：约经过此时长衰减到 37%，约 3 倍时长基本消失。0=不持久（只在生成那一刻发白）；海浪白沫≈0.4~1.2；奶泡/洗涤泡≈3~8；啤酒顶泡≈8~20。仅这两个动态来源使用；不影响物理。",
              "DensityWithImpact / DensityWithSpeed mode: foam persistence (seconds, time constant). After foam is generated it fades over this duration even with no new generation (mimics entrained air escaping): decays to ~37% after this long, mostly gone after ~3×. 0 = not persistent; sea whitecaps≈0.4~1.2; milk/detergent foam≈3~8; beer head≈8~20. Both dynamic sources only; does not affect physics.",
              "DensityWithImpact / DensityWithSpeed モード：泡の持続時間（秒、時定数）。生成後、新たな生成が無くてもこの時間で徐々に消えます：約 37%、約 3 倍でほぼ消滅。0=非持続。波の白泡≈0.4~1.2、ミルク/洗剤泡≈3~8、ビールの泡≈8~20。動的 2 種のみ使用。")]

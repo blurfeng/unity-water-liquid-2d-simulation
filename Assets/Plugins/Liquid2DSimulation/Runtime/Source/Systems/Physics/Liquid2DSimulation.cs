@@ -257,6 +257,8 @@ namespace Fs.Liquid2D
                 InvRestDensity = 1f / restDensity,
                 // DensityWithImpact 用冲击；非该来源 ImpactStrength=0 使冲击因子恒 0。 // impact factor only for DensityWithImpact. // 衝撃因子。
                 ImpactStrength = isImpact ? math.max(0f, rs.GradientImpactStrength) : 0f,
+                // 冲击死区（归一化上升率下限）：仅 DensityWithImpact 生效，低于此值不产泡。 // impact deadzone (DensityWithImpact only). // 衝撃デッドゾーン。
+                ImpactRiseMin = isImpact ? math.max(0f, rs.GradientImpactRiseMin) : 0f,
                 Decay = isDynamic && persistence > 1e-4f ? math.exp(-fixedDt / persistence) : 0f,
                 FoamStart = foamStart,
                 FoamRangeInv = 1f / math.max(1e-4f, foamStart - foamEnd),

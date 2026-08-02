@@ -55,12 +55,12 @@ namespace Fs.Liquid2D
         /// 生成量 = 密度区域门 × 冲击：区域门 = 密度亏空(FoamStart/End；FoamStart 卡在内部/水底密度以下→排除高密度内部，只留表面附近)；
         /// 冲击 = saturate((Δ平滑密度/静止密度)×ImpactStrength)（密度正向上升=被压实）。F = max(F·decay, 生成量)，由 FoamPersistence 控制消退。
         /// 内部/水底（区域门0）不发白；平静表面（无冲击）不发白、已有泡渐隐；孤立飞滴（未被压实=冲击0）不发白；只有「有效区域内发生压实」才产泡，静止后消退。
-        /// ⚠FoamStart 要卡在水底密度以下（水底往往≈1.0，则设 0.95~1.0）才能排除内部。参数：FoamStart/End + ImpactStrength + FoamPersistence。
+        /// ⚠FoamStart 要卡在水底密度以下（水底往往≈1.0，则设 0.95~1.0）才能排除内部。ImpactRiseMin=冲击死区，扣除上升率下限以排除「变化很小」的轻微扰动伪冲击波。参数：FoamStart/End + ImpactStrength + ImpactRiseMin + FoamPersistence。
         /// Density × Impact (filter the valid region by density, then let impact = density rise rate drive the color). generation = densityGate × impact:
-        /// densityGate = density deficit (FoamStart/End; FoamStart below the interior/bottom density to exclude it); impact = saturate((Δsmoothed-density/rest)×ImpactStrength).
+        /// densityGate = density deficit (FoamStart/End; FoamStart below the interior/bottom density to exclude it); impact = saturate((Δsmoothed-density/rest − ImpactRiseMin)×ImpactStrength).
         /// F = max(F·decay, generation), fade by FoamPersistence. Interior/bottom (gate 0), calm surface (no impact) and isolated droplets (not compressed) don't whiten.
-        /// ⚠FoamStart must be below the bottom density (≈1.0 → 0.95~1.0). Params: FoamStart/End + ImpactStrength + FoamPersistence.
-        /// 密度 × 衝撃：密度で有効領域を絞り、衝撃（密度上昇率）で色を駆動。⚠FoamStart は水底密度の下に。パラメータ：FoamStart/End + ImpactStrength + FoamPersistence。
+        /// ⚠FoamStart must be below the bottom density (≈1.0 → 0.95~1.0). ImpactRiseMin = impact deadzone, subtracting a rise-rate floor to exclude weak 'tiny change' shockwave-like whitening. Params: FoamStart/End + ImpactStrength + ImpactRiseMin + FoamPersistence.
+        /// 密度 × 衝撃：密度で有効領域を絞り、衝撃（密度上昇率）で色を駆動。⚠FoamStart は水底密度の下に。ImpactRiseMin=衝撃デッドゾーン（微弱な擾乱の偽白飛びを除外）。パラメータ：FoamStart/End + ImpactStrength + ImpactRiseMin + FoamPersistence。
         /// </summary>
         DensityWithImpact = 2,
 

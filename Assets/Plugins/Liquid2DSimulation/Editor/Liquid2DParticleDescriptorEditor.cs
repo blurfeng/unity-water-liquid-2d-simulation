@@ -35,6 +35,7 @@ namespace Fs.Liquid2D.Editor
         private SerializedProperty _gradientFoamStart;
         private SerializedProperty _gradientFoamEnd;
         private SerializedProperty _gradientImpactStrength;
+        private SerializedProperty _gradientImpactRiseMin;
         private SerializedProperty _gradientFoamPersistence;
         private SerializedProperty _gradientSmoothing;
 
@@ -58,6 +59,7 @@ namespace Fs.Liquid2D.Editor
                 _gradientFoamStart = _renderSettings.FindPropertyRelative("GradientFoamStart");
                 _gradientFoamEnd = _renderSettings.FindPropertyRelative("GradientFoamEnd");
                 _gradientImpactStrength = _renderSettings.FindPropertyRelative("GradientImpactStrength");
+                _gradientImpactRiseMin = _renderSettings.FindPropertyRelative("GradientImpactRiseMin");
                 _gradientFoamPersistence = _renderSettings.FindPropertyRelative("GradientFoamPersistence");
                 _gradientSmoothing = _renderSettings.FindPropertyRelative("GradientSmoothing");
             }
@@ -369,9 +371,13 @@ namespace Fs.Liquid2D.Editor
                 }
             }
 
-            // Impact Strength 仅 DensityWithImpact（冲击=密度上升率）使用；密度门(Foam Start/End)与速度门(Speed Min/Max)在上方对应块显示。 // Impact Strength only for DensityWithImpact. // 衝撃感度。
+            // Impact Strength / Impact Rise Min 仅 DensityWithImpact（冲击=密度上升率）使用；密度门(Foam Start/End)与速度门(Speed Min/Max)在上方对应块显示。 // Impact params only for DensityWithImpact. // 衝撃感度。
             if (isImpact && _gradientImpactStrength != null)
                 EditorGUILayout.PropertyField(_gradientImpactStrength, new GUIContent("Impact Strength", _gradientImpactStrength.tooltip));
+
+            // Impact Rise Min：冲击死区下限，排除「密度从低到高但变化很小」的轻微扰动伪冲击波。 // impact deadzone floor. // 衝撃デッドゾーン下限。
+            if (isImpact && _gradientImpactRiseMin != null)
+                EditorGUILayout.PropertyField(_gradientImpactRiseMin, new GUIContent("Impact Rise Min", _gradientImpactRiseMin.tooltip));
 
             // Foam Persistence：两个动态来源（DensityWithImpact / DensityWithSpeed）都用——生成后按此时长消退。 // both dynamic sources. // 消退時長。
             if (usesPersistence && _gradientFoamPersistence != null)
