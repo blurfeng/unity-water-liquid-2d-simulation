@@ -1,4 +1,4 @@
-![](Documents/samples_1.gif)
+![](Documents/header.gif)
 
 <p align="center">
   <img alt="GitHub Release" src="https://img.shields.io/github/v/release/blurfeng/unity-water-liquid-2d-simulation?color=blue">
@@ -53,6 +53,7 @@ Liquid 2D Simulation 是一款面向 `Unity` 的 2D 流体模拟系统，开箱�
   - [Sprite 贴图](#sprite-贴图)
   - [粒子尺寸与渲染](#粒子尺寸与渲染)
   - [Material 物理材质](#material-物理材质)
+  - [Color Mode 颜色模式（Simple / Gradient）](#color-mode-颜色模式simple--gradient)
   - [Mix Colors 混合颜色](#mix-colors-混合颜色)
 - [🧱 场景碰撞与阻挡](#-场景碰撞与阻挡)
   - [Liquid2DCollider 碰撞器](#liquid2dcollider-碰撞器)
@@ -88,6 +89,7 @@ Liquid 2D Simulation 是一款面向 `Unity` 的 2D 流体模拟系统，开箱�
 | 丰富的流体材质                    | 可配置粘性、表面张力、摩擦、反弹、重力缩放、浮力密度等，内置水/熔岩/泡沫/沙预设。                   |
 | 场景交互                          | 自研碰撞器阻挡流体、两路刚体耦合（冲走 / 浮力漂浮）、力场（吸引 / 排斥 / 旋流）、死亡区域回收。       |
 | 多色彩空间混色                    | 不同颜色流体相遇时混色，支持 Oklab / RYB / LinearRgb 三种混色算法。                                |
+| 颜色模式（固定 / 梯度）           | 每类粒子可选固定色或按速度 / 密度 / 冲击采样 HDR 渐变，表现流动感、泡沫、浪尖半透等动态色彩。          |
 | URP 2D / Render Graph             | 基于 URP 2D 渲染，性能大幅提升。Unity 6 使用新的 Render Graph 框架；Unity 2022.3 不使用 Render Graph，改用旧的命令式 URP 管线实现，效果一致。                                    |
 | GPU Instance                      | 使用 GPU Instance 方式渲染粒子，可以一次渲染大量粒子，支持更多粒子数量。                          |
 | Volume 运行时修改                  | 支持在运行时通过 Volume 修改流体粒子的渲染效果。                                                |
@@ -170,7 +172,7 @@ https://github.com/blurfeng/unity-water-liquid-2d-simulation.git?path=Assets/Plu
 你需要配置描述符的参数来定义流体粒子的外观与行为：
 - `Radius`：粒子物理半径（世界单位），决定粒子间距与邻居搜索范围。
 - `RenderScale`：渲染倍率，绘制的可视大小 = `Radius × 2 × RenderScale`，通常远大于物理半径以获得 metaball 融合效果。
-- `RenderSettings`：渲染设置，包括 `Sprite` 贴图、`Material` 材质、`Color` 颜色（支持 HDR）、`NameTag` 名称标签。
+- `RenderSettings`：渲染设置，包括 `Sprite` 贴图、`Material` 材质、`Color` 颜色（支持 HDR）、`ColorMode` 颜色模式（固定色 / 梯度色，见 [Color Mode 颜色模式](#color-mode-颜色模式simple--gradient)）、`NameTag` 名称标签。
 - `Material`：物理材质，定义粘性、表面张力、摩擦、反弹、重力缩放、浮力密度等（见 [Material 物理材质](#material-物理材质)）。
 - `MixSettings`：混色设置（见 [Mix Colors 混合颜色](#mix-colors-混合颜色)）。
 
@@ -216,7 +218,6 @@ https://github.com/blurfeng/unity-water-liquid-2d-simulation.git?path=Assets/Plu
 > 但是在演示场景中，你会发现阻挡物很好地阻挡了流体粒子。这是因为原本已经配置了正确的 Rendering Layer Mask。  
 > 因为引擎的缓存和机制，它们依旧能够正常工作。但是在你的项目中，这些 Rendering Layer 实际上并不存在。  
 > 在演示场景的 Liquid2DRenderer2D 的 Liquid2DFeature 上，Obstructor Rendering Layer Mask 配置显示为 `Unnamed Layer 1`。  
-> ![](Documents/rl_2.png)
 
 > [!IMPORTANT]
 > 这里的 Rendering Layer 只影响**渲染层面的遮挡顺序**（流体画在物体前面还是后面），**并不会真正阻挡流体的流动**。  
@@ -328,7 +329,58 @@ Replace 模式会将不透明度直接应用到粒子上。这也会覆盖粒子
 材质内置了 **Water（水）/ Lava（熔岩）/ Foam（泡沫）/ Sand（沙）** 几种预设，可作为起点再微调：水低粘低张力；熔岩高粘高质量高密度；泡沫高张力、低重力甚至上浮；沙高摩擦、零张力。  
 ![](Documents/pm_1.png)
 
+### Color Mode 颜色模式（Simple / Gradient）
+描述符 `RenderSettings` 上的 `Color Mode` 决定每个粒子写入流体纹理的**基础色从哪里来**，有两种模式：
+- **Simple（简单，默认）**：使用单一的 `Color`（支持 HDR），并叠加运行时的 [Mix Colors 混合颜色](#mix-colors-混合颜色)。这是原有行为。
+- **Gradient（梯度）**：按每个粒子的**物理标量**（速度 / 密度 / 冲击）实时采样一条 HDR 渐变来上色，用于表现流动感、泡沫、浪尖半透等动态色彩。此模式下**不使用** `Color`，也**不参与运行时混色**（颜色每帧按物理量重算）。  
+
+![](Documents/cm_1.png)
+
+> [!NOTE]
+> 颜色模式是**逐粒子、逐类描述符**的设置，与 Renderer Feature 的 [Cover Color 覆盖颜色](#cover-color-覆盖颜色) / [Opacity 不透明度](#opacity-不透明度) 是两层：这里决定粒子**自身**的颜色，Feature 再对整片流体做统一的覆盖 / 后处理。
+
+#### 梯度来源（Gradient Source）
+Gradient 模式下，`Gradient Source` 决定用哪个物理标量 `t`（0→1）去采样渐变的左端到右端。5 种来源覆盖了「流动感」与「泡沫」两大类需求：
+
+| 来源 | 标量 `t` 的含义 | 典型用途 |
+| --- | --- | --- |
+| **Speed** | 速度大小归一化（`Speed Min~Max`） | 流动越快颜色越偏渐变右端，表现流速 / 冲击感 |
+| **Density** | 当前密度亏空（静态，只看当前密度） | 表面**恒有一层**（如奶泡表面的白），内部→左端 |
+| **DensityWithImpact** | 密度门 × 冲击（密度上升率） | 只在**表面附近被快速压实处**起泡（海浪拍击的白沫），可持久后消退 |
+| **DensityWithSpeed** | 密度门 × 速度（旧 FoamWithSpeed） | 表面附近**运动越快越起泡**，可持久后消退 |
+| **Impact** | 纯冲击（无密度门） | **任意位置**（含流体内部）发生快速压实即整体发白 |
+
+其中 `Density`（静态）适合「一直存在的表面色」；`DensityWithImpact` / `DensityWithSpeed` / `Impact` 是**动态泡沫**，「生成→按持久度累加消退」，能表现「卷入空气后逐渐逃逸」的过程。
+
+#### 主要参数
+- **`Color Gradient`**：HDR 颜色渐变，按 `t` 从左(0)到右(1)采样。渐变自身的 **alpha** 用作距离场覆盖度（决定流体形状）。编辑器已为其补充了 HDR 渐变原生缺失的**右键复制 / 粘贴**功能。
+- **`Gradient Opacity`**：**独立透明度曲线**（默认恒为 1，零开销）。按与颜色相同的 `t` 采样，只影响**最终渲染透明度**、不改变流体形状（与渐变 alpha 解耦）。可用于「海浪浪尖半透、水体下部不透」等按标量动态变化的透明度。  
+  ![](Documents/cm_1.gif)
+- **`Speed Min` / `Speed Max`**：`Speed` 与 `DensityWithSpeed` 模式的速度归一化上下限（世界单位/秒）。
+- **`Foam Start` / `Foam End`**：`Density` 系三种模式的密度区域门。⚠ `Foam Start` 要卡在你的**内部 / 水底密度比略下方**（水底常≈1.0，取 0.95~1.0）才能排除内部；`Foam End` 低于表面密度（常≈0.9，取 0.8~0.9）。可先用 `Density` 模式配一条渐变观察密度分布来定位。
+- **`Impact Strength`**：`DensityWithImpact` / `Impact` 的冲击灵敏度，越大越容易起泡（典型 8~60）。
+- **`Impact Rise Min`**：冲击死区，扣除一个上升率下限以排除「变化很小」的轻微扰动伪冲击（避免看起来像冲击波的伪发白）。
+- **`Foam Persistence`**：泡沫持久度（秒，时间常数）。生成后即使不再产生也按此时长逐渐消退：海浪白沫≈0.4~1.2、奶泡 / 洗涤泡≈3~8、啤酒顶泡≈8~20；0=不持久。仅 3 种动态来源使用。
+- **`Foam Persistence Curve`**：按**表面度**重映射持久度的曲线（乘数，默认恒 1）。X=表面度（0 水底 / 1 水面），Y=乘在 `Foam Persistence` 上的倍率。用于「**水面泡沫持久、水底泡沫快速消散**」——左端给小值、右端给大值。
+- **`Gradient Smoothing`**：渐变时间平滑（逐流体独立，默认 0.93）。对渲染用的密度与速度按帧做 EMA 平滑，消除 SPH 逐帧抖动引起的颜色闪烁；越大越平滑但响应越慢。不影响物理。
+
+> [!TIP]
+> 上述所有 Gradient 参数都**只影响颜色 / 透明度的可视化，不改变物理**。`Gradient Opacity` 与 `Foam Persistence Curve` 在恒为 1（默认）时整条链路零开销，不会拖慢现有资产。
+
+#### 效果示例
+- **Speed**：随流速变色，强化流动感。  
+  ![](Documents/cm_2.gif)
+- **Density**：表面恒有一层泡沫 / 白边（如奶泡）。  
+  ![](Documents/cm_3.gif)
+- **DensityWithImpact / Impact**：拍击 / 冲击处起泡，静止后按持久度消退（海浪白沫）。  
+  ![](Documents/cm_4.gif)
+- **DensityWithSpeed**： 运动越快越起泡，静止后按持久度消退（海浪白沫）。  
+  ![](Documents/cm_5.gif)
+
 ### Mix Colors 混合颜色
+> [!NOTE]
+> 运行时混色**仅在 `Color Mode = Simple` 时生效**。`Gradient` 模式下颜色每帧按物理量重算，不参与混色。
+
 通过启用描述符 `MixSettings` 中的 `Mix Colors`，你可以让不同颜色的流体粒子间的颜色进行混合。  
 两个粒子都需要开启 `Mix Colors`，才会在相遇时混合，并改变自身的颜色。  
 ![](Documents/mc_1.gif)

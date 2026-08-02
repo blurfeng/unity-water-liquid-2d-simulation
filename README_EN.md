@@ -1,4 +1,4 @@
-![](Documents/samples_1.gif)
+![](Documents/header.gif)
 
 <p align="center">
   <img alt="GitHub Release" src="https://img.shields.io/github/v/release/blurfeng/unity-water-liquid-2d-simulation?color=blue">
@@ -53,6 +53,7 @@ The core algorithm of the fluid physics solver mainly references [SebLague/Fluid
   - [Sprite](#sprite)
   - [Particle Size and Rendering](#particle-size-and-rendering)
   - [Material (Physics)](#material-physics)
+  - [Color Mode (Simple / Gradient)](#color-mode-simple--gradient)
   - [Mix Colors](#mix-colors)
 - [🧱 Scene Collision and Blocking](#-scene-collision-and-blocking)
   - [Liquid2DCollider](#liquid2dcollider)
@@ -88,6 +89,7 @@ In practice, the particle fusion effect is achieved by stacking and clipping the
 | Rich fluid materials              | Configurable viscosity, surface tension, friction, restitution, gravity scale, buoyancy density, and more, with built-in Water / Lava / Foam / Sand presets. |
 | Scene interaction                 | Custom colliders block fluid, two-way rigidbody coupling (wash-away / buoyant float), force fields (attract / repel / swirl), and dead zones for recycling. |
 | Multi color-space mixing          | Fluids of different colors mix when they meet, with three mixing algorithms: Oklab / RYB / LinearRgb.         |
+| Color mode (fixed / gradient)     | Each particle category can use a fixed color or sample an HDR gradient by speed / density / impact, expressing dynamic colors such as flow, foam, and translucent wave crests. |
 | URP 2D / Render Graph             | Built on URP 2D for rendering, greatly improving performance. Unity 6 uses the new Render Graph framework; Unity 2022.3 does not use Render Graph and instead uses the classic imperative URP pipeline, with the same result.           |
 | GPU Instancing                    | Particles are rendered with GPU Instancing, rendering large numbers of particles in one pass and supporting higher particle counts. |
 | Runtime tweaking via Volume       | Supports modifying the fluid particles' rendering effects at runtime through Volumes.                         |
@@ -170,7 +172,7 @@ Right-click in the `Project` window and choose `Create -> Liquid2D -> Particle D
 You configure the descriptor's parameters to define the appearance and behavior of the fluid particles:
 - `Radius`: The particle's physical radius (world units), which determines particle spacing and the neighbor-search range.
 - `RenderScale`: The render multiplier. The visual size drawn = `Radius × 2 × RenderScale`, usually much larger than the physical radius to achieve a metaball fusion effect.
-- `RenderSettings`: Rendering settings, including the `Sprite`, `Material`, `Color` (HDR supported), and `NameTag`.
+- `RenderSettings`: Rendering settings, including the `Sprite`, `Material`, `Color` (HDR supported), `ColorMode` (fixed color / gradient color, see [Color Mode (Simple / Gradient)](#color-mode-simple--gradient)), and `NameTag`.
 - `Material`: The physics material, defining viscosity, surface tension, friction, restitution, gravity scale, buoyancy density, and more (see [Material (Physics)](#material-physics)).
 - `MixSettings`: Color-mixing settings (see [Mix Colors](#mix-colors)).
 
@@ -216,7 +218,6 @@ The Liquid Feature uses Rendering Layers to distinguish which objects can block 
 > Still, in the demo scenes you'll find that blockers block the fluid particles nicely. This is because the correct Rendering Layer Masks were already configured.  
 > Due to the engine's caching and mechanics, they still work. But in your project, those Rendering Layers don't actually exist.  
 > On the Liquid2DFeature of the demo scene's Liquid2DRenderer2D, the Obstructor Rendering Layer Mask shows as `Unnamed Layer 1`.  
-> ![](Documents/rl_2.png)
 
 > [!IMPORTANT]
 > The Rendering Layers here only affect the **rendering-level occlusion order** (whether the fluid is drawn in front of or behind objects); they **do not actually block the fluid's flow**.  
@@ -328,7 +329,58 @@ Key parameters (for more details, see the Inspector Tooltips):
 The material has several built-in presets — **Water / Lava / Foam / Sand** — which can serve as a starting point for further tweaking: water has low viscosity and low tension; lava has high viscosity, high mass, and high density; foam has high tension, low gravity or even floats; sand has high friction and zero tension.  
 ![](Documents/pm_1.png)
 
+### Color Mode (Simple / Gradient)
+The `Color Mode` on the descriptor's `RenderSettings` decides **where the base color each particle writes into the fluid texture comes from**, with two modes:
+- **Simple (default)**: Uses a single `Color` (HDR supported), with runtime [Mix Colors](#mix-colors) applied on top. This is the original behavior.
+- **Gradient**: Colors each particle by sampling an HDR gradient in real time based on the particle's **physical scalar** (speed / density / impact), used to express dynamic colors such as flow, foam, and translucent wave crests. In this mode `Color` is **not used** and it **does not participate in runtime color mixing** (the color is recomputed each frame from the physical quantity).  
+
+![](Documents/cm_1.png)
+
+> [!NOTE]
+> The color mode is a **per-particle, per-descriptor-category** setting, and forms a separate layer from the Renderer Feature's [Cover Color](#cover-color) / [Opacity](#opacity): this decides the particle's **own** color, while the Feature then applies uniform covering / post-processing over the whole body of fluid.
+
+#### Gradient Source
+In Gradient mode, `Gradient Source` decides which physical scalar `t` (0→1) is used to sample the gradient from its left end to its right end. The 5 sources cover the two major needs of "flow feel" and "foam":
+
+| Source | Meaning of scalar `t` | Typical use |
+| --- | --- | --- |
+| **Speed** | Normalized speed magnitude (`Speed Min~Max`) | The faster the flow, the more the color leans toward the right end of the gradient, expressing flow speed / impact feel |
+| **Density** | Current density deficit (static, only looks at the current density) | The surface **always has a layer** (e.g. the white on the surface of milk foam), interior → left end |
+| **DensityWithImpact** | Density gate × impact (density rise rate) | Foams only where the surface neighborhood is **rapidly compacted** (the white foam of a breaking wave), can persist then fade |
+| **DensityWithSpeed** | Density gate × speed (formerly FoamWithSpeed) | Near the surface, the **faster the motion the more it foams**, can persist then fade |
+| **Impact** | Pure impact (no density gate) | Rapid compaction **anywhere** (including inside the fluid) turns the whole thing white |
+
+Among these, `Density` (static) suits an "always-present surface color"; `DensityWithImpact` / `DensityWithSpeed` / `Impact` are **dynamic foam** — "generate → accumulate then fade by persistence" — able to express the process of "air being entrained then gradually escaping."
+
+#### Main Parameters
+- **`Color Gradient`**: The HDR color gradient, sampled by `t` from left (0) to right (1). The gradient's own **alpha** is used as the distance-field coverage (which determines the fluid's shape). The editor adds the **right-click copy / paste** that native HDR gradients lack.
+- **`Gradient Opacity`**: An **independent opacity curve** (a constant 1 by default, zero cost). Sampled by the same `t` as the color, it only affects the **final rendered opacity** and does not change the fluid's shape (decoupled from the gradient alpha). Useful for opacity that varies dynamically by scalar, such as "translucent wave crests, opaque lower body of water."  
+  ![](Documents/cm_1.gif)
+- **`Speed Min` / `Speed Max`**: The speed normalization bounds for the `Speed` and `DensityWithSpeed` modes (world units/s).
+- **`Foam Start` / `Foam End`**: The density-region gate for the three `Density`-family modes. ⚠ `Foam Start` should sit just **below your interior / water-bottom density ratio** (the water bottom is usually ≈1.0, use 0.95~1.0) to exclude the interior; `Foam End` is below the surface density (usually ≈0.9, use 0.8~0.9). You can first use `Density` mode with a gradient to observe the density distribution and locate these.
+- **`Impact Strength`**: The impact sensitivity for `DensityWithImpact` / `Impact`; the larger it is, the more easily it foams (typically 8~60).
+- **`Impact Rise Min`**: Impact dead zone; subtracts a lower bound on the rise rate to exclude "barely changing" slight-disturbance pseudo-impacts (avoiding pseudo-whitening that looks like a shockwave).
+- **`Foam Persistence`**: Foam persistence (seconds, a time constant). After being generated, it gradually fades over this duration even if it is no longer produced: sea foam ≈0.4~1.2, milk / dishwashing foam ≈3~8, beer head ≈8~20; 0 = not persistent. Used only by the 3 dynamic sources.
+- **`Foam Persistence Curve`**: A curve that remaps persistence by **surfaceness** (a multiplier, a constant 1 by default). X = surfaceness (0 = water bottom / 1 = water surface), Y = the multiplier applied to `Foam Persistence`. Used for "**persistent foam at the surface, fast-dissipating foam at the bottom**" — give a small value at the left end and a large value at the right end.
+- **`Gradient Smoothing`**: Gradient temporal smoothing (independent per fluid, 0.93 by default). Applies a per-frame EMA smoothing to the density and speed used for rendering, eliminating color flicker caused by the SPH's frame-to-frame jitter; the larger it is, the smoother but the slower the response. Does not affect physics.
+
+> [!TIP]
+> All the Gradient parameters above **only affect the visualization of color / opacity and do not change the physics**. When `Gradient Opacity` and `Foam Persistence Curve` are a constant 1 (the default), the entire chain has zero cost and won't slow down existing assets.
+
+#### Examples
+- **Speed**: Changes color with flow speed, reinforcing the flow feel.  
+  ![](Documents/cm_2.gif)
+- **Density**: The surface always has a layer of foam / white edge (e.g. milk foam).  
+  ![](Documents/cm_3.gif)
+- **DensityWithImpact / Impact**: Foams where struck / impacted, fading by persistence once at rest (sea foam).  
+  ![](Documents/cm_4.gif)
+- **DensityWithSpeed**: The faster the motion the more it foams, fading by persistence once at rest (sea foam).  
+  ![](Documents/cm_5.gif)
+
 ### Mix Colors
+> [!NOTE]
+> Runtime color mixing **only takes effect when `Color Mode = Simple`**. In `Gradient` mode the color is recomputed each frame from physical quantities and does not participate in mixing.
+
 By enabling `Mix Colors` in the descriptor's `MixSettings`, you can let fluid particles of different colors mix their colors.  
 Both particles must have `Mix Colors` enabled to mix when they meet and change their own colors.  
 ![](Documents/mc_1.gif)
