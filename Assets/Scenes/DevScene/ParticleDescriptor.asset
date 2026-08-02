@@ -34,7 +34,7 @@ MonoBehaviour:
       ctime1: 12336
       ctime2: 25250
       ctime3: 38357
-      ctime4: 56669
+      ctime4: 58211
       ctime5: 65535
       ctime6: 65535
       ctime7: 0
@@ -63,8 +63,8 @@ MonoBehaviour:
         inWeight: 0
         outWeight: 0
       - serializedVersion: 3
-        time: 0.45854634
-        value: 0.6464814
+        time: 0.2502181
+        value: 0.7405518
         inSlope: 1.0174639
         outSlope: 1.0174639
         tangentMode: 0
@@ -72,17 +72,8 @@ MonoBehaviour:
         inWeight: 0.33333334
         outWeight: 0.70902056
       - serializedVersion: 3
-        time: 0.5145519
-        value: 0.8027878
-        inSlope: 0.9344748
-        outSlope: 0.9344748
-        tangentMode: 0
-        weightedMode: 0
-        inWeight: 0.3083251
-        outWeight: 0.10734838
-      - serializedVersion: 3
         time: 1
-        value: 0.95
+        value: 1
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -99,7 +90,40 @@ MonoBehaviour:
     GradientFoamEnd: 1
     GradientImpactStrength: 80
     GradientImpactRiseMin: 0.003
-    GradientFoamPersistence: 0.2
+    GradientFoamPersistence: 0.3
+    GradientFoamPersistenceCurve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 1
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 0.8466972
+        value: 8.387822
+        inSlope: 27.738588
+        outSlope: 27.738588
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: 20
+        inSlope: 2
+        outSlope: 2
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
     GradientSmoothing: 0.93
     NameTag: Water
   MixSettings:

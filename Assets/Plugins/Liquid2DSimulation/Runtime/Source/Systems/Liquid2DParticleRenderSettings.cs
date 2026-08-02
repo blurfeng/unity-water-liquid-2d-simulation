@@ -96,6 +96,12 @@ namespace Fs.Liquid2D
              "DensityWithImpact / DensityWithSpeed モード：泡の持続時間（秒、時定数）。生成後、新たな生成が無くてもこの時間で徐々に消えます：約 37%、約 3 倍でほぼ消滅。0=非持続。波の白泡≈0.4~1.2、ミルク/洗剤泡≈3~8、ビールの泡≈8~20。動的 2 種のみ使用。")]
         public float GradientFoamPersistence = 0.6f;
 
+        [LocalizationTooltip(
+             "DensityWithImpact / DensityWithSpeed / Impact 模式：按表面度重映射泡沫持久度的曲线（乘数）。X 轴 = 表面度（用 Foam Start/End 把密度比归一化铺满 [0,1]：X=0 水底/内部、X=1 水面；= saturate((Foam Start − 密度比)/(Foam Start − Foam End))）；Y 轴 = 乘在 Foam Persistence 上的倍率。最终持久度 = Foam Persistence × 曲线(表面度)。默认恒为 1（无影响、零开销）。要实现「水面持久、水底快速消散」：曲线左端 X=0(水底) = 较小值、右端 X=1(水面) = 较大值（如水底系数 1、水面系数 10），Foam Persistence 设为基础秒数。Y>1 更持久，Y<1 更快消散，Y=0 瞬间消散。用表面度而非原始密度比作 X，是为让水面~水底那段窄密度差铺满整条曲线、两端各放一个键即可。纯 Impact 会借用 Foam Start/End 作此密度带。仅这三个动态来源使用；需 Foam Persistence>0 才有意义；不影响物理/颜色/形状，只改变已生成泡沫的消退速度。",
+             "DensityWithImpact / DensityWithSpeed / Impact mode: a curve (multiplier) that remaps foam persistence by surfaceness. X axis = surfaceness (density ratio normalized by Foam Start/End across the full [0,1]: X=0 bottom/interior, X=1 surface; = saturate((Foam Start − ratio)/(Foam Start − Foam End))); Y axis = multiplier on Foam Persistence. Final persistence = Foam Persistence × curve(surfaceness). Defaults to a constant 1 (no effect, zero cost). For \"surface persists, bottom dissipates fast\": left end X=0 (bottom) = a small value, right end X=1 (surface) = a larger value (e.g. bottom 1, surface 10), and set Foam Persistence to the base seconds. Y>1 = more persistent, Y<1 = fades faster, Y=0 = vanishes instantly. Using surfaceness (not raw ratio) as X spreads the narrow surface→bottom band across the whole curve — just one key at each end. Pure Impact borrows Foam Start/End as this density band. Used by these three dynamic sources only; only meaningful when Foam Persistence > 0; does not affect physics/color/shape — only how fast already-generated foam fades.",
+             "DensityWithImpact / DensityWithSpeed / Impact モード：表面度で泡の持続度をリマップするカーブ（倍率）。X 軸 = 表面度（Foam Start/End で密度比を [0,1] 全域に正規化：X=0 水底/内部、X=1 表面；= saturate((Foam Start − 密度比)/(Foam Start − Foam End)))、Y 軸 = Foam Persistence への倍率。最終持続度 = Foam Persistence × カーブ(表面度)。既定は定数 1（影響なし、ゼロコスト）。「表面は持続、水底は速く消える」には左端 X=0(水底) を小さく、右端 X=1(表面) を大きく（例 水底 1、表面 10）、Foam Persistence を基礎秒数に。Y>1 で持続、Y<1 で速く消え、Y=0 で瞬時消滅。原始密度比でなく表面度を X にすることで、狭い密度差をカーブ全域に広げ両端に 1 つずつキーを置くだけで済みます。純 Impact は Foam Start/End をこの密度帯として借用。動的 3 種のみ使用。Foam Persistence>0 が前提。物理・色・形状は変えません。")]
+        public AnimationCurve GradientFoamPersistenceCurve = AnimationCurve.Constant(0f, 1f, 1f);
+
         [Range(0f, 1f), LocalizationTooltip(
              "渐变时间平滑量（仅 ColorMode=Gradient 生效，逐流体独立）。对渲染用的密度与速度按 EMA 每帧平滑，消除 SPH 逐帧抖动引起的颜色闪烁。0=不平滑（可能闪烁）；越大越平滑但对变化响应越慢。不影响物理。",
              "Gradient temporal smoothing (effective only when ColorMode=Gradient; per-fluid). EMA-smooths the render density and speed each frame to remove color flicker from per-frame SPH jitter. 0 = no smoothing (may flicker); higher = smoother but slower to respond. Does not affect physics.",
@@ -163,8 +169,8 @@ namespace Fs.Liquid2D
         // 透明度 LUT 上传用的复用 Color[] 暂存：一次 SetPixels 取代 256 次 SetPixel 的原生调用。 // Reused Color[] scratch for uploading the opacity LUT: one SetPixels instead of 256 SetPixel native calls. // 透明度 LUT アップロード用 Color[] 再利用。
         [NonSerialized] private Color[] _opacityLutColorScratch;
 
-        /// <summary>标记渐变 LUT 失效（渐变/相关参数改动后调用，下次使用时重建）。 // Mark the gradient LUT dirty (rebuilt on next use). // LUT をダーティに。</summary>
-        public void InvalidateGradientLut() => _lutDirty = true;
+        /// <summary>标记渐变 LUT 失效（渐变/相关参数改动后调用，下次使用时重建）。同时置脏持久度曲线 LUT。 // Mark the gradient (and persistence-curve) LUT dirty. // LUT をダーティに。</summary>
+        public void InvalidateGradientLut() { _lutDirty = true; _persistenceLutDirty = true; }
 
         /// <summary>
         /// 透明度曲线是否「非恒 1」（需要独立透明度场）。恒 1 时可完全跳过 MRT 透明度链路，现有资产零开销。惰性烘焙后可用。
@@ -305,6 +311,47 @@ namespace Fs.Liquid2D
             if (Application.isPlaying) UnityEngine.Object.Destroy(tex);
             else UnityEngine.Object.DestroyImmediate(tex);
             tex = null;
+        }
+
+        // ---- 持久度曲线 LUT（供求解器 CPU Job / GPU compute 按每粒子密度比重映射泡沫持久度） ---- //
+        // 曲线不能在 Burst/HLSL 内直接 Evaluate，故惰性烘焙成 float[]（X=密度比[0,1] → Y=乘在 Foam Persistence 上的倍率）。
+        // _persistenceCurveActive 缓存「曲线是否非恒 1」，恒 1 时求解器完全跳过整条重映射（现有资产零开销、逐位一致）。
+        // 与颜色/透明度 LUT 独立：那两个供绘制路径且需 Texture2D；本 LUT 仅 CPU float[]（GPU 侧由求解器按类型展开后 SetData 上传），无纹理，可在 FixedUpdate 主线程烘焙。
+        // Persistence-curve LUT (for the solver's CPU Job / GPU compute to remap foam persistence per-particle by density ratio).
+        // AnimationCurve can't be Evaluated inside Burst/HLSL, so it's lazily baked into a float[] (X=density ratio[0,1] → Y=multiplier on
+        // Foam Persistence). _persistenceCurveActive caches whether the curve is non-constant-1; when flat 1 the solver skips the whole
+        // remap (zero cost, byte-identical). Independent of the color/opacity LUTs (those feed the draw path and need a Texture2D); this
+        // one is CPU float[] only (the solver expands it per-type and SetData-uploads for GPU), no texture — safe to bake in FixedUpdate.
+        public const int PersistenceCurveLutSize = 256;
+        [NonSerialized] private float[] _persistenceCurveLutCpu;
+        [NonSerialized] private bool _persistenceCurveActive;
+        [NonSerialized] private bool _persistenceLutDirty = true;
+
+        /// <summary>持久度曲线是否「非恒 1」（是否需要按密度重映射持久度）。恒 1 时求解器完全跳过、零开销。惰性烘焙后可用。 // Whether the persistence curve is non-constant-1 (needs the remap). // 持続度カーブが非定数1か。</summary>
+        public bool PersistenceCurveActive { get { EnsurePersistenceCurveLut(); return _persistenceCurveActive; } }
+
+        /// <summary>获取 CPU 持久度曲线 LUT（长度 <see cref="PersistenceCurveLutSize"/>，按密度比[0,1] 采样得倍率）。确保已烘焙。求解器每帧取一次填入按类型展开的缓冲。 // Get the CPU persistence-curve LUT (indexed by density ratio[0,1] → multiplier). // CPU 持続度カーブ LUT。</summary>
+        public float[] GetPersistenceCurveLutCpu() { EnsurePersistenceCurveLut(); return _persistenceCurveLutCpu; }
+
+        /// <summary>惰性烘焙持久度曲线到 float[]（仅 CPU、无纹理，可在 FixedUpdate 主线程调用）。X=密度比[0,1]，Y=倍率(≥0)；同时记录是否非恒 1。 // Lazily bake the persistence curve into a float[] (CPU only, no texture). // 持続度カーブを float[] へ焼き込み。</summary>
+        public void EnsurePersistenceCurveLut()
+        {
+            if (!_persistenceLutDirty && _persistenceCurveLutCpu != null) return;
+            if (_persistenceCurveLutCpu == null || _persistenceCurveLutCpu.Length != PersistenceCurveLutSize)
+                _persistenceCurveLutCpu = new float[PersistenceCurveLutSize];
+            var curve = GradientFoamPersistenceCurve;
+            bool active = false;
+            for (int i = 0; i < PersistenceCurveLutSize; i++)
+            {
+                // 倍率不为负（Y<0 无物理意义）；曲线为空时退化为恒 1。 // multiplier is non-negative; empty curve degenerates to constant 1. // 倍率は非負、空カーブは定数1。
+                float y = curve != null && curve.length > 0
+                    ? Mathf.Max(0f, curve.Evaluate(i / (float)(PersistenceCurveLutSize - 1)))
+                    : 1f;
+                _persistenceCurveLutCpu[i] = y;
+                if (Mathf.Abs(y - 1f) > 1e-4f) active = true;
+            }
+            _persistenceCurveActive = active;
+            _persistenceLutDirty = false;
         }
 
         #endregion

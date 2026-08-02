@@ -29,6 +29,7 @@ namespace Fs.Liquid2D
         private static readonly int _dt = Shader.PropertyToID("dt");
         private static readonly int _time = Shader.PropertyToID("time");
         private static readonly int _colorMixMode = Shader.PropertyToID("colorMixMode");
+        private static readonly int _persistenceLutSize = Shader.PropertyToID("persistenceLutSize");
         private static readonly int _initRenderScalarsId = Shader.PropertyToID("initRenderScalars");
         private static readonly int _sortPositions = Shader.PropertyToID("SortPositions");
         private static readonly int _accumulateImpulse = Shader.PropertyToID("accumulateImpulse");
@@ -109,8 +110,10 @@ namespace Fs.Liquid2D
         private ComputeBuffer _materials, _mixDatas, _colliders, _points, _forceFields;
         // 按类型的渲染平滑 EMA 系数（numTypes 级，CPU 上传）。 // Per-type render-smoothing EMA factors (numTypes-level, uploaded by CPU). // 型ごとの平滑係数。
         private ComputeBuffer _renderGradientKBuf;
-        // 按类型的动态泡沫累加器参数（numTypes 级，stride 36，CPU 上传；CopyColor 按 TypeId 读）。 // Per-type dynamic-foam accumulator params (numTypes-level, stride 36, uploaded by CPU; CopyColor reads by TypeId). // 型ごとの動的泡累加器パラメータ。
+        // 按类型的动态泡沫累加器参数（numTypes 级，stride 40，CPU 上传；CopyColor 按 TypeId 读）。 // Per-type dynamic-foam accumulator params (numTypes-level, stride 40, uploaded by CPU; CopyColor reads by TypeId). // 型ごとの動的泡累加器パラメータ。
         private ComputeBuffer _renderDynamicFoamParamsBuf;
+        // 按类型展开的持久度曲线 LUT（numTypes×PersistenceCurveLutSize 级，float，CPU 上传；CopyColor 按密度比采样）。 // Per-type persistence-curve LUT (numTypes×PersistenceCurveLutSize floats, uploaded by CPU). // 型ごとの持続度カーブ LUT。
+        private ComputeBuffer _renderPersistenceLutBuf;
         // 动态体接触累积（合并为单个缓冲，规避 D3D11 每 kernel 8 UAV 上限）：每体 _accumStride 个 int 通道，通道定义见 _accum* 常量与 shader ACCUM_*。
         // Per-body contact accumulation merged into one buffer (works around D3D11's 8-UAV-per-kernel limit): _accumStride int channels per body.
         // 動的体の接触累積を単一バッファに統合（D3D11 の 8 UAV 制限回避）。
@@ -563,7 +566,8 @@ namespace Fs.Liquid2D
         {
             Ensure(ref _materials, numTypes, 36); Ensure(ref _mixDatas, numTypes, 20);
             Ensure(ref _renderGradientKBuf, numTypes, 4);
-            Ensure(ref _renderDynamicFoamParamsBuf, numTypes, 36); // DynamicFoamParams：8 float + 1 int = 36 bytes（与 Liquid2DDynamicFoamParams / compute struct 对齐）。 // 9×4 = 36 bytes. // 36 バイト。
+            Ensure(ref _renderDynamicFoamParamsBuf, numTypes, 40); // DynamicFoamParams：8 float + 2 int = 40 bytes（与 Liquid2DDynamicFoamParams / compute struct 对齐）。 // 10×4 = 40 bytes. // 40 バイト。
+            Ensure(ref _renderPersistenceLutBuf, numTypes * Liquid2DParticleRenderSettings.PersistenceCurveLutSize, 4); // 持久度曲线 LUT：numTypes×LutSize 个 float。 // per-type persistence-curve LUT floats. // 持続度カーブ LUT。
             Ensure(ref _colliders, Mathf.Max(1, numColliders), 88); Ensure(ref _points, Mathf.Max(1, numPoints), 8);
             Ensure(ref _bodyAccum, numBodies * _accumStride, 4);
             Ensure(ref _forceFields, Mathf.Max(1, numForceFields), 44);
@@ -593,6 +597,10 @@ namespace Fs.Liquid2D
             // 按类型的动态泡沫累加器参数（CopyColor 用）。 // Per-type dynamic-foam accumulator params (used by CopyColor). // 型ごとの動的泡累加器パラメータ。
             if (ctx.RenderDynamicFoamParams is { IsCreated: true, Length: > 0 } && _renderDynamicFoamParamsBuf != null)
                 _renderDynamicFoamParamsBuf.SetData(ctx.RenderDynamicFoamParams, 0, 0, Mathf.Min(ctx.RenderDynamicFoamParams.Length, _renderDynamicFoamParamsBuf.count));
+
+            // 按类型展开的持久度曲线 LUT（CopyColor 用）。 // Per-type persistence-curve LUT (used by CopyColor). // 型ごとの持続度カーブ LUT。
+            if (ctx.RenderPersistenceLut is { IsCreated: true, Length: > 0 } && _renderPersistenceLutBuf != null)
+                _renderPersistenceLutBuf.SetData(ctx.RenderPersistenceLut, 0, 0, Mathf.Min(ctx.RenderPersistenceLut.Length, _renderPersistenceLutBuf.count));
 
             EnsureArray(ref _mixA, numTypes);
             int mixN = ctx.MixData.IsCreated ? ctx.MixData.Length : 0;
@@ -639,7 +647,7 @@ namespace Fs.Liquid2D
             Bind("Positions", _positions); Bind("Predicted", _predicted); Bind("Velocities", _velocities);
             Bind("VelNext", _velNext); Bind("Densities", _densities);
             Bind("RenderScalars", _renderScalars); Bind("RenderGradientK", _renderGradientKBuf);
-            Bind("RenderDynamicFoamParams", _renderDynamicFoamParamsBuf); Bind("Colors", _colors);
+            Bind("RenderDynamicFoamParams", _renderDynamicFoamParamsBuf); Bind("RenderPersistenceLut", _renderPersistenceLutBuf); Bind("Colors", _colors);
             Bind("ColorsNext", _colorsNext); Bind("LastMixTime", _lastMix); Bind("Radii", _radii);
             Bind("InvMass", _invMass); Bind("TypeId", _typeId); Bind("GroupId", _groupId);
             Bind("ActiveIndices", _active); Bind("Materials", _materials); Bind("MixDatas", _mixDatas);
@@ -661,6 +669,7 @@ namespace Fs.Liquid2D
         private void SetConstants(in SolverParams p, int count, int tableSize, int numColliders, int numBodies, int numForceFields)
         {
             _cs.SetInt(_numParticles, count);
+            _cs.SetInt(_persistenceLutSize, Liquid2DParticleRenderSettings.PersistenceCurveLutSize);
             _cs.SetInt(_tableSize, tableSize);
             _numBlocksValue = (tableSize + ScanBlock - 1) / ScanBlock;
             _cs.SetInt(_numBlocksId, _numBlocksValue);
@@ -777,7 +786,7 @@ namespace Fs.Liquid2D
             R(_radii); R(_invMass); R(_typeId); R(_groupId);
             R(_active); R(_bucketOf); R(_sortedSlots); R(_killFlags); R(_counts); R(_cellStart); R(_cursor);
             R(_blockSums); R(_scanMismatch);
-            R(_materials); R(_mixDatas); R(_renderGradientKBuf); R(_renderDynamicFoamParamsBuf); R(_colliders); R(_points); R(_forceFields);
+            R(_materials); R(_mixDatas); R(_renderGradientKBuf); R(_renderDynamicFoamParamsBuf); R(_renderPersistenceLutBuf); R(_colliders); R(_points); R(_forceFields);
             R(_bodyAccum);
             R(_deadZones); R(_deadZonePoints);
             R(_upSlots); R(_upPos); R(_upVel); R(_upColor);

@@ -225,6 +225,7 @@ namespace Fs.Liquid2D
         [ReadOnly] public NativeArray<int> TypeId;
         [ReadOnly] public NativeArray<float> SmoothK; // 按类型 EMA 系数（=1−GradientSmoothing）。 // per-type EMA factor. // 型ごと係数。
         [ReadOnly] public NativeArray<Liquid2DDynamicFoamParams> DynamicFoamParams; // 按类型的动态泡沫累加器参数。 // per-type dynamic-foam accumulator params. // 動的泡累加器パラメータ。
+        [ReadOnly] public NativeArray<float> PersistenceLut; // 按类型展开的持久度曲线 LUT（密度比[0,1]→倍率）。 // per-type persistence-curve LUT (density ratio → multiplier). // 型ごとの持続度カーブ LUT。
         // 读写：每个活动粒子的 slot i 唯一，线程间不冲突（禁用 ParallelFor 限制仅因按 i 而非 k 索引）。 // Read/write; each active particle's slot i is unique. // 読み書き。
         [NativeDisableParallelForRestriction] public NativeArray<float> OutDensities;
         [NativeDisableParallelForRestriction] public NativeArray<float> OutSpeeds;
@@ -278,7 +279,22 @@ namespace Fs.Liquid2D
                 dynamicFactor = saturate((rise * dp.InvRestDensity - dp.ImpactRiseMin) * dp.ImpactStrength);
             }
             float generation = gate * dynamicFactor;
-            OutFoam[i] = firstFrame ? 0f : max(OutFoam[i] * dp.Decay, generation);
+            // 持久度曲线：按每粒子表面度（densityGate，用 Foam Start/End 归一化：0=水底/内部、1=水面）从 LUT 取倍率 mul，
+            // 重映射有效持久度 = 基础持久度×mul ⇒ decay = pow(baseDecay, 1/mul)。mul>1 更持久、<1 更快消散、→0 瞬灭。
+            // 用表面度而非原始密度比作 X，是为把水面~水底那段窄密度差铺满整条 [0,1]，便于 authoring（水底=曲线左端、水面=右端）。
+            // 未启用(PersistenceCurveActive=0)或不持久(baseDecay=0)时跳过，逐位等价旧行为、零开销。
+            // Persistence curve: sample multiplier mul from the LUT by surfaceness (densityGate, normalized via Foam Start/End: 0=bottom, 1=surface);
+            // effective persistence = base×mul ⇒ decay = pow(baseDecay, 1/mul). Surfaceness (not raw ratio) spreads the narrow surface→bottom band
+            // across the full [0,1] curve for easy authoring. Skipped when off or non-persistent. // 表面度で倍率をサンプル。
+            float decay = dp.Decay;
+            if (dp.PersistenceCurveActive != 0 && decay > 0f)
+            {
+                int sz = Liquid2DParticleRenderSettings.PersistenceCurveLutSize;
+                int xi = clamp((int)(densityGate * (sz - 1) + 0.5f), 0, sz - 1);
+                float mul = PersistenceLut[type * sz + xi];
+                decay = mul > 1e-4f ? pow(decay, 1f / mul) : 0f;
+            }
+            OutFoam[i] = firstFrame ? 0f : max(OutFoam[i] * decay, generation);
         }
     }
 

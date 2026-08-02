@@ -176,6 +176,7 @@ namespace Fs.Liquid2D
                     {
                         ActiveIndices = ctx.ActiveIndices, Densities = _densities, Velocities = store.velocities,
                         TypeId = store.typeId, SmoothK = ctx.RenderGradientK, DynamicFoamParams = ctx.RenderDynamicFoamParams,
+                        PersistenceLut = ctx.RenderPersistenceLut,
                         OutDensities = store.densities, OutSpeeds = store.renderSpeeds, OutFoam = store.renderFoam,
                     }.Schedule(count, 64, h);
                 }

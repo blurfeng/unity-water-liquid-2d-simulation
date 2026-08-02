@@ -38,6 +38,7 @@ namespace Fs.Liquid2D.Editor
         private SerializedProperty _gradientImpactStrength;
         private SerializedProperty _gradientImpactRiseMin;
         private SerializedProperty _gradientFoamPersistence;
+        private SerializedProperty _gradientFoamPersistenceCurve;
         private SerializedProperty _gradientSmoothing;
 
         private void OnEnable()
@@ -63,6 +64,7 @@ namespace Fs.Liquid2D.Editor
                 _gradientImpactStrength = _renderSettings.FindPropertyRelative("GradientImpactStrength");
                 _gradientImpactRiseMin = _renderSettings.FindPropertyRelative("GradientImpactRiseMin");
                 _gradientFoamPersistence = _renderSettings.FindPropertyRelative("GradientFoamPersistence");
+                _gradientFoamPersistenceCurve = _renderSettings.FindPropertyRelative("GradientFoamPersistenceCurve");
                 _gradientSmoothing = _renderSettings.FindPropertyRelative("GradientSmoothing");
             }
         }
@@ -312,8 +314,11 @@ namespace Fs.Liquid2D.Editor
             bool isSpeedFoam = src == (int)EGradientColorSource.DensityWithSpeed;
             bool isPureImpact = src == (int)EGradientColorSource.Impact; // 纯冲击：无密度门，只用冲击参数。 // pure impact: no density gate. // 純衝撃。
             bool usesImpactParams = isImpact || isPureImpact; // Impact Strength + Impact Rise Min：DensityWithImpact 与 Impact 共用。 // both impact sources. // 衝撃系 2 種。
-            // Foam Start/End：Density 作贴图，DensityWith* 作密度区域门；纯 Impact 无密度门，不显示。 // density map vs region gate; pure Impact has none. // 密度貼図/領域ゲート（純 Impact は無し）。
-            bool usesDensity = src == (int)EGradientColorSource.Density || isImpact || isSpeedFoam;
+            // 纯 Impact 本无密度门；但启用 Foam Persistence Curve（曲线非恒 1）后，持久度曲线的 X 轴（表面度）用 Foam Start/End 归一化，故此时补显它们。 // pure Impact reveals Foam Start/End when the persistence curve is active (they normalize the curve's X). // 純 Impact でも持続度カーブ有効時は表示。
+            bool persistenceCurveActive = IsCurveActive(_gradientFoamPersistenceCurve);
+            bool impactNeedsBand = isPureImpact && persistenceCurveActive;
+            // Foam Start/End：Density 作贴图，DensityWith* 作密度区域门；纯 Impact 仅在启用持久度曲线时（作曲线 X 的密度带）显示。 // density map vs region gate; pure Impact only when the persistence curve is on. // 密度貼図/領域ゲート。
+            bool usesDensity = src == (int)EGradientColorSource.Density || isImpact || isSpeedFoam || impactNeedsBand;
             bool usesSpeed = src == (int)EGradientColorSource.Speed || isSpeedFoam; // Speed Min/Max：Speed 重映射，DensityWithSpeed 速度门控。 // remap vs speed gate. // 速度。
             bool usesPersistence = isImpact || isSpeedFoam || isPureImpact; // Foam Persistence：三个动态来源。 // all dynamic sources. // 動的 3 種。
 
@@ -407,6 +412,20 @@ namespace Fs.Liquid2D.Editor
                             "Foam Persistence = 0: foam appears only at the instant it is generated and vanishes immediately. Set > 0 so foam fades over this many seconds: sea≈0.4~1.2, milk≈3~8, beer≈8~20.",
                             "Foam Persistence = 0：泡は生成の瞬間のみ現れ即消えます。>0 にするとこの秒数で徐々に消えます：波≈0.4~1.2、ミルク≈3~8、ビール≈8~20。"),
                         MessageType.Info);
+                }
+
+                // Foam Persistence Curve：按密度比重映射持久度（乘数）。X=密度比（水面≈0.85、水底≈1.0），Y=乘在 Foam Persistence 上的倍率。恒 1=无影响。 // density→persistence multiplier curve. // 密度→持続度倍率カーブ。
+                if (_gradientFoamPersistenceCurve != null)
+                {
+                    EditorGUILayout.PropertyField(_gradientFoamPersistenceCurve, new GUIContent("Foam Persistence Curve", _gradientFoamPersistenceCurve.tooltip));
+                    if (_gradientFoamPersistence.floatValue <= 0f)
+                    {
+                        EditorGUILayout.HelpBox(
+                            L("Foam Persistence Curve 需要 Foam Persistence > 0 才生效：曲线是乘在 Foam Persistence 上的倍率，基础为 0 时乘任何倍率仍为 0。要实现「水面持久、水底快速消散」：把 Foam Persistence 设为基础秒数，曲线在 X=0(水底) 处设较小值、X=1(水面) 处设较大值（如水底系数 1、水面系数 10）。X 轴表面度由 Foam Start/End 定义，请确保它们卡准你流体的水底/水面密度。",
+                                "Foam Persistence Curve needs Foam Persistence > 0 to take effect: the curve is a multiplier on Foam Persistence, and any multiple of 0 is still 0. For \"surface persists, bottom dissipates fast\": set Foam Persistence to the base seconds and make the curve a small value at X=0 (bottom) and a larger one at X=1 (surface) (e.g. bottom 1, surface 10). The X-axis surfaceness is defined by Foam Start/End — make sure they match your fluid's bottom/surface density.",
+                                "Foam Persistence Curve は Foam Persistence > 0 が前提です：カーブは Foam Persistence への倍率で、0 に何を掛けても 0 です。「表面は持続、水底は速く消える」には Foam Persistence を基礎秒数にし、カーブを X=0(水底) で小さく、X=1(表面) で大きく（例 水底 1、表面 10）。X 軸の表面度は Foam Start/End で定義されるため、流体の水底/表面密度に合わせてください。"),
+                            MessageType.Info);
+                    }
                 }
             }
 
@@ -593,6 +612,19 @@ namespace Fs.Liquid2D.Editor
                 default:
                     return en;
             }
+        }
+
+        // 持久度曲线是否「非恒 1」（是否需要重映射持久度、是否给纯 Impact 补显 Foam Start/End）。采样若干点判定，与运行时烘焙口径一致。
+        // Whether the persistence curve is non-constant-1 (needs remap; reveals Foam Start/End for pure Impact). Sampled a few points, matching the runtime bake. // 持続度カーブが非定数1か。
+        private static bool IsCurveActive(SerializedProperty curveProp)
+        {
+            if (curveProp == null) return false;
+            var c = curveProp.animationCurveValue;
+            if (c == null || c.length == 0) return false;
+            const int samples = 16;
+            for (int i = 0; i < samples; i++)
+                if (Mathf.Abs(c.Evaluate(i / (float)(samples - 1)) - 1f) > 1e-4f) return true;
+            return false;
         }
     }
 }

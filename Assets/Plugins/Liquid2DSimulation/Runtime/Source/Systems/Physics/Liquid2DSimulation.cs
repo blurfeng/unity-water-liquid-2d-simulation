@@ -83,6 +83,8 @@ namespace Fs.Liquid2D
         private NativeArray<float> _renderGradientK;
         // 按类型的动态泡沫（DensityWithImpact/Speed）累加器参数（含每帧衰减 = exp(−fixedDeltaTime/持久度)）。 // Per-type dynamic-foam accumulator params (incl. per-step decay). // 型ごとの動的泡累加器パラメータ。
         private NativeArray<Liquid2DDynamicFoamParams> _renderDynamicFoamParams;
+        // 按类型展开的持久度曲线 LUT（长度 = numTypes × PersistenceCurveLutSize，按密度比重映射持久度倍率）。 // Per-type persistence-curve LUT (length = numTypes × PersistenceCurveLutSize). // 型ごとの持続度カーブ LUT。
+        private NativeArray<float> _renderPersistenceLut;
 
         // nameTag → groupId（0 为空标签通配）。 // nameTag → groupId (0 = empty-tag wildcard). // nameTag → groupId。
         private readonly Dictionary<string, int> _nameTagToGroup = new Dictionary<string, int>();
@@ -207,10 +209,12 @@ namespace Fs.Liquid2D
                 if (_mixData.IsCreated) _mixData.Dispose();
                 if (_renderGradientK.IsCreated) _renderGradientK.Dispose();
                 if (_renderDynamicFoamParams.IsCreated) _renderDynamicFoamParams.Dispose();
+                if (_renderPersistenceLut.IsCreated) _renderPersistenceLut.Dispose();
                 _materials = new NativeArray<Liquid2DMaterialData>(n, Allocator.Persistent);
                 _mixData = new NativeArray<Liquid2DMixData>(n, Allocator.Persistent);
                 _renderGradientK = new NativeArray<float>(n, Allocator.Persistent);
                 _renderDynamicFoamParams = new NativeArray<Liquid2DDynamicFoamParams>(n, Allocator.Persistent);
+                _renderPersistenceLut = new NativeArray<float>(n * Liquid2DParticleRenderSettings.PersistenceCurveLutSize, Allocator.Persistent);
             }
             // 泡沫累加器每帧衰减 = exp(−fixedDeltaTime/持久度秒)：EnsureMaterials 每 FixedUpdate 调用一次，故用固定步长。
             // Foam-accumulator per-step decay = exp(−fixedDeltaTime/persistenceSec): EnsureMaterials runs once per FixedUpdate, so use the fixed timestep. // 減衰係数は固定ステップで算出。
@@ -229,6 +233,17 @@ namespace Fs.Liquid2D
                     ? 1f - math.clamp(rs.GradientSmoothing, 0f, 1f)
                     : 1f;
                 _renderDynamicFoamParams[i] = BuildDynamicFoamParams(rs, d != null ? d.Material : null, targetDensity, fixedDt);
+
+                // 持久度曲线 LUT 按类型展开（求解器按密度比重映射持久度）：仅 Gradient 且曲线非恒 1 的类型烘焙并拷入；其余填 1（不改变持久度，且 PersistenceCurveActive=0 时根本不会被读）。
+                // Expand the persistence-curve LUT per type: only Gradient types with a non-flat curve are copied in; others fill 1 (no change, and not read when PersistenceCurveActive=0). // 型ごとに展開。
+                int lutSize = Liquid2DParticleRenderSettings.PersistenceCurveLutSize;
+                int baseIdx = i * lutSize;
+                float[] pLut = rs != null && rs.ColorMode == EParticleColorMode.Gradient && rs.PersistenceCurveActive
+                    ? rs.GetPersistenceCurveLutCpu() : null;
+                if (pLut != null)
+                    NativeArray<float>.Copy(pLut, 0, _renderPersistenceLut, baseIdx, lutSize);
+                else
+                    for (int j = 0; j < lutSize; j++) _renderPersistenceLut[baseIdx + j] = 1f;
             }
         }
 
@@ -267,6 +282,8 @@ namespace Fs.Liquid2D
                 SpeedMin = speedMin,
                 SpeedRangeInv = 1f / math.max(1e-4f, speedMax - speedMin),
                 Mode = isSpeed ? 1 : (isPureImpact ? 2 : 0), // 0=冲击+密度门(DensityWithImpact / 其余)，1=速度+密度门(DensityWithSpeed)，2=纯冲击无门(Impact)。 // 0=impact+gate, 1=speed+gate, 2=pure impact. // 動的因子選択。
+                // 持久度曲线：仅动态来源且曲线非恒 1 时启用（求解器按密度比重映射 decay）；否则 0（跳过、零开销）。 // persistence-curve remap enabled only for dynamic sources with a non-flat curve. // 持続度カーブ有効フラグ。
+                PersistenceCurveActive = isDynamic && rs.PersistenceCurveActive ? 1 : 0,
             };
         }
 
@@ -496,6 +513,7 @@ namespace Fs.Liquid2D
                 MixMode = (int)ColorMixMode,
                 RenderGradientK = _renderGradientK, // 按类型的渲染平滑 EMA 系数。 // per-type render-smoothing EMA factors. // 型ごとの平滑係数。
                 RenderDynamicFoamParams = _renderDynamicFoamParams, // 按类型的动态泡沫累加器参数。 // per-type dynamic-foam accumulator params. // 型ごとの動的泡累加器パラメータ。
+                RenderPersistenceLut = _renderPersistenceLut, // 按类型展开的持久度曲线 LUT。 // per-type persistence-curve LUT. // 型ごとの持続度カーブ LUT。
                 DynamicBodyCount = _dynamicReceivers.Count,
                 GPUPendingSpawns = _gpuPendingSpawns,
             };
@@ -735,6 +753,7 @@ namespace Fs.Liquid2D
             if (_mixData.IsCreated) _mixData.Dispose();
             if (_renderGradientK.IsCreated) _renderGradientK.Dispose();
             if (_renderDynamicFoamParams.IsCreated) _renderDynamicFoamParams.Dispose();
+            if (_renderPersistenceLut.IsCreated) _renderPersistenceLut.Dispose();
         }
 
 #if UNITY_EDITOR

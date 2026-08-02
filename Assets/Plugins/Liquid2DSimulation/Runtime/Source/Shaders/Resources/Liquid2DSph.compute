@@ -55,8 +55,10 @@ RWStructuredBuffer<float2> Densities;    // (density, nearDensity)
 RWStructuredBuffer<float3> RenderScalars;
 StructuredBuffer<float>    RenderGradientK; // 按类型的渲染平滑 EMA 系数（=1−GradientSmoothing，由 CPU 上传）。 // per-type render-smoothing EMA factor (uploaded by CPU). // 型ごとの平滑係数。
 // 按类型的动态泡沫参数（与 C# Liquid2DDynamicFoamParams 逐字段一致）。generation = 区域门 × 动态因子。mode：0=冲击+密度门(DensityWithImpact) / 1=速度门控+密度门(DensityWithSpeed) / 2=纯冲击无门(Impact，区域门恒 1)。 // Per-type dynamic-foam params (matches C# Liquid2DDynamicFoamParams field-for-field). mode: 0=impact+gate, 1=speed+gate, 2=pure impact (gate=1). // 型ごとの動的泡パラメータ。
-struct DynamicFoamParams { float invRestDensity; float impactStrength; float impactRiseMin; float decay; float foamStart; float foamRangeInv; float speedMin; float speedRangeInv; int mode; };
+struct DynamicFoamParams { float invRestDensity; float impactStrength; float impactRiseMin; float decay; float foamStart; float foamRangeInv; float speedMin; float speedRangeInv; int mode; int persistenceCurveActive; };
 StructuredBuffer<DynamicFoamParams> RenderDynamicFoamParams;
+// 按类型展开的持久度曲线 LUT（长度 numTypes×persistenceLutSize，密度比[0,1]→倍率）；仅 persistenceCurveActive=1 的类型读取。 // Per-type persistence-curve LUT (density ratio → multiplier); read only when persistenceCurveActive=1. // 型ごとの持続度カーブ LUT。
+StructuredBuffer<float> RenderPersistenceLut;
 RWStructuredBuffer<float4> Colors;
 RWStructuredBuffer<float4> ColorsNext;
 RWStructuredBuffer<float>  LastMixTime;
@@ -161,6 +163,7 @@ float dt;
 float time;
 float impulseScale;
 int colorMixMode; // 0=LinearRgb, 1=Oklab, 2=Ryb
+int persistenceLutSize; // 持久度曲线 LUT 每类型长度（= Liquid2DParticleRenderSettings.PersistenceCurveLutSize）。 // per-type persistence-curve LUT length. // 持続度カーブ LUT 長。
 int initRenderScalars; // ScatterSpawn 是否初始化 RenderScalars：1=增量生成置哨兵；0=扩容全量重传（由 CPU 侧读回旧值保持连续，不覆盖）。 // whether ScatterSpawn inits RenderScalars: 1=incremental (sentinel), 0=grow full re-upload (CPU preserves continuity). // 初期化フラグ。
 
 // ============ 核函数。 ============
@@ -1019,7 +1022,15 @@ void CopyColor(uint3 id : SV_DispatchThreadID)
         dynamicFactor = saturate((rise * dp.invRestDensity - dp.impactRiseMin) * dp.impactStrength);
     }
     float generation = gate * dynamicFactor;
-    rs.z = firstFrame ? 0.0 : max(rs.z * dp.decay, generation);
+    // 持久度曲线：按表面度 densityGate（Foam Start/End 归一化：0=水底、1=水面）从 LUT 取倍率 mul，decay = pow(baseDecay, 1/mul)（mul>1 更持久、<1 更快散、→0 瞬灭）。用表面度而非原始密度比铺满 [0,1] 便于 authoring。未启用或不持久时跳过。 // persistence curve: remap decay by surfaceness (densityGate) via the LUT; skipped when off. // 表面度で倍率をサンプル。
+    float decay = dp.decay;
+    if (dp.persistenceCurveActive != 0 && decay > 0.0)
+    {
+        int xi = clamp((int)(densityGate * (persistenceLutSize - 1) + 0.5), 0, persistenceLutSize - 1);
+        float mul = RenderPersistenceLut[type * persistenceLutSize + xi];
+        decay = mul > 1e-4 ? pow(decay, 1.0 / mul) : 0.0;
+    }
+    rs.z = firstFrame ? 0.0 : max(rs.z * decay, generation);
     RenderScalars[i] = rs;
 }
 

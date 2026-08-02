@@ -36,6 +36,8 @@ namespace Fs.Liquid2D
         public float SpeedRangeInv;
         /// <summary>模式：0=冲击+密度门(DensityWithImpact)，1=速度门控+密度门(DensityWithSpeed)，2=纯冲击无密度门(Impact，门恒=1)。 // 0=impact+gate, 1=speed+gate, 2=pure impact (no gate). // 0=衝撃+ゲート, 1=速度+ゲート, 2=純衝撃(門無し)。</summary>
         public int Mode;
+        /// <summary>持久度曲线是否启用（1/0）。1 时按每粒子密度比从 <see cref="Liquid2DSolveContext.RenderPersistenceLut"/> 采样倍率重映射持久度：decay = pow(Decay, 1/mul)；0 时直接用 Decay（零开销）。 // persistence-curve enabled (1/0); when 1, remap decay per-particle via the LUT. // 持続度カーブ有効フラグ。</summary>
+        public int PersistenceCurveActive;
     }
 
     /// <summary>
@@ -134,6 +136,14 @@ namespace Fs.Liquid2D
         /// 型ごと（typeId）の動的泡累加器パラメータ。物理には影響しません。
         /// </summary>
         [ReadOnly] public NativeArray<Liquid2DDynamicFoamParams> RenderDynamicFoamParams;
+
+        /// <summary>
+        /// 按类型展开的持久度曲线 LUT（长度 = numTypes × <see cref="Liquid2DParticleRenderSettings.PersistenceCurveLutSize"/>）。
+        /// 按密度比[0,1] 采样得倍率，重映射泡沫持久度（最终持久度 = Foam Persistence × 倍率）。仅 <see cref="Liquid2DDynamicFoamParams.PersistenceCurveActive"/>=1 的类型被读取。
+        /// Per-type persistence-curve LUT (length = numTypes × PersistenceCurveLutSize), indexed by density ratio[0,1] → multiplier;
+        /// remaps foam persistence. Only types with PersistenceCurveActive=1 read it. // 型ごとに展開した持続度カーブ LUT。
+        /// </summary>
+        [ReadOnly] public NativeArray<float> RenderPersistenceLut;
 
         /// <summary>动态碰撞体数量（>0 时 GPU 才回读冲量）。 // Dynamic collider count (GPU reads impulse back only when >0). // 動的コライダー数。</summary>
         public int DynamicBodyCount;
