@@ -5,6 +5,42 @@ using Unity.Mathematics;
 namespace Fs.Liquid2D
 {
     /// <summary>
+    /// Impact 渐变来源的「冲击泡沫累加器」逐类型参数（预算好的常量）。字段顺序/布局必须与 Compute Shader
+    /// （Liquid2DSph.compute）中的 <c>struct DynamicFoamParams</c> 逐字段一致（GPU 直接 SetData 上传）。
+    /// 动态泡沫（DensityWithImpact / DensityWithSpeed）逐类型参数（预算好的常量）。生成量 = 密度区域门 × 动态因子：
+    /// 区域门 = 密度亏空(FoamStart/FoamRangeInv，FoamStart 卡在内部/水底密度以下→排除内部)；动态因子 = Mode==1 ? 速度门控(saturate((平滑速度−SpeedMin)·SpeedRangeInv)) : 冲击(saturate((Δ平滑密度·InvRestDensity − ImpactRiseMin)·ImpactStrength))。
+    /// F = max(F·Decay, 生成量)。内部/水底（区域门0）不产泡；平静/未压实（动态因子0）不产泡且已有泡消退。
+    /// Per-type params for the dynamic foam (DensityWithImpact / DensityWithSpeed), precomputed. Field order/layout MUST match
+    /// <c>struct DynamicFoamParams</c> in Liquid2DSph.compute (uploaded via SetData). generation = densityGate × dynamicFactor:
+    /// densityGate = density deficit (FoamStart/FoamRangeInv); dynamicFactor = Mode==1 ? speedGate(saturate((smoothedSpeed−SpeedMin)·SpeedRangeInv)) : impact(saturate((Δsmoothed·InvRestDensity − ImpactRiseMin)·ImpactStrength)).
+    /// F = max(F·Decay, generation).
+    /// 動的泡（DensityWithImpact / DensityWithSpeed）の型ごとパラメータ。generation = 密度領域ゲート × 動的因子。フィールド順は compute の DynamicFoamParams と一致必須。
+    /// </summary>
+    public struct Liquid2DDynamicFoamParams
+    {
+        /// <summary>= 1/静止密度，把密度/变化量归一化为密度比。 // 1/rest density. // 静止密度の逆数。</summary>
+        public float InvRestDensity;
+        /// <summary>冲击灵敏度（Mode==0/DensityWithImpact）。 // impact sensitivity (Mode==0). // 衝撃感度。</summary>
+        public float ImpactStrength;
+        /// <summary>冲击死区：归一化上升率下限，低于此值冲击项为 0（Mode==0/DensityWithImpact）。 // impact deadzone: normalized rise-rate floor (Mode==0). // 衝撃デッドゾーン下限。</summary>
+        public float ImpactRiseMin;
+        /// <summary>每帧衰减系数 = exp(−fixedDeltaTime/持久度秒)；0=不持久（F=生成量）。 // per-step decay; 0 = not persistent. // 減衰係数。</summary>
+        public float Decay;
+        /// <summary>区域门上界（密度比）：密度比低于此值才算有效区域（应卡在内部/水底密度以下以排除内部）。 // gate upper bound. // 領域ゲート上界。</summary>
+        public float FoamStart;
+        /// <summary>= 1/(FoamStart − FoamEnd)，区域门归一化。 // gate normalization. // 領域ゲート正規化。</summary>
+        public float FoamRangeInv;
+        /// <summary>速度门控下限（Mode==1/DensityWithSpeed）。 // speed-gate lower bound (Mode==1). // 速度ゲート下限。</summary>
+        public float SpeedMin;
+        /// <summary>= 1/(SpeedMax − SpeedMin)，速度门控归一化（Mode==1）。 // speed-gate normalization (Mode==1). // 速度ゲート正規化。</summary>
+        public float SpeedRangeInv;
+        /// <summary>模式：0=冲击+密度门(DensityWithImpact)，1=速度门控+密度门(DensityWithSpeed)，2=纯冲击无密度门(Impact，门恒=1)。 // 0=impact+gate, 1=speed+gate, 2=pure impact (no gate). // 0=衝撃+ゲート, 1=速度+ゲート, 2=純衝撃(門無し)。</summary>
+        public int Mode;
+        /// <summary>持久度曲线是否启用（1/0）。1 时按每粒子密度比从 <see cref="Liquid2DSolveContext.RenderPersistenceLut"/> 采样倍率重映射持久度：decay = pow(Decay, 1/mul)；0 时直接用 Decay（零开销）。 // persistence-curve enabled (1/0); when 1, remap decay per-particle via the LUT. // 持続度カーブ有効フラグ。</summary>
+        public int PersistenceCurveActive;
+    }
+
+    /// <summary>
     /// 一次求解所需的上下文。store 为托管侧 SoA 容器；其余为 Job 可用的 NativeArray 视图。
     /// Context for a single solve. store is the managed-side SoA container; the rest are Job-usable NativeArray views.
     /// 1回の解法に必要なコンテキスト。store はマネージド側 SoA コンテナ、他は Job が使える NativeArray ビュー。
@@ -76,8 +112,38 @@ namespace Fs.Liquid2D
         /// <summary>当前时间（Time.time），用于混色节流等。 // Current time, for mix throttling etc. // 現在時刻（混色スロットリング等）。</summary>
         public float Time;
 
-        /// <summary>全局颜色混合模式（0=LinearRgb, 1=Oklab, 2=Ryb）。 // Global colour-mix mode (0=LinearRgb, 1=Oklab, 2=Ryb). // グローバル色混合モード。</summary>
+        /// <summary>全局颜色混合模式（0=LinearRgb, 1=Oklab, 2=Ryb）。 // Global color-mix mode (0=LinearRgb, 1=Oklab, 2=Ryb). // グローバル色混合モード。</summary>
         public int MixMode;
+
+        /// <summary>
+        /// 按类型（typeId）的渲染平滑 EMA 混合系数 k（= 1 − 该类型 GradientSmoothing，范围 0..1）。每帧把持久化的
+        /// 「渲染密度」「渲染速度」按 EMA 更新：renderX = lerp(renderX, 本帧原始值, k[typeId])。k=1 无平滑；越小越平滑。
+        /// 用于消除渐变模式因 SPH 逐帧抖动导致的颜色闪烁；逐流体独立配置；不影响物理（物理仍用原始 Densities/Velocities）。
+        /// Per-type (typeId) render-smoothing EMA factors k (= 1 − that type's GradientSmoothing, range 0..1). Each frame the
+        /// persisted render density/speed are updated by EMA: renderX = lerp(renderX, this-frame raw, k[typeId]). k=1 = no
+        /// smoothing; smaller = smoother. Per-fluid; removes gradient-mode flicker from per-frame SPH jitter; does not affect
+        /// physics (which still uses raw Densities/Velocities).
+        /// 型ごと（typeId）のレンダー平滑 EMA 係数 k（= 1 − その型の GradientSmoothing）。密度/速度を EMA 更新。物理には影響しません。
+        /// </summary>
+        [ReadOnly] public NativeArray<float> RenderGradientK;
+
+        /// <summary>
+        /// 按类型（typeId）的动态泡沫（DensityWithImpact / DensityWithSpeed）累加器参数（预算好的常量，供求解器每帧更新持久化泡沫值 F）。
+        /// 生成量 = 密度区域门 × 动态因子（冲击或速度，见 <see cref="Liquid2DDynamicFoamParams"/>）；F = max(F·Decay, 生成量)。
+        /// 仅动态泡沫类型读取 F；其余类型参数使动态因子为 0，F 恒为 0 且不被渲染读取。不影响物理。
+        /// Per-type (typeId) dynamic-foam (DensityWithImpact / DensityWithSpeed) accumulator params. generation = densityGate ×
+        /// dynamicFactor; F = max(F·Decay, generation). Only dynamic-foam types read F; others produce 0. Does not affect physics.
+        /// 型ごと（typeId）の動的泡累加器パラメータ。物理には影響しません。
+        /// </summary>
+        [ReadOnly] public NativeArray<Liquid2DDynamicFoamParams> RenderDynamicFoamParams;
+
+        /// <summary>
+        /// 按类型展开的持久度曲线 LUT（长度 = numTypes × <see cref="Liquid2DParticleRenderSettings.PersistenceCurveLutSize"/>）。
+        /// 按密度比[0,1] 采样得倍率，重映射泡沫持久度（最终持久度 = Foam Persistence × 倍率）。仅 <see cref="Liquid2DDynamicFoamParams.PersistenceCurveActive"/>=1 的类型被读取。
+        /// Per-type persistence-curve LUT (length = numTypes × PersistenceCurveLutSize), indexed by density ratio[0,1] → multiplier;
+        /// remaps foam persistence. Only types with PersistenceCurveActive=1 read it. // 型ごとに展開した持続度カーブ LUT。
+        /// </summary>
+        [ReadOnly] public NativeArray<float> RenderPersistenceLut;
 
         /// <summary>动态碰撞体数量（>0 时 GPU 才回读冲量）。 // Dynamic collider count (GPU reads impulse back only when >0). // 動的コライダー数。</summary>
         public int DynamicBodyCount;

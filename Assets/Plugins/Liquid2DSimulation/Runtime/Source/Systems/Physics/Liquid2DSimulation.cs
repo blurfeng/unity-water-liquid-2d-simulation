@@ -46,7 +46,7 @@ namespace Fs.Liquid2D
         /// <summary>计算平台模式。 // Compute mode. // 計算モード。</summary>
         public static Liquid2DSimulationMode Mode = Liquid2DSimulationMode.Gpu;
 
-        /// <summary>全局颜色混合算法模式（由 Liquid2DPhysicsConfig 可在场景级覆盖）。 // Global colour-mixing algorithm mode (can be overridden per-scene by Liquid2DPhysicsConfig). // グローバル色混合アルゴリズムモード。</summary>
+        /// <summary>全局颜色混合算法模式（由 Liquid2DPhysicsConfig 可在场景级覆盖）。 // Global color-mixing algorithm mode (can be overridden per-scene by Liquid2DPhysicsConfig). // グローバル色混合アルゴリズムモード。</summary>
         public static Liquid2DColorMixMode ColorMixMode = Liquid2DColorMixMode.Oklab;
 
         /// <summary>
@@ -79,6 +79,12 @@ namespace Fs.Liquid2D
         private readonly List<Liquid2DParticleDescriptor> _descriptors = new List<Liquid2DParticleDescriptor>();
         private NativeArray<Liquid2DMaterialData> _materials;
         private NativeArray<Liquid2DMixData> _mixData;
+        // 按类型的渲染平滑 EMA 系数 k（=1−GradientSmoothing，非 Gradient 类型为 1=不平滑）。 // Per-type render-smoothing EMA factor k (=1−GradientSmoothing; 1 for non-Gradient types). // 型ごとの平滑係数。
+        private NativeArray<float> _renderGradientK;
+        // 按类型的动态泡沫（DensityWithImpact/Speed）累加器参数（含每帧衰减 = exp(−fixedDeltaTime/持久度)）。 // Per-type dynamic-foam accumulator params (incl. per-step decay). // 型ごとの動的泡累加器パラメータ。
+        private NativeArray<Liquid2DDynamicFoamParams> _renderDynamicFoamParams;
+        // 按类型展开的持久度曲线 LUT（长度 = numTypes × PersistenceCurveLutSize，按密度比重映射持久度倍率）。 // Per-type persistence-curve LUT (length = numTypes × PersistenceCurveLutSize). // 型ごとの持続度カーブ LUT。
+        private NativeArray<float> _renderPersistenceLut;
 
         // nameTag → groupId（0 为空标签通配）。 // nameTag → groupId (0 = empty-tag wildcard). // nameTag → groupId。
         private readonly Dictionary<string, int> _nameTagToGroup = new Dictionary<string, int>();
@@ -201,15 +207,84 @@ namespace Fs.Liquid2D
             {
                 if (_materials.IsCreated) _materials.Dispose();
                 if (_mixData.IsCreated) _mixData.Dispose();
+                if (_renderGradientK.IsCreated) _renderGradientK.Dispose();
+                if (_renderDynamicFoamParams.IsCreated) _renderDynamicFoamParams.Dispose();
+                if (_renderPersistenceLut.IsCreated) _renderPersistenceLut.Dispose();
                 _materials = new NativeArray<Liquid2DMaterialData>(n, Allocator.Persistent);
                 _mixData = new NativeArray<Liquid2DMixData>(n, Allocator.Persistent);
+                _renderGradientK = new NativeArray<float>(n, Allocator.Persistent);
+                _renderDynamicFoamParams = new NativeArray<Liquid2DDynamicFoamParams>(n, Allocator.Persistent);
+                _renderPersistenceLut = new NativeArray<float>(n * Liquid2DParticleRenderSettings.PersistenceCurveLutSize, Allocator.Persistent);
             }
+            // 泡沫累加器每帧衰减 = exp(−fixedDeltaTime/持久度秒)：EnsureMaterials 每 FixedUpdate 调用一次，故用固定步长。
+            // Foam-accumulator per-step decay = exp(−fixedDeltaTime/persistenceSec): EnsureMaterials runs once per FixedUpdate, so use the fixed timestep. // 減衰係数は固定ステップで算出。
+            float fixedDt = math.max(1e-4f, Time.fixedDeltaTime);
+            float targetDensity = Params.TargetDensity;
             for (int i = 0; i < _descriptors.Count; i++)
             {
                 var d = _descriptors[i];
                 _materials[i] = d != null && d.Material != null ? d.Material.ToData() : Liquid2DMaterialData.Default;
                 _mixData[i] = BuildMix(d != null ? d.MixSettings : null);
+                // 渲染平滑 EMA 系数：仅 Gradient 模式平滑（k=1−smoothing）；其余类型 k=1（不平滑，渲染也不用）。逐帧回填以支持运行时改动。
+                // Render-smoothing EMA factor: smooth only Gradient-mode types (k=1−smoothing); others k=1 (no smoothing, unused by render). Refilled each frame for runtime edits.
+                // 平滑係数：Gradient のみ平滑、他は k=1。実行時変更のため毎回回填。
+                var rs = d != null ? d.RenderSettings : null;
+                _renderGradientK[i] = rs != null && rs.ColorMode == EParticleColorMode.Gradient
+                    ? 1f - math.clamp(rs.GradientSmoothing, 0f, 1f)
+                    : 1f;
+                _renderDynamicFoamParams[i] = BuildDynamicFoamParams(rs, d != null ? d.Material : null, targetDensity, fixedDt);
+
+                // 持久度曲线 LUT 按类型展开（求解器按密度比重映射持久度）：仅 Gradient 且曲线非恒 1 的类型烘焙并拷入；其余填 1（不改变持久度，且 PersistenceCurveActive=0 时根本不会被读）。
+                // Expand the persistence-curve LUT per type: only Gradient types with a non-flat curve are copied in; others fill 1 (no change, and not read when PersistenceCurveActive=0). // 型ごとに展開。
+                int lutSize = Liquid2DParticleRenderSettings.PersistenceCurveLutSize;
+                int baseIdx = i * lutSize;
+                float[] pLut = rs != null && rs.ColorMode == EParticleColorMode.Gradient && rs.PersistenceCurveActive
+                    ? rs.GetPersistenceCurveLutCpu() : null;
+                if (pLut != null)
+                    NativeArray<float>.Copy(pLut, 0, _renderPersistenceLut, baseIdx, lutSize);
+                else
+                    for (int j = 0; j < lutSize; j++) _renderPersistenceLut[baseIdx + j] = 1f;
             }
+        }
+
+        /// <summary>
+        /// 构建某类型的动态泡沫（DensityWithImpact / DensityWithSpeed）累加器参数（预算好常量）。仅这两个来源给出非零 Decay 与
+        /// 对应动态因子（冲击 or 速度）；其余类型动态因子恒 0（F 恒 0 且不被渲染读取）。restDensity 与求解器/Pass 的 rho0 口径一致。
+        /// Build a type's dynamic-foam (DensityWithImpact / DensityWithSpeed) accumulator params. Only those two sources get a
+        /// nonzero Decay and dynamic factor; others produce 0. restDensity matches the solver/Pass rho0. // パラメータ構築。
+        /// </summary>
+        private static Liquid2DDynamicFoamParams BuildDynamicFoamParams(Liquid2DParticleRenderSettings rs,
+            Liquid2DParticleMaterial mat, float targetDensity, float fixedDt)
+        {
+            // 静止密度 = 全局目标密度 × 材质密度倍率（与 Pass/compute 的 rho0 完全一致）。 // rest density = global target × material scale. // 静止密度。
+            float restDensity = math.max(1e-4f, targetDensity * (mat != null ? math.max(0.01f, mat.TargetDensityScale) : 1f));
+            bool isGradient = rs != null && rs.ColorMode == EParticleColorMode.Gradient;
+            bool isImpact = isGradient && rs.GradientSource == EGradientColorSource.DensityWithImpact;
+            bool isSpeed = isGradient && rs.GradientSource == EGradientColorSource.DensityWithSpeed;
+            bool isPureImpact = isGradient && rs.GradientSource == EGradientColorSource.Impact;
+            bool usesImpact = isImpact || isPureImpact; // 都用冲击公式 + ImpactStrength/ImpactRiseMin（区别仅在是否做密度门）。 // both use the impact formula. // 両方衝撃式。
+            bool isDynamic = isImpact || isSpeed || isPureImpact;
+            float persistence = rs != null ? rs.GradientFoamPersistence : 0f;
+            float foamStart = rs != null ? rs.GradientFoamStart : 1f;
+            float foamEnd = rs != null ? rs.GradientFoamEnd : 0.85f;
+            float speedMin = rs != null ? rs.GradientSpeedMin : 0.2f;
+            float speedMax = rs != null ? rs.GradientSpeedMax : 10f;
+            return new Liquid2DDynamicFoamParams
+            {
+                InvRestDensity = 1f / restDensity,
+                // DensityWithImpact / Impact 用冲击；非冲击来源 ImpactStrength=0 使冲击因子恒 0。 // impact factor for DensityWithImpact / Impact. // 衝撃因子。
+                ImpactStrength = usesImpact ? math.max(0f, rs.GradientImpactStrength) : 0f,
+                // 冲击死区（归一化上升率下限）：DensityWithImpact / Impact 生效，低于此值不产泡。 // impact deadzone (DensityWithImpact / Impact). // 衝撃デッドゾーン。
+                ImpactRiseMin = usesImpact ? math.max(0f, rs.GradientImpactRiseMin) : 0f,
+                Decay = isDynamic && persistence > 1e-4f ? math.exp(-fixedDt / persistence) : 0f,
+                FoamStart = foamStart,
+                FoamRangeInv = 1f / math.max(1e-4f, foamStart - foamEnd),
+                SpeedMin = speedMin,
+                SpeedRangeInv = 1f / math.max(1e-4f, speedMax - speedMin),
+                Mode = isSpeed ? 1 : (isPureImpact ? 2 : 0), // 0=冲击+密度门(DensityWithImpact / 其余)，1=速度+密度门(DensityWithSpeed)，2=纯冲击无门(Impact)。 // 0=impact+gate, 1=speed+gate, 2=pure impact. // 動的因子選択。
+                // 持久度曲线：仅动态来源且曲线非恒 1 时启用（求解器按密度比重映射 decay）；否则 0（跳过、零开销）。 // persistence-curve remap enabled only for dynamic sources with a non-flat curve. // 持続度カーブ有効フラグ。
+                PersistenceCurveActive = isDynamic && rs.PersistenceCurveActive ? 1 : 0,
+            };
         }
 
         private static Liquid2DMixData BuildMix(Liquid2DParticleMixSettings m)
@@ -251,6 +326,16 @@ namespace Fs.Liquid2D
 
             var handle = _store.Allocate(position, velocity, new float4(c.r, c.g, c.b, c.a),
                 radius, mass, typeId, group, lifeEnd, now);
+
+            // 渲染平滑标量置哨兵 (-1)：WriteRenderScalarsJob 检测到 <0 即快照到本帧真实密度/速度（无收敛瞬变、无扩容/生成闪色）。
+            // 不用固定初值——任何固定值都可能落在某配置的泡沫带内。CPU 模式渲染读 store；GPU 模式由 ScatterSpawn 置同哨兵。
+            // Sentinel (-1): WriteRenderScalarsJob snaps to the actual value on the first frame (no transient / grow flash),
+            // avoiding a fixed init that could sit inside a foam band. GPU mode sets the same sentinel in ScatterSpawn. // 哨兵。
+            _store.densities[handle.Index] = -1f;
+            _store.renderSpeeds[handle.Index] = -1f;
+            // 泡沫累加器从 0 起（新粒子无累积泡沫）；首帧（密度哨兵 <0）会由 WriteRenderScalarsJob/CopyColor 直接置为本帧生成量。
+            // Foam accumulator starts at 0 (a new particle has no accumulated foam); the first frame (density sentinel <0) sets it to this frame's generation. // 泡累加器は 0 起点。
+            _store.renderFoam[handle.Index] = 0f;
 
             if (!_groupSlots.TryGetValue(group, out var g))
             {
@@ -426,6 +511,9 @@ namespace Fs.Liquid2D
                 KillFlags = killFlags,
                 Time = now,
                 MixMode = (int)ColorMixMode,
+                RenderGradientK = _renderGradientK, // 按类型的渲染平滑 EMA 系数。 // per-type render-smoothing EMA factors. // 型ごとの平滑係数。
+                RenderDynamicFoamParams = _renderDynamicFoamParams, // 按类型的动态泡沫累加器参数。 // per-type dynamic-foam accumulator params. // 型ごとの動的泡累加器パラメータ。
+                RenderPersistenceLut = _renderPersistenceLut, // 按类型展开的持久度曲线 LUT。 // per-type persistence-curve LUT. // 型ごとの持続度カーブ LUT。
                 DynamicBodyCount = _dynamicReceivers.Count,
                 GPUPendingSpawns = _gpuPendingSpawns,
             };
@@ -604,14 +692,15 @@ namespace Fs.Liquid2D
         /// </summary>
         public static bool TryGetRenderBuffers(out ComputeBuffer positions, out ComputeBuffer colors,
             out ComputeBuffer radii, out ComputeBuffer typeIds, out ComputeBuffer activeIndices,
-            out ComputeBuffer velocities, out int count, out IReadOnlyList<Liquid2DParticleDescriptor> descriptors)
+            out ComputeBuffer velocities, out ComputeBuffer renderScalars, out int count,
+            out IReadOnlyList<Liquid2DParticleDescriptor> descriptors)
         {
-            positions = colors = radii = typeIds = activeIndices = velocities = null; count = 0; descriptors = null;
+            positions = colors = radii = typeIds = activeIndices = velocities = renderScalars = null; count = 0; descriptors = null;
             var inst = _instance;
             if (inst == null) return false;
             descriptors = inst._descriptors;
             if (inst._solver is SphGpuSolver gpu)
-                return gpu.TryGetRenderBuffers(out positions, out colors, out radii, out typeIds, out activeIndices, out velocities, out count);
+                return gpu.TryGetRenderBuffers(out positions, out colors, out radii, out typeIds, out activeIndices, out velocities, out renderScalars, out count);
             return false;
         }
 
@@ -662,6 +751,9 @@ namespace Fs.Liquid2D
             if (_activeIndices.IsCreated) _activeIndices.Dispose();
             if (_materials.IsCreated) _materials.Dispose();
             if (_mixData.IsCreated) _mixData.Dispose();
+            if (_renderGradientK.IsCreated) _renderGradientK.Dispose();
+            if (_renderDynamicFoamParams.IsCreated) _renderDynamicFoamParams.Dispose();
+            if (_renderPersistenceLut.IsCreated) _renderPersistenceLut.Dispose();
         }
 
 #if UNITY_EDITOR

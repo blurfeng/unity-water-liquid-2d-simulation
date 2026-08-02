@@ -49,6 +49,16 @@ RWStructuredBuffer<float2> Predicted;
 RWStructuredBuffer<float2> Velocities;
 RWStructuredBuffer<float2> VelNext;
 RWStructuredBuffer<float2> Densities;    // (density, nearDensity)
+// 渲染用平滑标量 (x=密度, y=速度大小, z=Impact 冲击泡沫累加器 F)（EMA/累加，跨帧驻留）。仅供渐变渲染读取，物理不用。合并为单个缓冲以规避 D3D11 每 kernel 8 UAV 上限（ScatterSpawn 恰好触顶）。
+// Render-only smoothed scalars (x=density, y=speed, z=Impact accumulator F) (EMA/accumulate, resident). For gradient rendering, unused by physics. Merged into one buffer to stay within D3D11's 8-UAV-per-kernel limit (ScatterSpawn was at the cap).
+// レンダー用平滑スカラー (x=密度, y=速度, z=泡累加器 F)。D3D11 の 8 UAV 制限回避のため単一バッファに統合。
+RWStructuredBuffer<float3> RenderScalars;
+StructuredBuffer<float>    RenderGradientK; // 按类型的渲染平滑 EMA 系数（=1−GradientSmoothing，由 CPU 上传）。 // per-type render-smoothing EMA factor (uploaded by CPU). // 型ごとの平滑係数。
+// 按类型的动态泡沫参数（与 C# Liquid2DDynamicFoamParams 逐字段一致）。generation = 区域门 × 动态因子。mode：0=冲击+密度门(DensityWithImpact) / 1=速度门控+密度门(DensityWithSpeed) / 2=纯冲击无门(Impact，区域门恒 1)。 // Per-type dynamic-foam params (matches C# Liquid2DDynamicFoamParams field-for-field). mode: 0=impact+gate, 1=speed+gate, 2=pure impact (gate=1). // 型ごとの動的泡パラメータ。
+struct DynamicFoamParams { float invRestDensity; float impactStrength; float impactRiseMin; float decay; float foamStart; float foamRangeInv; float speedMin; float speedRangeInv; int mode; int persistenceCurveActive; };
+StructuredBuffer<DynamicFoamParams> RenderDynamicFoamParams;
+// 按类型展开的持久度曲线 LUT（长度 numTypes×persistenceLutSize，密度比[0,1]→倍率）；仅 persistenceCurveActive=1 的类型读取。 // Per-type persistence-curve LUT (density ratio → multiplier); read only when persistenceCurveActive=1. // 型ごとの持続度カーブ LUT。
+StructuredBuffer<float> RenderPersistenceLut;
 RWStructuredBuffer<float4> Colors;
 RWStructuredBuffer<float4> ColorsNext;
 RWStructuredBuffer<float>  LastMixTime;
@@ -153,6 +163,8 @@ float dt;
 float time;
 float impulseScale;
 int colorMixMode; // 0=LinearRgb, 1=Oklab, 2=Ryb
+int persistenceLutSize; // 持久度曲线 LUT 每类型长度（= Liquid2DParticleRenderSettings.PersistenceCurveLutSize）。 // per-type persistence-curve LUT length. // 持続度カーブ LUT 長。
+int initRenderScalars; // ScatterSpawn 是否初始化 RenderScalars：1=增量生成置哨兵；0=扩容全量重传（由 CPU 侧读回旧值保持连续，不覆盖）。 // whether ScatterSpawn inits RenderScalars: 1=incremental (sentinel), 0=grow full re-upload (CPU preserves continuity). // 初期化フラグ。
 
 // ============ 核函数。 ============
 float Poly6Coef()     { return 4.0f  / (PI * pow(h, 8.0f)); }
@@ -322,6 +334,11 @@ void ScatterSpawn(uint3 id : SV_DispatchThreadID)
     ColorsNext[slot] = c;
     LastMixTime[slot] = time;
     Densities[slot] = float2(0, 0);
+    // 渲染平滑标量：增量生成（initRenderScalars=1）置哨兵 (-1)，CopyColor 检测到 <0 即快照到本帧真实值；
+    // 扩容全量重传（initRenderScalars=0）不覆盖——现有粒子的平滑值由 CPU 侧读回旧缓冲写入新缓冲以保持连续（见 SphGpuSolver.HandleCapacity）。
+    // Render scalars: incremental spawn (initRenderScalars=1) sets sentinel (-1), CopyColor snaps to the actual value; grow
+    // full re-upload (0) does NOT overwrite — existing particles' smoothed values are preserved by the CPU side. // 哨兵/連続保持。
+    if (initRenderScalars != 0) RenderScalars[slot] = float3(-1, -1, 0); // x=y=-1 哨兵（首帧快照密度/速度）；z=0 泡沫累加器起点。 // sentinel x=y=-1; z=0 foam start. // 哨兵。
 }
 
 [numthreads(NumThreads,1,1)]
@@ -768,7 +785,7 @@ void IntegrateCollide(uint3 id : SV_DispatchThreadID)
 }
 
 // ============ 颜色混合辅助函数 ============
-// Colour-mixing helper functions.
+// Color-mixing helper functions.
 // 色混合ヘルパー関数。
 
 // ---- Oklab 转换（Björn Ottosson 标准实现）。输入/输出：线性 sRGB [0,1]。 ----
@@ -826,7 +843,7 @@ float3 RybToRgb(float3 ryb)
 // RGB → RYB 逆映射（Newton-Raphson + 解析雅可比，5 次迭代达机器精度）。
 // 精确逆是关键：不精确会让 RybToRgb(RgbToRyb(c))≠c，残差经"亮→RYB坐标减小→更亮"的正反馈把混合色冲到纯白。
 // RGB → RYB inverse (Newton-Raphson + analytic Jacobian, 5 iters → machine precision). Accurate inverse kills the
-// "brighter → smaller RYB → brighter" feedback that drifts mixed colours to white.
+// "brighter → smaller RYB → brighter" feedback that drifts mixed colors to white.
 // RGB → RYB 逆写像（Newton 法 + 解析ヤコビアン、5 回）。白へのドリフトを根絶。
 float3 RgbToRyb(float3 rgb)
 {
@@ -946,7 +963,7 @@ void MixColor(uint3 id : SV_DispatchThreadID)
     else if (colorMixMode == 2) // Ryb (Gossett-Chen 三线性立方体 + 锚定增量，消除往返误差导致的同色漂移/闪烁。)
     {
         // accumRgb.xyz = 邻居 RYB 之和。锚定到自身：同色时增量恒为 0，结果精确等于 ci4。
-        // accumRgb.xyz = sum of neighbour RYBs. Anchor to self: identical colours give a zero delta → exact ci4.
+        // accumRgb.xyz = sum of neighbour RYBs. Anchor to self: identical colors give a zero delta → exact ci4.
         float3 selfRyb = RgbToRyb(ci4.xyz);
         float3 mixedRyb = (accumRgb.xyz + selfRyb) / (wsum + 1.0f);
         float3 deltaRgb = RybToRgb(mixedRyb) - RybToRgb(selfRyb);
@@ -966,6 +983,55 @@ void CopyColor(uint3 id : SV_DispatchThreadID)
     int k = (int)id.x; if (k >= numParticles) return;
     int i = ActiveIndices[k];
     Colors[i] = ColorsNext[i];
+    // 渲染平滑标量（x=密度, y=速度, z=Impact 冲击泡沫累加器 F）：末子步随混色一并更新（本 kernel 在 lastStep 对活动粒子跑一次）。
+    // 哨兵 (x<0)=spawn/扩容后首帧，密度/速度直接快照到本帧真实值（无收敛瞬变、无扩容闪色）；否则按类型系数 EMA（kk=1 时等于原始值）。
+    // 冲击泡沫：生成量 = 表面度 × 冲击。表面度=密度亏空(foamStart/End/Floor，内部→0)；冲击 = saturate((Δ平滑密度)·invRestDensity·impactStrength)；F = max(F·decay, 生成量)。
+    // Render scalars (x=density, y=speed, z=Impact accumulator F), updated in the last-substep color copy. Sentinel (x<0) =
+    // first frame → snap; else EMA. Impact: generation = surfaceness × impact; F = max(F·decay, generation). // 哨兵で快照、否則 EMA。
+    float3 rs = RenderScalars[i];
+    int type = TypeId[i];
+    float rawD = Densities[i].x;
+    float rawS = length(Velocities[i]);
+    float prevD = rs.x; // 上一帧平滑密度（或哨兵<0）。 // previous smoothed density (or sentinel <0). // 前フレーム平滑密度。
+    bool firstFrame = rs.x < 0.0;
+    if (firstFrame)
+    {
+        rs.x = rawD;
+        rs.y = rawS;
+    }
+    else
+    {
+        float kk = RenderGradientK[type];
+        rs.x += (rawD - rs.x) * kk;
+        rs.y += (rawS - rs.y) * kk;
+    }
+    DynamicFoamParams dp = RenderDynamicFoamParams[type];
+    // 密度区域门 = 密度亏空（FoamStart 卡在内部密度以下→排除内部）。 // density gate = deficit (interior excluded). // 密度領域ゲート。
+    float ratio = rs.x * dp.invRestDensity;
+    float densityGate = saturate((dp.foamStart - ratio) * dp.foamRangeInv);
+    // 区域门：DensityWithImpact(0)/DensityWithSpeed(1) 用密度门筛选表面；纯 Impact(2) 不筛选，门恒 1。 // pure Impact(2) skips the gate. // 純 Impact(2) は門=1。
+    float gate = dp.mode == 2 ? 1.0 : densityGate;
+    // 动态因子：mode==1 速度门控（DensityWithSpeed）/ 否则 冲击=密度上升率（DensityWithImpact / Impact）。 // dynamic factor: speed gate or density rise. // 動的因子。
+    float dynamicFactor;
+    if (dp.mode == 1)
+        dynamicFactor = saturate((rs.y - dp.speedMin) * dp.speedRangeInv);
+    else
+    {
+        float rise = firstFrame ? 0.0 : (rs.x - prevD);
+        // 死区：归一化上升率低于 impactRiseMin 的部分不产泡，排除轻微扰动的伪冲击波。riseMin=0 时与旧式等价。 // deadzone; equivalent to the old formula when riseMin=0. // デッドゾーン、riseMin=0 で旧式と等価。
+        dynamicFactor = saturate((rise * dp.invRestDensity - dp.impactRiseMin) * dp.impactStrength);
+    }
+    float generation = gate * dynamicFactor;
+    // 持久度曲线：按表面度 densityGate（Foam Start/End 归一化：0=水底、1=水面）从 LUT 取倍率 mul，decay = pow(baseDecay, 1/mul)（mul>1 更持久、<1 更快散、→0 瞬灭）。用表面度而非原始密度比铺满 [0,1] 便于 authoring。未启用或不持久时跳过。 // persistence curve: remap decay by surfaceness (densityGate) via the LUT; skipped when off. // 表面度で倍率をサンプル。
+    float decay = dp.decay;
+    if (dp.persistenceCurveActive != 0 && decay > 0.0)
+    {
+        int xi = clamp((int)(densityGate * (persistenceLutSize - 1) + 0.5), 0, persistenceLutSize - 1);
+        float mul = RenderPersistenceLut[type * persistenceLutSize + xi];
+        decay = mul > 1e-4 ? pow(decay, 1.0 / mul) : 0.0;
+    }
+    rs.z = firstFrame ? 0.0 : max(rs.z * decay, generation);
+    RenderScalars[i] = rs;
 }
 
 // 销毁区域多边形内判定（读 DeadZonePoints，与 PointInPoly 同算法）。 // Dead-zone polygon inside test (reads DeadZonePoints). // 破棄領域の多角形内判定。

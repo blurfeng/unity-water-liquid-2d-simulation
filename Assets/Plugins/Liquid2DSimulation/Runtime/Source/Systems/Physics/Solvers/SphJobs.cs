@@ -208,6 +208,97 @@ namespace Fs.Liquid2D
     }
 
     /// <summary>
+    /// 把求解器每步临时的密度与速度按时间平滑（EMA，按类型 k）写回 store（按 slot），供渲染层做渐变 Foam / Speed 判断；并据平滑密度的变化速率算 Impact 冲击泡沫累加器写回 store.renderFoam。
+    /// 仅在末子步调度一次。OutDensities/OutSpeeds 是跨帧持久的 EMA 累加器：Out = lerp(上帧值, 本帧原始值, SmoothK[typeId])。
+    /// SmoothK=1 无平滑；越小越平滑，消除 SPH 逐帧抖动引起的颜色闪烁。渲染读 store.densities（密度比）、store.renderSpeeds（速度）、store.renderFoam（冲击泡沫 F）。
+    /// EMA-smooth (per-type k) the solver's per-step density and speed back into the store (by slot) for gradient Foam / Speed; and
+    /// compute the Impact impact-foam accumulator from the smoothed-density change rate into store.renderFoam. Scheduled once on the last substep. OutDensities/OutSpeeds are cross-frame
+    /// EMA accumulators: Out = lerp(prev, raw, SmoothK[typeId]). SmoothK=1 = no smoothing; smaller = smoother.
+    /// 密度と速度を EMA（型ごと k）で平滑して store へ書き戻し。OutDensities/OutSpeeds は跨帧 EMA 累加器。
+    /// </summary>
+    [BurstCompile]
+    public struct WriteRenderScalarsJob : IJobParallelFor
+    {
+        [ReadOnly] public NativeArray<int> ActiveIndices;
+        [ReadOnly] public NativeArray<float2> Densities;
+        [ReadOnly] public NativeArray<float2> Velocities;
+        [ReadOnly] public NativeArray<int> TypeId;
+        [ReadOnly] public NativeArray<float> SmoothK; // 按类型 EMA 系数（=1−GradientSmoothing）。 // per-type EMA factor. // 型ごと係数。
+        [ReadOnly] public NativeArray<Liquid2DDynamicFoamParams> DynamicFoamParams; // 按类型的动态泡沫累加器参数。 // per-type dynamic-foam accumulator params. // 動的泡累加器パラメータ。
+        [ReadOnly] public NativeArray<float> PersistenceLut; // 按类型展开的持久度曲线 LUT（密度比[0,1]→倍率）。 // per-type persistence-curve LUT (density ratio → multiplier). // 型ごとの持続度カーブ LUT。
+        // 读写：每个活动粒子的 slot i 唯一，线程间不冲突（禁用 ParallelFor 限制仅因按 i 而非 k 索引）。 // Read/write; each active particle's slot i is unique. // 読み書き。
+        [NativeDisableParallelForRestriction] public NativeArray<float> OutDensities;
+        [NativeDisableParallelForRestriction] public NativeArray<float> OutSpeeds;
+        [NativeDisableParallelForRestriction] public NativeArray<float> OutFoam; // Impact 冲击泡沫累加器 F（跨帧持久：冲击快升、按持久度慢降）。 // impact-foam accumulator F (persistent). // 衝撃泡累加器 F。
+
+        public void Execute(int k)
+        {
+            int i = ActiveIndices[k];
+            int type = TypeId[i];
+            float rawD = Densities[i].x;
+            float rawS = length(Velocities[i]);
+            float pd = OutDensities[i]; // 上一帧的平滑密度（或哨兵<0）。 // previous smoothed density (or sentinel <0). // 前フレーム平滑密度。
+
+            float smD, smS; // 本帧平滑后的密度/速度（渲染 Foam/Speed 读取，也是冲击速率的基准量）。 // this-frame smoothed density/speed. // 平滑後密度/速度。
+            bool firstFrame = pd < 0f;
+            if (firstFrame)
+            {
+                // 哨兵（<0）：spawn 后首帧直接快照到本帧真实值（无收敛瞬变）。 // Sentinel: snap to actual on the first frame after spawn. // 哨兵で快照。
+                smD = rawD;
+                smS = rawS;
+            }
+            else
+            {
+                float kk = SmoothK[type];
+                smD = pd + (rawD - pd) * kk;                  // = lerp(prev, raw density, kk)。
+                smS = OutSpeeds[i] + (rawS - OutSpeeds[i]) * kk; // = lerp(prev, raw speed, kk)。
+            }
+            OutDensities[i] = smD;
+            OutSpeeds[i] = smS;
+
+            // 动态泡沫累加器：生成量 = 密度区域门 × 动态因子（DensityWithImpact→冲击；DensityWithSpeed→速度门控）。
+            // 区域门 = 密度亏空(FoamStart/End，FoamStart 卡在内部密度以下排除内部)；动态因子 = Mode==1 ? 速度门控 : 冲击(密度上升率)。
+            // F = max(F·Decay, 生成量)。内部/水底(区域门0)、平静/未压实(动态因子0)不产泡；仅动态泡沫来源读取 F。
+            // Dynamic-foam accumulator: generation = densityGate × dynamicFactor (impact for DensityWithImpact, speedGate for DensityWithSpeed). // 動的泡累加器。
+            var dp = DynamicFoamParams[type];
+            float ratio = smD * dp.InvRestDensity;
+            float densityGate = saturate((dp.FoamStart - ratio) * dp.FoamRangeInv);
+            // 区域门：DensityWithImpact(0)/DensityWithSpeed(1) 用密度亏空门筛选表面；纯 Impact(2) 不筛选，门恒 1（任意位置的快速压实都产泡）。
+            // Region gate: DensityWithImpact(0)/DensityWithSpeed(1) use the density-deficit gate; pure Impact(2) skips it (gate=1, any location foams on rapid compression).
+            // 領域ゲート：0/1 は密度ゲートで表面を絞る、純 Impact(2) は絞らず門=1。
+            float gate = dp.Mode == 2 ? 1f : densityGate;
+            float dynamicFactor;
+            if (dp.Mode == 1) // DensityWithSpeed：速度门控。 // speed gate. // 速度ゲート。
+                dynamicFactor = saturate((smS - dp.SpeedMin) * dp.SpeedRangeInv);
+            else // DensityWithImpact(0) / Impact(2)：冲击=密度上升率（减去死区 ImpactRiseMin 后再乘灵敏度）。 // impact = density rise rate minus the ImpactRiseMin deadzone. // 衝撃。
+            {
+                float rise = firstFrame ? 0f : (smD - pd);
+                // 死区：归一化上升率低于 ImpactRiseMin 的部分不产泡，排除轻微扰动的伪冲击波。RiseMin=0 时与旧式等价。
+                // Deadzone: rise below ImpactRiseMin produces no foam, excluding weak disturbances' false shockwave. Equivalent to the old formula when RiseMin=0.
+                // デッドゾーン：ImpactRiseMin 未満は泡なし。RiseMin=0 で旧式と等価。
+                dynamicFactor = saturate((rise * dp.InvRestDensity - dp.ImpactRiseMin) * dp.ImpactStrength);
+            }
+            float generation = gate * dynamicFactor;
+            // 持久度曲线：按每粒子表面度（densityGate，用 Foam Start/End 归一化：0=水底/内部、1=水面）从 LUT 取倍率 mul，
+            // 重映射有效持久度 = 基础持久度×mul ⇒ decay = pow(baseDecay, 1/mul)。mul>1 更持久、<1 更快消散、→0 瞬灭。
+            // 用表面度而非原始密度比作 X，是为把水面~水底那段窄密度差铺满整条 [0,1]，便于 authoring（水底=曲线左端、水面=右端）。
+            // 未启用(PersistenceCurveActive=0)或不持久(baseDecay=0)时跳过，逐位等价旧行为、零开销。
+            // Persistence curve: sample multiplier mul from the LUT by surfaceness (densityGate, normalized via Foam Start/End: 0=bottom, 1=surface);
+            // effective persistence = base×mul ⇒ decay = pow(baseDecay, 1/mul). Surfaceness (not raw ratio) spreads the narrow surface→bottom band
+            // across the full [0,1] curve for easy authoring. Skipped when off or non-persistent. // 表面度で倍率をサンプル。
+            float decay = dp.Decay;
+            if (dp.PersistenceCurveActive != 0 && decay > 0f)
+            {
+                int sz = Liquid2DParticleRenderSettings.PersistenceCurveLutSize;
+                int xi = clamp((int)(densityGate * (sz - 1) + 0.5f), 0, sz - 1);
+                float mul = PersistenceLut[type * sz + xi];
+                decay = mul > 1e-4f ? pow(decay, 1f / mul) : 0f;
+            }
+            OutFoam[i] = firstFrame ? 0f : max(OutFoam[i] * decay, generation);
+        }
+    }
+
+    /// <summary>
     /// 压力力：pressure = (density - targetDensity·targetDensityScale)·pressureMultiplier；
     /// nearPressure = nearDensity·nearPressureMultiplier·(0.5+cohesion)（cohesion 越高越易结团/表面张力）。
     /// 邻居梯度累加后 v += (pressureForce/density)·dt。
@@ -693,7 +784,7 @@ namespace Fs.Liquid2D
         // 把混合色逐渐冲到纯白。Newton 把色域内残差降到 ~0，反馈增益归零，杜绝白色爬升。
         // RGB → RYB inverse (Newton-Raphson + analytic Jacobian, 5 iters → machine precision).
         // An accurate inverse is essential: inexactness makes RybToRgb(RgbToRyb(c))≠c, and the residual feeds a
-        // "brighter → smaller RYB → brighter" positive feedback that drifts mixed colours toward pure white.
+        // "brighter → smaller RYB → brighter" positive feedback that drifts mixed colors toward pure white.
         // RGB → RYB 逆写像（Newton 法 + 解析ヤコビアン、5 回で機械精度）。白へのドリフトを根絶。
         private static float3 RgbToRyb(float3 rgb)
         {
@@ -812,7 +903,7 @@ namespace Fs.Liquid2D
                 case 2: // Ryb (Gossett-Chen 三线性立方体 + 锚定增量，消除往返误差导致的同色漂移/闪烁。)
                 {
                     // accumRgb.xyz = 邻居 RYB 之和。锚定到自身：同色时增量恒为 0，结果精确等于 ci。
-                    // accumRgb.xyz = sum of neighbour RYBs. Anchor to self: identical colours give a zero delta → exact ci.
+                    // accumRgb.xyz = sum of neighbour RYBs. Anchor to self: identical colors give a zero delta → exact ci.
                     // accumRgb.xyz = 近傍 RYB の和。自身にアンカー：同色は増分 0 → ci に厳密一致。
                     float3 selfRyb = RgbToRyb(ci.xyz);
                     float3 mixedRyb = (accumRgb.xyz + selfRyb) / (wsum + 1f);

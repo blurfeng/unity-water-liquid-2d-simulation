@@ -67,5 +67,13 @@ namespace Fs.Liquid2D
         /// 記述子が描画可能か（スプライトとマテリアルが揃っているか）。
         /// </summary>
         public bool IsValid() => RenderSettings != null && RenderSettings.IsValid();
+
+        // 卸载时释放渲染设置持有的渐变/透明度 LUT 纹理（运行时创建的 HideAndDontSave，无 GC，须显式销毁）。 // On unload, release the gradient/opacity LUT textures held by the render settings (runtime-created HideAndDontSave, not GC'd). // アンロード時に LUT テクスチャを解放。
+        private void OnDisable() => RenderSettings?.DisposeGradientLut();
+
+#if UNITY_EDITOR
+        // 编辑器改动（如渐变）后使渐变 LUT 失效，下次渲染重建。 // Invalidate the gradient LUT after editor edits (e.g. gradient); rebuilt on next render. // 編集後に LUT を無効化。
+        private void OnValidate() => RenderSettings?.InvalidateGradientLut();
+#endif
     }
 }

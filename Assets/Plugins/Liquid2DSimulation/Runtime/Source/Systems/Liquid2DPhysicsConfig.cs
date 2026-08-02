@@ -103,9 +103,13 @@ namespace Fs.Liquid2D
 
         [SerializeField, LocalizationTooltip(
              "全局颜色混合算法。LinearRgb：线性 RGB 平均（旧行为，蓝+黄=灰）。Oklab：感知均匀色彩空间混合，颜色过渡自然（默认）。Ryb：RYB 颜料色轮，蓝+黄=绿。",
-             "Global colour-mixing algorithm. LinearRgb: linear-RGB average (legacy; blue+yellow=grey). Oklab: perceptually-uniform mixing, natural transitions (default). Ryb: RYB pigment wheel, blue+yellow=green.",
+             "Global color-mixing algorithm. LinearRgb: linear-RGB average (legacy; blue+yellow=grey). Oklab: perceptually-uniform mixing, natural transitions (default). Ryb: RYB pigment wheel, blue+yellow=green.",
              "グローバル色混合アルゴリズム。LinearRgb：線形 RGB 平均（旧動作、青+黄=灰）。Oklab：知覚均一混合（デフォルト）。Ryb：RYB 顔料色相環、青+黄=緑。")]
         private Liquid2DColorMixMode colorMixMode = Liquid2DColorMixMode.Oklab;
+
+        // 渐变时间平滑量已移至每描述符（Liquid2DParticleRenderSettings.GradientSmoothing），可为不同流体独立配置，此处不再全局设置。
+        // Gradient temporal smoothing moved to per-descriptor (Liquid2DParticleRenderSettings.GradientSmoothing) for per-fluid control; no longer a global setting here.
+        // グラデーション時間平滑は記述子ごと（Liquid2DParticleRenderSettings.GradientSmoothing）に移動。
 
         [SerializeField, LocalizationTooltip(
              "⚠ 性能警告：GPU 模式下每帧把粒子数据从 GPU 全量回读到 CPU。仅在需要让依赖 CPU 数据的功能" +

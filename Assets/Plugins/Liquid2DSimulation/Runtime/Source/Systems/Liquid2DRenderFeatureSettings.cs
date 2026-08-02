@@ -308,13 +308,7 @@ namespace Fs.Liquid2D
              "Opacity value, applied to the final fluid color according to the mode.",
              "透明度値、モードに従って最終的な流体色に適用されます。")]
         public float OpacityValue = 1f;
-        
-        [ColorUsage(true, true), LocalizationTooltip(
-              "覆盖颜色会覆盖流体粒子自身的颜色，作为流体的整体色调。alpha为强度，1时完全覆盖粒子颜色，0时不覆盖。",
-             "Cover color overrides the fluid particle's own color, serving as the overall tone of the fluid. Alpha represents intensity, 1 for complete color override, 0 for no override.",
-             "カバーカラーは流体パーティクル自体の色を上書きし、流体の全体的なトーンとして機能します。アルファは強度を表し、1で完全な色の上書き、0で上書きなしです。")]
-        public Color CoverColor = Color.clear;
-        
+
         [LocalizationTooltip(
              "流体模糊设置。过强的模糊会让流体粒子尺寸变小，建议适当调整流体粒子尺寸或材质边缘不透明度以获得更好的效果。",
              "Fluid blur settings. Excessive blur can make fluid particles appear smaller, it is recommended to adjust fluid particle size or material edge opacity for better results.",
@@ -356,7 +350,6 @@ namespace Fs.Liquid2D
             Cutoff = src.Cutoff;
             OpacityMode = src.OpacityMode;
             OpacityValue = src.OpacityValue;
-            CoverColor = src.CoverColor;
             Blur.CopyFrom(src.Blur);
             Distort.CopyFrom(src.Distort);
             Edge.CopyFrom(src.Edge);

@@ -21,14 +21,15 @@ namespace Fs.Liquid2D
         {
             internal static readonly int MainTexId = Shader.PropertyToID("_MainTex");
             internal static readonly int SecondTex = Shader.PropertyToID("_SecondTex");
+            internal static readonly int OpacityTex = Shader.PropertyToID("_OpacityTex"); // 独立透明度场源纹理(RG)：模糊/合成的第二源。 // Independent opacity field source (RG): 2nd source for blur/composite. // 独立透明度場ソース(RG)。
             internal static readonly int ColorId = Shader.PropertyToID("_Color");
+            internal static readonly int Opacity = Shader.PropertyToID("_Opacity"); // CPU 路径逐实例最终透明度倍率 O。 // CPU path per-instance opacity multiplier O. // CPU 逐実例 O。
             internal static readonly int ColorIntensityId = Shader.PropertyToID("_ColorIntensity");
             internal static readonly int BlurOffsetId = Shader.PropertyToID("_BlurOffset");
             internal static readonly int Cutoff = Shader.PropertyToID("_Cutoff");
             internal static readonly int ObstructorTex = Shader.PropertyToID("_ObstructorTex");
             internal static readonly int OccluderTex = Shader.PropertyToID("_OccluderTex");
             internal static readonly int OpacityValue = Shader.PropertyToID("_OpacityValue");
-            internal static readonly int CoverColorId = Shader.PropertyToID("_CoverColor");
             internal static readonly int EdgeEnd = Shader.PropertyToID("_EdgeEnd");
             internal static readonly int EdgeMixStart = Shader.PropertyToID("_EdgeMixStart");
             internal static readonly int EdgeColor = Shader.PropertyToID("_EdgeColor");
@@ -53,9 +54,26 @@ namespace Fs.Liquid2D
             internal static readonly int ActiveIdxBuf = Shader.PropertyToID("_ActiveIndices");
             internal static readonly int TargetType = Shader.PropertyToID("_TargetType");
             internal static readonly int RenderScale = Shader.PropertyToID("_RenderScale");
+
+            // GPU 渐变颜色映射相关。 // GPU gradient color-mapping related. // GPU 渐変カラーマッピング関連。
+            internal static readonly int RenderScalarsBuf = Shader.PropertyToID("_RenderScalars"); // 平滑标量 float3 (x=密度, y=速度, z=Impact 冲击泡沫累加器 F)。 // smoothed scalars float3 (x=density, y=speed, z=Impact accumulator F). // 平滑スカラー。
+            internal static readonly int GradientLut = Shader.PropertyToID("_GradientLut");
+            internal static readonly int OpacityLut = Shader.PropertyToID("_OpacityLut"); // GPU 路径透明度 LUT。 // GPU path opacity LUT. // GPU 透明度 LUT。
+            internal static readonly int UseGradient = Shader.PropertyToID("_UseGradient");
+            internal static readonly int GradientSource = Shader.PropertyToID("_GradientSource");
+            internal static readonly int GradientSpeedMin = Shader.PropertyToID("_SpeedMin");
+            internal static readonly int GradientSpeedMax = Shader.PropertyToID("_GradientSpeedMax");
+            internal static readonly int RestDensity = Shader.PropertyToID("_RestDensity");
+            internal static readonly int FoamStart = Shader.PropertyToID("_FoamStart");
+            internal static readonly int FoamEnd = Shader.PropertyToID("_FoamEnd");
         }
         
         private static readonly ShaderTagId _shaderTagId = new ShaderTagId("UniversalForward");
+
+        // 独立透明度场关键字（粒子/模糊/合成三处 shader 共用）。开启时绑定第二渲染目标(RG)：R=Σ覆盖×O, G=Σ覆盖。
+        // Independent opacity field keyword (shared by the particle/blur/composite shaders). When on, a second RG target is bound.
+        // 独立透明度場キーワード（粒子/ブラー/合成の3シェーダーで共有）。
+        private const string OpacityFieldKeyword = "_OPACITY_FIELD";
 
         private const string ShaderPathBlurCombineTwo = "Custom/URP/2D/CombineTwo";
         private Material _materialBlurCombineTwo;
@@ -104,8 +122,16 @@ namespace Fs.Liquid2D
         // 流体粒子描画キャッシュ。バッチ上限サイズに固定し、バッチごとに充填・描画して毎フレームの割り当てを回避します。
         private readonly Matrix4x4[] _matricesCache = new Matrix4x4[MaxInstancesPerBatch];
         private readonly Vector4[] _colorArrayCache = new Vector4[MaxInstancesPerBatch];
+        // CPU 路径逐实例最终透明度倍率 O 缓存（仅独立透明度场启用时填充）。 // CPU path per-instance opacity multiplier O cache (filled only when the opacity field is active). // CPU 逐実例 O キャッシュ。
+        private readonly float[] _opacityArrayCache = new float[MaxInstancesPerBatch];
         // 视锥平面缓存。复用以避免每帧分配。 // Frustum planes cache. Reused to avoid per-frame allocation. // 視錐台平面キャッシュ。毎フレームの割り当てを避けるため再利用。
         private readonly Plane[] _frustumPlanes = new Plane[6];
+
+        // 描述符绘制顺序缓存（按 RenderOrder 升序排出的 typeId 列表：值小者先画=下层，值大者后画=上层）。复用避免每帧分配。
+        // Descriptor draw-order cache (typeIds sorted ascending by RenderOrder: smaller draws first = below, larger draws last = on top). Reused to avoid per-frame allocation.
+        // 記述子の描画順キャッシュ（RenderOrder 昇順の typeId 列）。毎フレームの割り当てを回避するため再利用。
+        private readonly List<int> _drawOrderCache = new List<int>(16);
+        private readonly DescriptorDrawOrderComparer _drawOrderComparer = new DescriptorDrawOrderComparer();
 
         // 各 Pass 复用的 MaterialPropertyBlock，避免每帧/每 Pass 重新分配。
         // (CommandBuffer 在调用绘制时会拷贝 MPB 内容，因此跨顺序执行的 Pass 复用同一实例是安全的。)
@@ -161,6 +187,47 @@ namespace Fs.Liquid2D
             CoreUtils.Destroy(_quadMesh);
         }
 
+        // 描述符绘制顺序比较器：按 RenderSettings.RenderOrder 升序排序 typeId；RenderOrder 相同时按 typeId 升序（=注册顺序）作稳定次序，保证结果确定。
+        // 复用单实例（每帧排序前设 Descriptors），避免闭包/委托的每帧分配。仅比较少量描述符，开销可忽略。
+        // Descriptor draw-order comparer: sorts typeIds ascending by RenderSettings.RenderOrder; ties break by typeId (= registration order)
+        // for a deterministic total order. A single reused instance (Descriptors set before each sort) avoids per-frame closure/delegate allocation.
+        // 記述子の描画順コンパレータ：RenderOrder 昇順、同値は typeId 昇順（登録順）で決定的に。単一インスタンスを再利用。
+        private sealed class DescriptorDrawOrderComparer : IComparer<int>
+        {
+            public IReadOnlyList<Liquid2DParticleDescriptor> Descriptors;
+
+            public int Compare(int a, int b)
+            {
+                int c = OrderOf(a).CompareTo(OrderOf(b));
+                return c != 0 ? c : a.CompareTo(b);
+            }
+
+            private int OrderOf(int typeId)
+            {
+                var d = Descriptors[typeId];
+                var rs = d ? d.RenderSettings : null;
+                return rs != null ? rs.RenderOrder : 0;
+            }
+        }
+
+        // 按 RenderOrder 生成描述符绘制顺序，填入复用列表。值小者先画（下层）、值大者后画（上层）；同值按 typeId 稳定。
+        // ⚠ order 内是真实 typeId：绘制时仍用它做 typeArr==t 过滤与 _TargetType 设置，故本函数仅改变外层遍历顺序，不影响分组正确性。
+        // Build the descriptor draw order by RenderOrder into the reused list. Smaller draws first (below), larger draws last (on top);
+        // ties stable by typeId. The list holds real typeIds (still used for the typeArr==t filter and _TargetType at draw time), so this
+        // only reorders the outer iteration and never breaks grouping. // RenderOrder で描画順を生成。値は実 typeId。
+        private static void BuildDrawOrder(
+            IReadOnlyList<Liquid2DParticleDescriptor> descriptors, List<int> order, DescriptorDrawOrderComparer comparer)
+        {
+            order.Clear();
+            int n = descriptors.Count;
+            for (int t = 0; t < n; t++) order.Add(t);
+            if (n > 1)
+            {
+                comparer.Descriptors = descriptors;
+                order.Sort(comparer);
+            }
+        }
+
         private class PassData
         {
             public UniversalCameraData CameraData;
@@ -184,8 +251,20 @@ namespace Fs.Liquid2D
             // 引用 Pass 实例上的复用缓存，不在此分配。 // Reference reusable caches on the Pass instance; not allocated here. // Pass上の再利用キャッシュを参照し、ここでは割り当てません。
             public Matrix4x4[] MatricesCache;
             public Vector4[] ColorArrayCache;
+            public float[] OpacityArrayCache; // CPU 路径逐实例 O 数组（引用 Pass 实例缓存）。 // CPU path per-instance O array. // CPU 逐実例 O。
             public Plane[] FrustumPlanes;
             public Mesh QuadMesh;
+
+            // 描述符绘制顺序：复用列表与比较器（引用 Pass 实例缓存），CPU/GPU 两条绘制路径据此按 RenderOrder 遍历描述符。
+            // Descriptor draw order: reused list + comparer (referencing Pass caches); both the CPU and GPU draw paths iterate descriptors by RenderOrder.
+            // 記述子の描画順：再利用リストとコンパレータ（Pass キャッシュ参照）。
+            public List<int> DrawOrder;
+            public DescriptorDrawOrderComparer DrawOrderComparer;
+
+            // 独立透明度场：本 Feature 本帧是否启用（有非恒1透明度曲线的粒子且非场景视图）。粒子绘制据此绑定第二渲染目标并开启关键字。
+            // Independent opacity field: whether it is active this frame (some particle has a non-constant-1 opacity curve and not
+            // scene view). The particle draw binds the 2nd render target and enables the keyword accordingly. // 独立透明度場が有効か。
+            public bool OpacityFieldActive;
 
             // GPU 常驻粒子绘制（DrawProcedural 直读 GPU 缓冲）。 // GPU-resident particle draw (DrawProcedural). // GPU 常駐粒子描画。
             public bool GPUMode;
@@ -195,6 +274,7 @@ namespace Fs.Liquid2D
             public ComputeBuffer GPURadii;
             public ComputeBuffer GPUTypeIds;
             public ComputeBuffer GPUActive;
+            public ComputeBuffer GPURenderScalars; // 渐变用逐粒子平滑标量 float3 (x=密度, y=速度, z=Impact 冲击泡沫累加器 F)。 // per-particle scalars float3 (x=density, y=speed, z=Impact accumulator F). // 平滑スカラー。
             public int GPUCount;
             public IReadOnlyList<Liquid2DParticleDescriptor> GPUDescriptors;
 
@@ -202,6 +282,9 @@ namespace Fs.Liquid2D
             public Material MaterialBlur;
             public TextureHandle BlurSource;
             public int BlurIteration;
+            // 模糊 Pass 的 MRT 透明度场：开启时第二源(RG)与颜色图共用同一批偏移一起模糊。 // Blur MRT opacity field: 2nd source (RG) blurred with the same offsets. // ブラー MRT 透明度場。
+            public bool BlurOpacityField;
+            public TextureHandle BlurOpacitySource;
 
             // 核心保持叠加 Pass 相关。 // Core-keep combine Pass related. // コア保持合成Pass関連。
             public Material CombineMaterial;
@@ -220,6 +303,9 @@ namespace Fs.Liquid2D
             // 水体效果 Pass 相关。 // Water effect Pass related. // 水体エフェクトPass関連。
             public Material MaterialEffect;
             public TextureHandle BlurFinalTh;
+            // 合成阶段独立透明度场：最终模糊后的透明度图(RG)，shader 内 O=R/G 并入最终 alpha。 // Composite opacity field: final-blurred RG texture; shader O=R/G into final alpha. // 合成の独立透明度場。
+            public bool EffectOpacityField;
+            public TextureHandle EffectOpacityTh;
 
             // Display Overlay Pass 相关。 // Display Overlay Pass related. // Display Overlay Pass 関連。
             public IReadOnlyList<Liquid2DDebugParticleDisplay> Displays;
@@ -239,6 +325,15 @@ namespace Fs.Liquid2D
             // この Feature が当該フレームで描画する生存粒子が無い場合、全画面処理は無駄なので連鎖全体をスキップします。
             if (Liquid2DSimulation.GetRenderableAliveCount(_settings.NameTag) == 0)
                 return;
+
+            // ---- 预热渐变 LUT // Warm up gradient LUTs // 渐変 LUT を予熱 ---- //
+            // 在主线程的 Record 阶段确保 Gradient 模式描述符的 LUT 纹理已烘焙，避免在渲染执行回调内首次创建 Texture2D。
+            // Ensure gradient-mode descriptors' LUT textures are baked here (Record phase, main thread), so no Texture2D is
+            // first-created inside a render exec callback. // Record 段階（メインスレッド）で LUT を焼き込み済みにする。
+            // 返回值：本 Feature 本帧是否有含非恒1透明度曲线的 Gradient 粒子（决定是否启用独立透明度场 MRT 链路）。
+            // Return value: whether this feature draws any Gradient particle with a non-constant-1 opacity curve (drives the
+            // independent-opacity-field MRT path). // 戻り値：独立透明度場 MRT を有効化するか。
+            bool opacityFieldActive = PrepareGradientLuts();
 
             // ---- 获取基础数据 // Get basic data // 基本データを取得する ---- //
             UniversalCameraData cameraData = frameData.Get<UniversalCameraData>();
@@ -292,6 +387,24 @@ namespace Fs.Liquid2D
             // 判断当前相机是否为场景视图相机。 // Check if the current camera is a scene view camera. // 現在のカメラがシーンビューカメラかどうかを判断します。
             bool isSceneView = cameraData.cameraType == CameraType.SceneView;
 
+            // ---- 独立透明度场纹理 // Independent opacity field texture // 独立透明度場テクスチャ ---- //
+            // 仅在有非恒1透明度曲线的 Gradient 粒子且非场景视图时启用（场景视图直接绘制到相机、无后续模糊/合成，不需要）。
+            // RG 半精度：R=Σ(覆盖×O)、G=Σ覆盖，由粒子加性累加；须每帧清零（加性混合）。合成阶段 O=R/G。
+            // Enabled only when a Gradient particle has a non-constant-1 opacity curve and this is not the scene view (scene view
+            // draws straight to the camera with no later blur/composite). RG half: R=Σ(coverage×O), G=Σcoverage, additively
+            // accumulated by particles; must be cleared each frame (additive blend). The composite computes O=R/G. // RG 半精度。
+            bool useOpacityField = opacityFieldActive && !isSceneView;
+            TextureHandle liquidOpacityTh = default;
+            if (useOpacityField)
+            {
+                TextureDesc opacityDesc = mainDesc;
+                opacityDesc.colorFormat = GraphicsFormat.R16G16_SFloat;
+                opacityDesc.name = GetName("liquidOpacityTh");
+                opacityDesc.clearBuffer = true;
+                opacityDesc.clearColor = Color.clear;
+                liquidOpacityTh = renderGraph.CreateTexture(opacityDesc);
+            }
+
             // ---- 添加绘制到 Pass // Add drawing to Pass // パスに描画を追加 ---- //
             using (var builder = renderGraph.AddRasterRenderPass<PassData>(GetName("Particles"), out var passData))
             {
@@ -302,14 +415,19 @@ namespace Fs.Liquid2D
                 passData.QuadMesh = _quadMesh; // 用于绘制流体粒子的四边形网格。
                 passData.MatricesCache = _matricesCache;
                 passData.ColorArrayCache = _colorArrayCache;
+                passData.OpacityArrayCache = _opacityArrayCache;
                 passData.FrustumPlanes = _frustumPlanes;
                 passData.Mpb = _mpbParticle;
+                passData.OpacityFieldActive = useOpacityField;
+                passData.DrawOrder = _drawOrderCache; // 描述符绘制顺序（按 RenderOrder）。 // descriptor draw order (by RenderOrder). // 記述子描画順。
+                passData.DrawOrderComparer = _drawOrderComparer;
 
                 // GPU 常驻模式：取 GPU 缓冲直读绘制（DrawProcedural），否则走 CPU 路径。
                 // GPU resident mode: read GPU buffers and draw via DrawProcedural; otherwise the CPU path.
                 // GPU 常駐モード：GPU バッファを直読して DrawProcedural、それ以外は CPU パス。
+                // 渲染读平滑后的标量 float2 (x=密度, y=速度)，原始 velocity 不再需要（丢弃）。 // Render reads the smoothed scalars (x=density, y=speed); raw velocity no longer needed. // 平滑スカラーを使用。
                 bool hasGpuBuffers = Liquid2DSimulation.TryGetRenderBuffers(out var gpuPos, out var gpuCol, out var gpuRad,
-                    out var gpuType, out var gpuActive, out _, out int gpuCount, out var gpuDesc);
+                    out var gpuType, out var gpuActive, out _, out var gpuScalars, out int gpuCount, out var gpuDesc);
                 passData.GPUMode = Liquid2DSimulation.Mode == Liquid2DSimulationMode.Gpu && hasGpuBuffers;
                 if (passData.GPUMode)
                 {
@@ -319,6 +437,7 @@ namespace Fs.Liquid2D
                     passData.GPURadii = gpuRad;
                     passData.GPUTypeIds = gpuType;
                     passData.GPUActive = gpuActive;
+                    passData.GPURenderScalars = gpuScalars; // 渐变用平滑标量 float3 (x=密度→Foam, y=速度→Speed, z=Impact 累加器 F)。 // smoothed scalars (x=density→Foam, y=speed→Speed, z=Impact accumulator F). // 平滑スカラー。
                     passData.GPUCount = gpuCount;
                     passData.GPUDescriptors = gpuDesc;
                 }
@@ -327,8 +446,14 @@ namespace Fs.Liquid2D
                     // 设置渲染目标纹理句柄和声明使用纹理句柄。
                     // Set render target texture handle and declare usage texture handle.
                     // レンダーターゲットテクスチャハンドルを設定し、使用テクスチャハンドルを宣言します。
-                    isSceneView ? sourceTextureHandle : liquidParticleTh, 
+                    isSceneView ? sourceTextureHandle : liquidParticleTh,
                     0, AccessFlags.Write);
+
+                // 独立透明度场：绑定第二渲染目标(RG)。须与 shader 的 _OPACITY_FIELD 输出目标数一致（exec 内按 OpacityFieldActive 开关关键字）。
+                // Independent opacity field: bind the 2nd render target (RG). Must match the shader's _OPACITY_FIELD output count
+                // (the exec toggles the keyword by OpacityFieldActive). // 独立透明度場：第二 RT(RG) を束縛。
+                if (useOpacityField)
+                    builder.SetRenderAttachment(liquidOpacityTh, 1, AccessFlags.Write);
 
                 // 设置绘制方法。 // Set drawing method. // 描画メソッドを設定します。
                 builder.SetRenderFunc((PassData data, RasterGraphContext context) => ExecutePassParticle(data, context));
@@ -347,7 +472,9 @@ namespace Fs.Liquid2D
             // Final blur texture handle for subsequent processing steps.
             // 後続の処理ステップに渡される最終ブラーテクスチャハンドル。
             TextureHandle blurThFinal;
-            
+            // 独立透明度场的最终模糊图(RG)。与颜色图并行走完模糊链，供合成阶段 O=R/G。 // Final-blurred opacity field (RG), parallel to the color chain, for composite O=R/G. // 最終透明度場(RG)。
+            TextureHandle blurThFinalO = default;
+
             // 多次迭代模糊。 // Multiple iterations of blur. // ブラーの複数回反復。
             if (_settings.Blur.Iterations > 0)
             {
@@ -366,13 +493,30 @@ namespace Fs.Liquid2D
                 TextureHandle blurThRight = renderGraph.CreateTexture(blurDesc);
                 blurDesc.name = GetName("Blur Core");
                 TextureHandle blurThCore = renderGraph.CreateTexture(blurDesc);
-                
+
+                // 独立透明度场的模糊图对(RG，ping-pong)。仅启用时创建。 // Opacity field blur pair (RG, ping-pong), created only when active. // 透明度場ブラー対(RG)。
+                TextureHandle blurThLeftO = default, blurThRightO = default;
+                if (useOpacityField)
+                {
+                    TextureDesc blurDescO = blurDesc;
+                    blurDescO.colorFormat = GraphicsFormat.R16G16_SFloat;
+                    blurDescO.name = GetName("Blur Left O");
+                    blurThLeftO = renderGraph.CreateTexture(blurDescO);
+                    blurDescO.name = GetName("Blur Right O");
+                    blurThRightO = renderGraph.CreateTexture(blurDescO);
+                }
+
                 // 复制流体粒子纹理到第一个模糊纹理和源颜色纹理。因为尺寸不同不能直接使用 liquidParticleTh。
                 // Copy fluid particle texture to first blur texture and source color texture. Cannot use liquidParticleTh directly due to different sizes.
                 // 流体粒子テクスチャを最初のブラーテクスチャとソースカラーテクスチャにコピーします。サイズが異なるためliquidParticleThを直接使用できません。
                 renderGraph.AddBlitPass(
-                    liquidParticleTh, blurThLeft, 
+                    liquidParticleTh, blurThLeft,
                     Vector2.one, Vector2.zero, passName: GetName("Particles to Blur"));
+                // 透明度场同样下采样拷贝到第一张模糊图(RG)。 // Downscale-copy the opacity field into the first opacity blur texture (RG). // 透明度場も下採样コピー。
+                if (useOpacityField)
+                    renderGraph.AddBlitPass(
+                        liquidOpacityTh, blurThLeftO,
+                        Vector2.one, Vector2.zero, passName: GetName("Opacity to Blur"));
                 
                 // ---- 添加绘制到 Pass // Add drawing to Pass // パスに描画を追加 ---- //
                 // 计算核心保持使用哪次迭代的模糊纹理。
@@ -382,15 +526,18 @@ namespace Fs.Liquid2D
                 bool coreKeep = coreKeepIteration < _settings.Blur.Iterations;
                 
                 TextureHandle blurThMain = blurThLeft; // 模糊迭代的最终纹理句柄。 // Final texture handle for blur iterations. // ブラー反復の最終テクスチャハンドル。
+                TextureHandle blurThMainO = blurThLeftO; // 透明度场迭代的最终句柄(RG)。 // Final opacity iteration handle (RG). // 透明度場の最終句柄(RG)。
                 for (var i = 0; i < _settings.Blur.Iterations; ++i)
                 {
-                    // 交替使用两个模糊纹理句柄进行模糊。
-                    // Alternately use two blur texture handles for blurring.
-                    // 2つのブラーテクスチャハンドルを交互に使用してブラーします。
+                    // 交替使用两个模糊纹理句柄进行模糊。透明度场(RG)与颜色图共用同一 PassBlur 的同一批偏移一起模糊(真 MRT)。
+                    // Alternately use two blur texture handles for blurring. The opacity field (RG) is blurred together with the
+                    // color texture in the same PassBlur using the same offsets (true MRT). // 透明度場(RG)は色図と同 PassBlur で同時ブラー。
                     PassBlur(
-                        renderGraph, 
-                        i % 2 == 0 ? blurThLeft : blurThRight, i % 2 == 0 ? blurThRight : blurThLeft, 
-                        i, GetName(GetBlurIndexName(i)));
+                        renderGraph,
+                        i % 2 == 0 ? blurThLeft : blurThRight, i % 2 == 0 ? blurThRight : blurThLeft,
+                        i, GetName(GetBlurIndexName(i)),
+                        useOpacityField,
+                        i % 2 == 0 ? blurThLeftO : blurThRightO, i % 2 == 0 ? blurThRightO : blurThLeftO);
                     
                     // 选择某次迭代的模糊图作为核心保持图。
                     // Select the blur image from a certain iteration as the core keep image.
@@ -415,6 +562,7 @@ namespace Fs.Liquid2D
                     if (i == _settings.Blur.Iterations - 1)
                     {
                         blurThMain = i % 2 == 0 ? blurThRight : blurThLeft;
+                        if (useOpacityField) blurThMainO = i % 2 == 0 ? blurThRightO : blurThLeftO;
                     }
                 }
 
@@ -456,7 +604,19 @@ namespace Fs.Liquid2D
                     // このステップにより、コア保持画像と最終的なブラー画像がより良く融合します。
                     blurDesc.name = GetName("Blur: Final");
                     blurThFinal = renderGraph.CreateTexture(blurDesc);
-                    PassBlur(renderGraph, blurThCombineCore, blurThFinal, 0, GetName("Blur: Final"));
+                    // 透明度场不参与 CombineTwo（那是覆盖度/颜色的核心保持锐化，会破坏 R/G 比值）；仅取迭代末的透明度图，
+                    // 与颜色的最终模糊共用同一 PassBlur 再模糊一次，与颜色链对齐。 // Opacity skips CombineTwo (a coverage/color core-keep
+                    // sharpen that would break the R/G ratio); it takes the last-iteration opacity and shares the final PassBlur to
+                    // stay aligned with the color chain. // 透明度場は CombineTwo に不参加、最終 PassBlur を共有。
+                    if (useOpacityField)
+                    {
+                        TextureDesc blurDescO = blurDesc;
+                        blurDescO.colorFormat = GraphicsFormat.R16G16_SFloat;
+                        blurDescO.name = GetName("Blur: Final O");
+                        blurThFinalO = renderGraph.CreateTexture(blurDescO);
+                    }
+                    PassBlur(renderGraph, blurThCombineCore, blurThFinal, 0, GetName("Blur: Final"),
+                        useOpacityField, blurThMainO, blurThFinalO);
                 }
                 else
                 {
@@ -464,6 +624,7 @@ namespace Fs.Liquid2D
                     // When not performing core keeping, directly use the last blur image as the final blur image.
                     // コア保持を行わない場合、最後のブラー画像を最終ブラー画像として直接使用します。
                     blurThFinal = blurThMain;
+                    if (useOpacityField) blurThFinalO = blurThMainO;
                 }
             }
             else
@@ -472,6 +633,7 @@ namespace Fs.Liquid2D
                 // When not performing blur, directly use fluid particle texture as the final blur texture.
                 // ブラーを行わない場合、流体粒子テクスチャを最終ブラーテクスチャとして直接使用します。
                 blurThFinal = liquidParticleTh;
+                if (useOpacityField) blurThFinalO = liquidOpacityTh;
             }
             #endregion
 
@@ -583,6 +745,10 @@ namespace Fs.Liquid2D
                     passData.OccluderTh = liquidOccluderTh;
                 }
 
+                // 独立透明度场：把最终模糊后的透明度图(RG)交给合成，shader 内 O=R/G 并入最终 alpha。 // Opacity field: hand the final-blurred RG texture to the composite; shader O=R/G into final alpha. // 独立透明度場を合成へ。
+                passData.EffectOpacityField = useOpacityField;
+                if (useOpacityField) passData.EffectOpacityTh = blurThFinalO;
+
                 // 设置渲染目标纹理句柄和声明使用纹理句柄。
                 // Set render target texture handle and declare usage texture handle.
                 // レンダーターゲットテクスチャハンドルを設定し、使用テクスチャハンドルを宣言します。
@@ -594,6 +760,10 @@ namespace Fs.Liquid2D
                 {
                     builder.UseTexture(passData.OccluderTh, AccessFlags.Read);
                 }
+                if (useOpacityField)
+                {
+                    builder.UseTexture(passData.EffectOpacityTh, AccessFlags.Read);
+                }
                 
                 // 设置绘制方法。 // Set drawing method. // 描画メソッドを設定します。
                 builder.SetRenderFunc((PassData data, RasterGraphContext context) => ExecutePassEffect(data, context));
@@ -604,7 +774,7 @@ namespace Fs.Liquid2D
 
             // Effect Pass 之后，将 Liquid2DDebugParticleDisplay 粒子叠加绘制到相机颜色缓冲，使其覆盖在水体效果之上、
             // 不被扰动 Shader 干扰（Editor + Build 一致）。实例来自组件自维护的静态注册表，避免每帧 FindObjectsByType 全场景扫描。
-            // After the Effect Pass, draw Liquid2DDebugParticleDisplay particles into the camera colour buffer so they appear
+            // After the Effect Pass, draw Liquid2DDebugParticleDisplay particles into the camera color buffer so they appear
             // above the water effect, undisturbed by the distortion shader (same for Editor + Build). Instances come from the
             // component's self-maintained static registry, avoiding a per-frame full-scene FindObjectsByType scan.
             // Effect Pass の後、Liquid2DDebugParticleDisplay の粒子をカメラカラーバッファに描画し、水体エフェクトの上に重ねます
@@ -628,6 +798,34 @@ namespace Fs.Liquid2D
             #endregion
         }
         
+        /// <summary>
+        /// 预热本 Feature 会绘制的 Gradient 模式描述符的渐变 LUT（主线程创建纹理）。仅烘焙尚未烘焙/已失效者，无粒子或非 Gradient 时零开销。
+        /// Warm up gradient LUTs for the Gradient-mode descriptors this feature will draw (creates textures on the main thread).
+        /// Only bakes those not yet baked / invalidated; zero cost when there are no particles or none use Gradient.
+        /// 本 Feature が描画する Gradient モード記述子の LUT を予熱（メインスレッドで作成）。
+        /// </summary>
+        private bool PrepareGradientLuts()
+        {
+            if (!Liquid2DSimulation.TryGetRenderData(out _, out _, out _, out var descriptors) || descriptors == null)
+                return false;
+            string nameTag = _settings.NameTag;
+            bool opacityActive = false;
+            for (int t = 0; t < descriptors.Count; t++)
+            {
+                var d = descriptors[t];
+                if (d == null || !d.IsValid()) continue;
+                var rs = d.RenderSettings;
+                if (rs.ColorMode != EParticleColorMode.Gradient) continue;
+                // 与绘制时一致的 nameTag 门控。 // Same nameTag gate as at draw time. // 描画時と同じ nameTag ゲート。
+                if (!string.IsNullOrEmpty(rs.NameTag) && !rs.NameTag.Equals(nameTag)) continue;
+                rs.EnsureGradientLut();
+                // 本 Feature 会绘制的某个 Gradient 描述符含非恒1的透明度曲线 → 需要独立透明度场。
+                // A Gradient descriptor this feature will draw has a non-constant-1 opacity curve → needs the opacity field.
+                if (rs.GradientOpacityActive) opacityActive = true;
+            }
+            return opacityActive;
+        }
+
         /// <summary>
         /// 流体粒子绘制 Pass。将所有注册的流体粒子绘制到流体绘制。
         /// Fluid particle drawing Pass. Draw all registered fluid particles to fluid rendering.
@@ -653,6 +851,7 @@ namespace Fs.Liquid2D
             var mpb = data.Mpb;
             var matrices = data.MatricesCache;
             var colors = data.ColorArrayCache;
+            var opacities = data.OpacityArrayCache; // 逐实例 O（仅独立透明度场启用时填充/上传）。 // Per-instance O (filled/uploaded only when the opacity field is active). // 逐実例 O。
 
             // 从模拟器（SoA）取数据绘制，绕过 Transform。按描述符（typeId）分组使用 GPU Instancing 批量绘制。
             // Read data from the simulation (SoA) and draw, bypassing Transform. Group by descriptor (typeId) and batch via GPU Instancing.
@@ -665,9 +864,23 @@ namespace Fs.Liquid2D
             var radiiArr = store.radii;
             var colorArr = store.colors;
             var typeArr = store.typeId;
+            var speedArr = store.renderSpeeds; // 渐变 Speed 用（平滑速度）。 // for gradient Speed (smoothed speed). // Speed 用（平滑）。
+            var densArr = store.densities;     // 渐变 Foam 用（平滑密度，纯密度亏空静态贴图）。 // for gradient Foam (smoothed density, pure density-deficit map). // Foam 用（平滑）。
+            var foamArr = store.renderFoam;    // 渐变 Impact 用（冲击泡沫累加器 F，求解器每帧算好）。 // for gradient Impact (impact-foam accumulator F). // Impact 用。
 
-            for (int t = 0; t < descriptors.Count; t++)
+            // 是否需在上传前把 store 的手调 sRGB 色转 linear（对齐 CPU 绘制路径与渐变 LUT 的上传边界）。循环外缓存，避免每粒子查询色彩空间。
+            // Whether to convert the store's authored sRGB colors to linear before upload (aligning with the CPU draw path and the gradient LUT's upload boundary). Cached outside the loop to avoid a per-particle color-space query. // 上传前に sRGB→linear が要るか。ループ外でキャッシュ。
+            bool toLinear = Liquid2DColorSpace.IsLinear;
+
+            // 按描述符 RenderOrder 生成稳定的绘制顺序（值大者后画=在上层），消除多色流体重叠时因生成/销毁时序导致的随机遮挡。
+            // Build a stable draw order by RenderOrder (larger draws last = on top), removing the spawn/despawn-timing-driven random occlusion when multi-color fluids overlap.
+            // 記述子の RenderOrder で安定した描画順を生成（値が大きいほど後 = 上層）、多色流体重なりのランダム遮蔽を解消。
+            var drawOrder = data.DrawOrder;
+            BuildDrawOrder(descriptors, drawOrder, data.DrawOrderComparer);
+
+            for (int oi = 0; oi < drawOrder.Count; oi++)
             {
+                int t = drawOrder[oi];
                 var d = descriptors[t];
                 // 跳过无效组（缺少贴图或材质则无法绘制）。 // Skip invalid groups (cannot draw without sprite or material). // 無効なグループをスキップ。
                 if (d == null || !d.IsValid()) continue;
@@ -677,6 +890,27 @@ namespace Fs.Liquid2D
                 // When the descriptor NameTag is not empty, only the Feature with the same NameTag renders it.
                 // 記述子の NameTag が空でない場合、同じ NameTag の Feature のみが描画します。
                 if (!string.IsNullOrEmpty(settings.NameTag) && !settings.NameTag.Equals(nameTag)) continue;
+
+                // 独立透明度场：切换本描述符材质的 _OPACITY_FIELD，须与 Pass 绑定的渲染目标数一致（否则 shader 输出与附件不匹配）。
+                // Toggle _OPACITY_FIELD on this descriptor's material; must match the render-target count the Pass bound (else the
+                // shader's output count and the attachments mismatch). // 独立透明度場：材質の _OPACITY_FIELD を切替（附件数と一致必須）。
+                if (settings.Material) SetKeyword(settings.Material, OpacityFieldKeyword, data.OpacityFieldActive);
+
+                // 渐变颜色映射参数（逐描述符预算，循环内每粒子按 t 采 CPU LUT 得色）。 // Gradient params (per descriptor; each particle samples the CPU LUT by t). // 渐変パラメータ。
+                bool gradient = settings.ColorMode == EParticleColorMode.Gradient;
+                var gradientSource = settings.GradientSource;
+                float speedMin = settings.GradientSpeedMin;
+                // 速度重映射：t = (speed − Min) / (Max − Min)，裁剪 0..1。低于 Min 视作 0（缓慢移动不出色/泡）。 // Speed remap; below Min → 0 (slow motion produces no color/foam). // 速度リマップ。
+                float speedRangeInv = 1f / Mathf.Max(1e-4f, settings.GradientSpeedMax - settings.GradientSpeedMin);
+                // 该类粒子静止密度 = 全局目标密度 × 材质密度倍率（与求解器 rho0 一致），用于把 SPH 密度归一化为密度比。 // rest density = global target × material scale (matches solver rho0). // 静止密度。
+                float restDensity = Mathf.Max(1e-4f, Liquid2DSimulation.Params.TargetDensity *
+                    (d.Material != null ? Mathf.Max(0.01f, d.Material.TargetDensityScale) : 1f));
+                float foamStart = settings.GradientFoamStart;
+                float foamRangeInv = 1f / Mathf.Max(1e-4f, settings.GradientFoamStart - settings.GradientFoamEnd);
+                // 渐变 CPU LUT：Record 阶段（PrepareGradientLuts）已预热，这里每描述符取一次数组直接按索引查，
+                // 避免每粒子调用 EnsureGradientLut（含 Unity 对象判空）的开销。 // Gradient CPU LUTs: warmed in Record; fetch the arrays once per descriptor and index directly, avoiding a per-particle EnsureGradientLut. // 記述子ごとに一度取得。
+                Color[] cpuGradientLut = gradient ? settings.GetGradientLutCpu() : null;
+                float[] cpuOpacityLut = gradient && data.OpacityFieldActive ? settings.GetOpacityLutCpu() : null;
 
                 mpb.Clear();
                 mpb.SetTexture(ShaderIds.MainTexId, settings.Sprite.texture);
@@ -708,13 +942,47 @@ namespace Fs.Liquid2D
                     m.m00 = diameter; m.m11 = diameter;
                     m.m03 = center.x; m.m13 = center.y; m.m23 = center.z;
                     matrices[count] = m;
-                    float4 c = colorArr[slot];
-                    colors[count] = new Vector4(c.x, c.y, c.z, c.w);
+                    // 颜色：Gradient 模式按每粒子标量采 CPU LUT（绕过运行时混色）；否则用 store 的每粒子色。
+                    // Color: Gradient mode samples the CPU LUT by a per-particle scalar (bypassing runtime mixing); otherwise the store's per-particle color. // 色：Gradient は LUT サンプル、否則は store 色。
+                    if (gradient)
+                    {
+                        float tt;
+                        if (gradientSource == EGradientColorSource.Speed)
+                        {
+                            tt = math.saturate((speedArr[slot] - speedMin) * speedRangeInv); // 速度重映射。 // remapped speed. // 速度リマップ。
+                        }
+                        else if (gradientSource == EGradientColorSource.Density)
+                        {
+                            // Density（=1）：纯密度亏空静态贴图。 // Density: pure density-deficit static map. // 純密度不足。
+                            float ratio = densArr[slot] / restDensity;
+                            tt = math.saturate((foamStart - ratio) * foamRangeInv);
+                        }
+                        else
+                        {
+                            // DensityWithImpact（=2）/ DensityWithSpeed（=3）/ Impact（=4）：求解器算好的动态泡沫累加器 F。 // solver's dynamic-foam accumulator F. // 動的泡累加器 F。
+                            tt = foamArr[slot];
+                        }
+                        // 每粒子只算一次 LUT 索引，颜色与透明度共用（GradientLutIndex 内部已 saturate(t)）。 // One LUT index per particle, shared by color and opacity (GradientLutIndex saturates t internally). // 索引を1回だけ算出し色/透明度で共用。
+                        int lutIdx = Liquid2DParticleRenderSettings.GradientLutIndex(tt);
+                        Color gc = cpuGradientLut[lutIdx];
+                        colors[count] = new Vector4(gc.r, gc.g, gc.b, gc.a);
+                        // 透明度：按同一索引取 CPU 透明度 LUT。 // Opacity: index the CPU opacity LUT with the same index. // 透明度：同じ索引で CPU 透明度 LUT。
+                        if (data.OpacityFieldActive) opacities[count] = cpuOpacityLut[lutIdx];
+                    }
+                    else
+                    {
+                        // store 存的是手调 sRGB 值；线性项目下按 SetColor 的口径转 linear 再上传（渐变分支的 LUT 已烘焙为上传值，不走这里）。
+                        // The store holds authored sRGB values; in linear projects convert to linear per SetColor's convention before upload (the gradient branch's LUT is already baked to upload values). // store は sRGB 値。線形項目では SetColor に合わせ linear へ。
+                        colors[count] = Liquid2DColorSpace.ToGpuUpload(colorArr[slot], toLinear);
+                        // 非渐变粒子透明度倍率恒 1（不改变最终透明度）。 // Non-gradient particles: opacity multiplier is a constant 1 (no change). // 非渐変は O=1。
+                        if (data.OpacityFieldActive) opacities[count] = 1f;
+                    }
                     count++;
 
                     if (count == MaxInstancesPerBatch)
                     {
                         mpb.SetVectorArray(ShaderIds.ColorId, colors);
+                        if (data.OpacityFieldActive) mpb.SetFloatArray(ShaderIds.Opacity, opacities);
                         cmd.DrawMeshInstanced(data.QuadMesh, 0, settings.Material, 0, matrices, count, mpb);
                         count = 0;
                     }
@@ -724,6 +992,7 @@ namespace Fs.Liquid2D
                 if (count > 0)
                 {
                     mpb.SetVectorArray(ShaderIds.ColorId, colors);
+                    if (data.OpacityFieldActive) mpb.SetFloatArray(ShaderIds.Opacity, opacities);
                     cmd.DrawMeshInstanced(data.QuadMesh, 0, settings.Material, 0, matrices, count, mpb);
                 }
             }
@@ -745,8 +1014,16 @@ namespace Fs.Liquid2D
             string nameTag = data.Settings.NameTag;
             var mpb = data.Mpb;
 
-            for (int t = 0; t < descriptors.Count; t++)
+            // 独立透明度场：GPU 路径为共享材质，关键字整批统一切换（须与 Pass 绑定的渲染目标数一致）。 // Shared GPU material: toggle the keyword once for the whole batch (must match the Pass's attachment count). // 共有材質のためバッチ一括切替。
+            SetKeyword(data.GPUMaterial, OpacityFieldKeyword, data.OpacityFieldActive);
+
+            // 与 CPU 路径一致：按描述符 RenderOrder 生成稳定绘制顺序（值大者后画=在上层）。 // Same as the CPU path: stable draw order by RenderOrder (larger draws last = on top). // CPU パスと同様に RenderOrder で安定描画順。
+            var drawOrder = data.DrawOrder;
+            BuildDrawOrder(descriptors, drawOrder, data.DrawOrderComparer);
+
+            for (int oi = 0; oi < drawOrder.Count; oi++)
             {
+                int t = drawOrder[oi];
                 var d = descriptors[t];
                 if (d == null || !d.IsValid()) continue;
                 var settings = d.RenderSettings;
@@ -764,6 +1041,42 @@ namespace Fs.Liquid2D
                 mpb.SetInteger(ShaderIds.TargetType, t);
                 mpb.SetFloat(ShaderIds.RenderScale, d.RenderScale);
 
+                // 渐变颜色映射：绑定速度/密度缓冲与 LUT，shader 内按每粒子标量采样（绕过 store 颜色）。速度/密度缓冲恒绑定
+                // （GPU 模式下必有效），_UseGradient=0 时 shader 不会真正采样。
+                // Gradient color mapping: bind velocity/density buffers + LUT; the shader samples by a per-particle scalar
+                // (bypassing the store color). Velocity/density buffers are always bound (valid in GPU mode); the shader never
+                // samples them when _UseGradient=0. // 渐変マッピング：速度/密度バッファと LUT を束縛。
+                bool gradient = settings.ColorMode == EParticleColorMode.Gradient && data.GPURenderScalars != null;
+                mpb.SetInteger(ShaderIds.UseGradient, gradient ? 1 : 0);
+                if (data.GPURenderScalars != null) mpb.SetBuffer(ShaderIds.RenderScalarsBuf, data.GPURenderScalars);
+                if (gradient)
+                {
+                    var lut = settings.GetGradientLut();
+                    mpb.SetTexture(ShaderIds.GradientLut, lut ? lut : Texture2D.blackTexture);
+                    mpb.SetInteger(ShaderIds.GradientSource, (int)settings.GradientSource);
+                    mpb.SetFloat(ShaderIds.GradientSpeedMin, settings.GradientSpeedMin);
+                    mpb.SetFloat(ShaderIds.GradientSpeedMax, settings.GradientSpeedMax);
+                    // 该类粒子静止密度 = 全局目标密度 × 材质密度倍率（与 compute 的 rho0 一致）。 // rest density = global target × material scale (matches the compute's rho0). // 静止密度。
+                    float restDensity = Mathf.Max(1e-4f, Liquid2DSimulation.Params.TargetDensity *
+                        (d.Material != null ? Mathf.Max(0.01f, d.Material.TargetDensityScale) : 1f));
+                    mpb.SetFloat(ShaderIds.RestDensity, restDensity);
+                    mpb.SetFloat(ShaderIds.FoamStart, settings.GradientFoamStart);
+                    mpb.SetFloat(ShaderIds.FoamEnd, settings.GradientFoamEnd);
+                    // 独立透明度场：绑定透明度 LUT（shader 内按同一 t 采样得 O）。 // Opacity field: bind the opacity LUT (sampled by the same t → O). // 透明度 LUT を束縛。
+                    if (data.OpacityFieldActive)
+                    {
+                        var olut = settings.GetOpacityLut();
+                        mpb.SetTexture(ShaderIds.OpacityLut, olut ? olut : Texture2D.blackTexture);
+                    }
+                }
+                else
+                {
+                    // 非渐变仍绑定一个占位 LUT，避免采样器未绑定告警（_UseGradient=0 时不会真正采样）。 // Bind a placeholder LUT to avoid unbound-sampler warnings. // 未使用時もプレースホルダ LUT を束縛。
+                    mpb.SetTexture(ShaderIds.GradientLut, Texture2D.blackTexture);
+                    // 非渐变但透明度场开启时，绑定占位透明度 LUT（shader 内 _UseGradient=0 不会真正采样）。 // Placeholder opacity LUT when the field is on but this descriptor is non-gradient. // 占位透明度 LUT。
+                    if (data.OpacityFieldActive) mpb.SetTexture(ShaderIds.OpacityLut, Texture2D.blackTexture);
+                }
+
                 // 6 顶点/实例（两三角拼四边形），实例数 = 活动粒子数；Shader 内按 typeId 剔除非本类。
                 // 6 verts/instance (quad), instances = active particle count; shader culls non-matching typeIds.
                 // 6 頂点/インスタンス、インスタンス数 = アクティブ粒子数。
@@ -771,7 +1084,8 @@ namespace Fs.Liquid2D
             }
         }
 
-        private void PassBlur(RenderGraph renderGraph, TextureHandle source, TextureHandle destination, int iteration, string passName)
+        private void PassBlur(RenderGraph renderGraph, TextureHandle source, TextureHandle destination, int iteration, string passName,
+            bool opacityField = false, TextureHandle opacitySource = default, TextureHandle opacityDest = default)
         {
             using (var builder = renderGraph.AddRasterRenderPass(passName, out PassData passData))
             {
@@ -782,13 +1096,22 @@ namespace Fs.Liquid2D
                 passData.BlurSource = source;
                 passData.BlurIteration = iteration;
                 passData.Mpb = _mpbBlur;
+                passData.BlurOpacityField = opacityField;
+                passData.BlurOpacitySource = opacitySource;
 
                 // 设置渲染目标纹理句柄和声明使用纹理句柄。
                 // Set render target texture handle and declare usage texture handle.
                 // レンダーターゲットテクスチャハンドルを設定し、使用テクスチャハンドルを宣言します。
                 builder.SetRenderAttachment(destination, 0, AccessFlags.Write);
                 builder.UseTexture(source, AccessFlags.Read);
-            
+
+                // 独立透明度场：第二源(RG)读、第二目标(RG)写，与颜色共用同一批模糊偏移。 // Opacity field: read 2nd source (RG), write 2nd target (RG), sharing the same offsets. // 独立透明度場：第二源/目標(RG)。
+                if (opacityField)
+                {
+                    builder.SetRenderAttachment(opacityDest, 1, AccessFlags.Write);
+                    builder.UseTexture(opacitySource, AccessFlags.Read);
+                }
+
                 // 设置绘制方法。 // Set drawing method. // 描画メソッドを設定します。
                 builder.SetRenderFunc((PassData data, RasterGraphContext context) => ExecutePassBlur(data, context));
             }
@@ -818,6 +1141,9 @@ namespace Fs.Liquid2D
             mpb.SetFloat(ShaderIds.BlurOffsetId, offset); // 设置模糊偏移强度。 // Set blur offset intensity. // ブラーオフセット強度を設定します。
             // 是否忽略背景色。 // Whether to ignore background color. // 背景色を無視するかどうか。
             SetKeyword(data.MaterialBlur, "_IGNORE_BG_COLOR", data.Settings.Blur.IgnoreBgColor);
+            // 独立透明度场：开启第二渲染目标输出并绑定 RG 源。关键字须与 SetRenderAttachment 的目标数一致。 // Opacity field: enable the 2nd output and bind the RG source; keyword must match the attachment count. // 独立透明度場：第二出力 + RG 源。
+            SetKeyword(data.MaterialBlur, OpacityFieldKeyword, data.BlurOpacityField);
+            if (data.BlurOpacityField) mpb.SetTexture(ShaderIds.OpacityTex, data.BlurOpacitySource);
 
             // 绘制一个全屏三角形，使用模糊材质，并传入属性块。
             // Draw a full-screen triangle using blur material and pass in property block.
@@ -868,6 +1194,10 @@ namespace Fs.Liquid2D
             mpb.SetFloat(ShaderIds.Cutoff, data.Settings.Cutoff); // 裁剪阈值。 //Cutoff threshold. //カットオフ閾値。
             mpb.SetTexture(ShaderIds.BackgroundTex, data.SourceTh); // 背景纹理。用于扰动采样。 //Background texture. Used for distortion sampling. //背景テクスチャ。歪みサンプリングに使用。
 
+            // 独立透明度场：切换关键字并绑定最终透明度图(RG)，shader 内 O=R/G 并入最终 alpha。 // Opacity field: toggle keyword and bind the final RG texture; shader O=R/G into final alpha. // 独立透明度場：キーワード切替 + RG 束縛。
+            SetKeyword(data.MaterialEffect, OpacityFieldKeyword, data.EffectOpacityField);
+            if (data.EffectOpacityField) mpb.SetTexture(ShaderIds.OpacityTex, data.EffectOpacityTh);
+
             // 流体遮挡纹理。 // Fluid occluder texture. // 流体オクルーダーテクスチャ。
             SetKeyword(data.MaterialEffect, "_OCCLUDER_ENABLE", data.IsHaveOccluder);
             if (data.IsHaveOccluder)
@@ -879,9 +1209,6 @@ namespace Fs.Liquid2D
             SetKeyword(data.MaterialEffect, "_OPACITY_MULTIPLY", data.Settings.OpacityMode == EOpacityMode.Multiply);
             SetKeyword(data.MaterialEffect, "_OPACITY_REPLACE", data.Settings.OpacityMode == EOpacityMode.Replace);
             mpb.SetFloat(ShaderIds.OpacityValue, data.Settings.OpacityValue); // 透明度值。 // Opacity value. //透明度値。
-            
-            // 覆盖颜色。透明度值是强度。 // Cover color. Opacity value is intensity. // カバー色。透明度値は強度です。
-            mpb.SetColor(ShaderIds.CoverColorId, data.Settings.CoverColor);
 
             SetKeyword(data.MaterialEffect, "_EDGE_ENABLE", data.Settings.Edge.Enable);
             if (data.Settings.Edge.Enable)
