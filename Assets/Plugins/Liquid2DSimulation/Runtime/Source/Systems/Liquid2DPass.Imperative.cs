@@ -133,6 +133,48 @@ namespace Fs.Liquid2D
         private readonly float[] _opacityArrayCache = new float[MaxInstancesPerBatch];
         private readonly Plane[] _frustumPlanes = new Plane[6];
 
+        // 描述符绘制顺序缓存（按 RenderOrder 升序的 typeId 列：值小者先画=下层、值大者后画=上层）。复用避免每帧分配。
+        // Descriptor draw-order cache (typeIds sorted ascending by RenderOrder: smaller draws first = below, larger last = on top). Reused to avoid per-frame allocation.
+        // 記述子の描画順キャッシュ（RenderOrder 昇順の typeId 列）。再利用。
+        private readonly List<int> _drawOrderCache = new List<int>(16);
+        private readonly DescriptorDrawOrderComparer _drawOrderComparer = new DescriptorDrawOrderComparer();
+
+        // 描述符绘制顺序比较器：按 RenderSettings.RenderOrder 升序排序 typeId；同值按 typeId 升序（=注册顺序）保证确定。复用单实例避免每帧分配。
+        // Descriptor draw-order comparer: sorts typeIds ascending by RenderOrder; ties break by typeId (registration order) for determinism. Single reused instance.
+        // 記述子の描画順コンパレータ：RenderOrder 昇順、同値は typeId 昇順で決定的に。単一インスタンスを再利用。
+        private sealed class DescriptorDrawOrderComparer : IComparer<int>
+        {
+            public IReadOnlyList<Liquid2DParticleDescriptor> Descriptors;
+
+            public int Compare(int a, int b)
+            {
+                int c = OrderOf(a).CompareTo(OrderOf(b));
+                return c != 0 ? c : a.CompareTo(b);
+            }
+
+            private int OrderOf(int typeId)
+            {
+                var d = Descriptors[typeId];
+                var rs = d ? d.RenderSettings : null;
+                return rs != null ? rs.RenderOrder : 0;
+            }
+        }
+
+        // 按 RenderOrder 生成描述符绘制顺序，填入复用列表。值小者先画（下层）、值大者后画（上层）；同值按 typeId 稳定。order 内是真实 typeId（绘制时仍用它做 typeArr==t 过滤与 _TargetType）。
+        // Build the descriptor draw order by RenderOrder into the reused list. The list holds real typeIds (still used for the typeArr==t filter and _TargetType at draw time). // RenderOrder で描画順を生成。値は実 typeId。
+        private static void BuildDrawOrder(
+            IReadOnlyList<Liquid2DParticleDescriptor> descriptors, List<int> order, DescriptorDrawOrderComparer comparer)
+        {
+            order.Clear();
+            int n = descriptors.Count;
+            for (int t = 0; t < n; t++) order.Add(t);
+            if (n > 1)
+            {
+                comparer.Descriptors = descriptors;
+                order.Sort(comparer);
+            }
+        }
+
         private readonly MaterialPropertyBlock _mpbParticle = new MaterialPropertyBlock();
         private readonly MaterialPropertyBlock _mpbBlur = new MaterialPropertyBlock();
         private readonly MaterialPropertyBlock _mpbEffect = new MaterialPropertyBlock();
@@ -433,8 +475,13 @@ namespace Fs.Liquid2D
             // Whether to convert the store's authored sRGB colors to linear before upload (aligning with the CPU draw path and the gradient LUT's upload boundary). // 上传前に sRGB→linear が要るか。
             bool toLinear = Liquid2DColorSpace.IsLinear;
 
-            for (int t = 0; t < descriptors.Count; t++)
+            // 按描述符 RenderOrder 生成稳定绘制顺序（值大者后画=在上层），消除多色流体重叠时因生成/销毁时序导致的随机遮挡。 // Stable draw order by RenderOrder (larger draws last = on top). // RenderOrder で安定描画順。
+            var drawOrder = _drawOrderCache;
+            BuildDrawOrder(descriptors, drawOrder, _drawOrderComparer);
+
+            for (int oi = 0; oi < drawOrder.Count; oi++)
             {
+                int t = drawOrder[oi];
                 var d = descriptors[t];
                 if (!d || !d.IsValid()) continue;
                 var settings = d.RenderSettings;
@@ -549,9 +596,14 @@ namespace Fs.Liquid2D
             // 独立透明度场：GPU 路径为共享材质，关键字整批统一切换（须与 Pass 绑定的渲染目标数一致）。 // Shared GPU material: toggle the keyword once for the whole batch. // 共有材質のためバッチ一括切替。
             SetKeyword(gpuMat, OpacityFieldKeyword, useOpacityField);
 
+            // 与 CPU 路径一致：按描述符 RenderOrder 生成稳定绘制顺序（值大者后画=在上层）。 // Same as the CPU path: stable draw order by RenderOrder (larger draws last = on top). // CPU パスと同様に RenderOrder で安定描画順。
+            var drawOrder = _drawOrderCache;
+            BuildDrawOrder(descriptors, drawOrder, _drawOrderComparer);
+
             string nameTag = _settings.NameTag;
-            for (int t = 0; t < descriptors.Count; t++)
+            for (int oi = 0; oi < drawOrder.Count; oi++)
             {
+                int t = drawOrder[oi];
                 var d = descriptors[t];
                 if (!d || !d.IsValid()) continue;
                 var settings = d.RenderSettings;

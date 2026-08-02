@@ -27,6 +27,7 @@ namespace Fs.Liquid2D.Editor
         private SerializedProperty _material;
         private SerializedProperty _color;
         private SerializedProperty _nameTag;
+        private SerializedProperty _renderOrder;
         private SerializedProperty _colorMode;
         private SerializedProperty _colorGradient;
         private SerializedProperty _gradientOpacity;
@@ -53,6 +54,7 @@ namespace Fs.Liquid2D.Editor
                 _material = _renderSettings.FindPropertyRelative("Material");
                 _color = _renderSettings.FindPropertyRelative("Color");
                 _nameTag = _renderSettings.FindPropertyRelative("NameTag");
+                _renderOrder = _renderSettings.FindPropertyRelative("RenderOrder");
                 _colorMode = _renderSettings.FindPropertyRelative("ColorMode");
                 _colorGradient = _renderSettings.FindPropertyRelative("ColorGradient");
                 _gradientOpacity = _renderSettings.FindPropertyRelative("GradientOpacity");
@@ -89,6 +91,7 @@ namespace Fs.Liquid2D.Editor
             EditorGUILayout.Space();
 
             DrawNameTagRow();
+            DrawRenderOrderRow();
             DrawSpriteRow();
             DrawMaterialRow();
             DrawSpritePreview();
@@ -203,6 +206,16 @@ namespace Fs.Liquid2D.Editor
                 EditorGUILayout.EndHorizontal();
                 EditorGUI.indentLevel--;
             }
+        }
+
+        // 渲染层级（RenderOrder）：决定同一 Feature 下多个不同颜色描述符重叠时的绘制先后（值大者在上层）。
+        // RenderSettings 在本编辑器中手绘并排除于默认绘制，故此字段须显式绘制。
+        // Render order: decides the draw order when multiple differently-colored descriptors overlap under the same Feature (larger = on top).
+        // RenderSettings is hand-drawn and excluded from default drawing, so this field must be drawn explicitly. // 描画順を明示的に描画。
+        private void DrawRenderOrderRow()
+        {
+            if (_renderOrder == null) return;
+            EditorGUILayout.PropertyField(_renderOrder, new GUIContent("Render Order", _renderOrder.tooltip));
         }
 
         private void DrawSpriteRow()

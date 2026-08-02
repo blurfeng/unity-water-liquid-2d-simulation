@@ -127,6 +127,12 @@ namespace Fs.Liquid2D
         // 视锥平面缓存。复用以避免每帧分配。 // Frustum planes cache. Reused to avoid per-frame allocation. // 視錐台平面キャッシュ。毎フレームの割り当てを避けるため再利用。
         private readonly Plane[] _frustumPlanes = new Plane[6];
 
+        // 描述符绘制顺序缓存（按 RenderOrder 升序排出的 typeId 列表：值小者先画=下层，值大者后画=上层）。复用避免每帧分配。
+        // Descriptor draw-order cache (typeIds sorted ascending by RenderOrder: smaller draws first = below, larger draws last = on top). Reused to avoid per-frame allocation.
+        // 記述子の描画順キャッシュ（RenderOrder 昇順の typeId 列）。毎フレームの割り当てを回避するため再利用。
+        private readonly List<int> _drawOrderCache = new List<int>(16);
+        private readonly DescriptorDrawOrderComparer _drawOrderComparer = new DescriptorDrawOrderComparer();
+
         // 各 Pass 复用的 MaterialPropertyBlock，避免每帧/每 Pass 重新分配。
         // (CommandBuffer 在调用绘制时会拷贝 MPB 内容，因此跨顺序执行的 Pass 复用同一实例是安全的。)
         // Reusable MaterialPropertyBlock per pass, to avoid per-frame/per-pass allocation.
@@ -181,6 +187,47 @@ namespace Fs.Liquid2D
             CoreUtils.Destroy(_quadMesh);
         }
 
+        // 描述符绘制顺序比较器：按 RenderSettings.RenderOrder 升序排序 typeId；RenderOrder 相同时按 typeId 升序（=注册顺序）作稳定次序，保证结果确定。
+        // 复用单实例（每帧排序前设 Descriptors），避免闭包/委托的每帧分配。仅比较少量描述符，开销可忽略。
+        // Descriptor draw-order comparer: sorts typeIds ascending by RenderSettings.RenderOrder; ties break by typeId (= registration order)
+        // for a deterministic total order. A single reused instance (Descriptors set before each sort) avoids per-frame closure/delegate allocation.
+        // 記述子の描画順コンパレータ：RenderOrder 昇順、同値は typeId 昇順（登録順）で決定的に。単一インスタンスを再利用。
+        private sealed class DescriptorDrawOrderComparer : IComparer<int>
+        {
+            public IReadOnlyList<Liquid2DParticleDescriptor> Descriptors;
+
+            public int Compare(int a, int b)
+            {
+                int c = OrderOf(a).CompareTo(OrderOf(b));
+                return c != 0 ? c : a.CompareTo(b);
+            }
+
+            private int OrderOf(int typeId)
+            {
+                var d = Descriptors[typeId];
+                var rs = d ? d.RenderSettings : null;
+                return rs != null ? rs.RenderOrder : 0;
+            }
+        }
+
+        // 按 RenderOrder 生成描述符绘制顺序，填入复用列表。值小者先画（下层）、值大者后画（上层）；同值按 typeId 稳定。
+        // ⚠ order 内是真实 typeId：绘制时仍用它做 typeArr==t 过滤与 _TargetType 设置，故本函数仅改变外层遍历顺序，不影响分组正确性。
+        // Build the descriptor draw order by RenderOrder into the reused list. Smaller draws first (below), larger draws last (on top);
+        // ties stable by typeId. The list holds real typeIds (still used for the typeArr==t filter and _TargetType at draw time), so this
+        // only reorders the outer iteration and never breaks grouping. // RenderOrder で描画順を生成。値は実 typeId。
+        private static void BuildDrawOrder(
+            IReadOnlyList<Liquid2DParticleDescriptor> descriptors, List<int> order, DescriptorDrawOrderComparer comparer)
+        {
+            order.Clear();
+            int n = descriptors.Count;
+            for (int t = 0; t < n; t++) order.Add(t);
+            if (n > 1)
+            {
+                comparer.Descriptors = descriptors;
+                order.Sort(comparer);
+            }
+        }
+
         private class PassData
         {
             public UniversalCameraData CameraData;
@@ -207,6 +254,12 @@ namespace Fs.Liquid2D
             public float[] OpacityArrayCache; // CPU 路径逐实例 O 数组（引用 Pass 实例缓存）。 // CPU path per-instance O array. // CPU 逐実例 O。
             public Plane[] FrustumPlanes;
             public Mesh QuadMesh;
+
+            // 描述符绘制顺序：复用列表与比较器（引用 Pass 实例缓存），CPU/GPU 两条绘制路径据此按 RenderOrder 遍历描述符。
+            // Descriptor draw order: reused list + comparer (referencing Pass caches); both the CPU and GPU draw paths iterate descriptors by RenderOrder.
+            // 記述子の描画順：再利用リストとコンパレータ（Pass キャッシュ参照）。
+            public List<int> DrawOrder;
+            public DescriptorDrawOrderComparer DrawOrderComparer;
 
             // 独立透明度场：本 Feature 本帧是否启用（有非恒1透明度曲线的粒子且非场景视图）。粒子绘制据此绑定第二渲染目标并开启关键字。
             // Independent opacity field: whether it is active this frame (some particle has a non-constant-1 opacity curve and not
@@ -366,6 +419,8 @@ namespace Fs.Liquid2D
                 passData.FrustumPlanes = _frustumPlanes;
                 passData.Mpb = _mpbParticle;
                 passData.OpacityFieldActive = useOpacityField;
+                passData.DrawOrder = _drawOrderCache; // 描述符绘制顺序（按 RenderOrder）。 // descriptor draw order (by RenderOrder). // 記述子描画順。
+                passData.DrawOrderComparer = _drawOrderComparer;
 
                 // GPU 常驻模式：取 GPU 缓冲直读绘制（DrawProcedural），否则走 CPU 路径。
                 // GPU resident mode: read GPU buffers and draw via DrawProcedural; otherwise the CPU path.
@@ -817,8 +872,15 @@ namespace Fs.Liquid2D
             // Whether to convert the store's authored sRGB colors to linear before upload (aligning with the CPU draw path and the gradient LUT's upload boundary). Cached outside the loop to avoid a per-particle color-space query. // 上传前に sRGB→linear が要るか。ループ外でキャッシュ。
             bool toLinear = Liquid2DColorSpace.IsLinear;
 
-            for (int t = 0; t < descriptors.Count; t++)
+            // 按描述符 RenderOrder 生成稳定的绘制顺序（值大者后画=在上层），消除多色流体重叠时因生成/销毁时序导致的随机遮挡。
+            // Build a stable draw order by RenderOrder (larger draws last = on top), removing the spawn/despawn-timing-driven random occlusion when multi-color fluids overlap.
+            // 記述子の RenderOrder で安定した描画順を生成（値が大きいほど後 = 上層）、多色流体重なりのランダム遮蔽を解消。
+            var drawOrder = data.DrawOrder;
+            BuildDrawOrder(descriptors, drawOrder, data.DrawOrderComparer);
+
+            for (int oi = 0; oi < drawOrder.Count; oi++)
             {
+                int t = drawOrder[oi];
                 var d = descriptors[t];
                 // 跳过无效组（缺少贴图或材质则无法绘制）。 // Skip invalid groups (cannot draw without sprite or material). // 無効なグループをスキップ。
                 if (d == null || !d.IsValid()) continue;
@@ -955,8 +1017,13 @@ namespace Fs.Liquid2D
             // 独立透明度场：GPU 路径为共享材质，关键字整批统一切换（须与 Pass 绑定的渲染目标数一致）。 // Shared GPU material: toggle the keyword once for the whole batch (must match the Pass's attachment count). // 共有材質のためバッチ一括切替。
             SetKeyword(data.GPUMaterial, OpacityFieldKeyword, data.OpacityFieldActive);
 
-            for (int t = 0; t < descriptors.Count; t++)
+            // 与 CPU 路径一致：按描述符 RenderOrder 生成稳定绘制顺序（值大者后画=在上层）。 // Same as the CPU path: stable draw order by RenderOrder (larger draws last = on top). // CPU パスと同様に RenderOrder で安定描画順。
+            var drawOrder = data.DrawOrder;
+            BuildDrawOrder(descriptors, drawOrder, data.DrawOrderComparer);
+
+            for (int oi = 0; oi < drawOrder.Count; oi++)
             {
+                int t = drawOrder[oi];
                 var d = descriptors[t];
                 if (d == null || !d.IsValid()) continue;
                 var settings = d.RenderSettings;

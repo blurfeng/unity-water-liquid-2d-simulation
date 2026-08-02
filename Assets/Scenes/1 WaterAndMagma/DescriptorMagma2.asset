@@ -108,6 +108,7 @@ MonoBehaviour:
       m_RotationOrder: 4
     GradientSmoothing: 0.93
     NameTag: Magma
+    RenderOrder: 2
   MixSettings:
     MixColors: 0
     MixColorsRadiusRate: 2

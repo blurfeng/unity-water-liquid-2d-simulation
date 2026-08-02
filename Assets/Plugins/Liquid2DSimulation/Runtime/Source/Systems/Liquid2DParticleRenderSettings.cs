@@ -114,6 +114,12 @@ namespace Fs.Liquid2D
             "2D流体レンダラーフィーチャーの名前タグ。異なるレンダラーフィーチャー構成に対応する流体パーティクルを区別するために使用されます。ボリュームを使用して流体効果を制御する場合は、名前タグが一意であり、ボリュームプロファイルのタグと一致していることを確認してください。")]
         public string NameTag = "Liquid2D";
 
+        [LocalizationTooltip(
+             "渲染层级（绘制先后）。当同一 Feature（相同 NameTag）下有多个不同颜色的粒子描述符相互重叠时，决定它们的绘制先后：值越大越后绘制、越显示在上层（覆盖值更小的）；同值时按注册顺序。仅影响不同描述符之间的层叠关系，不改变物理，也不影响同一描述符内部。用于让多色流体（如岩浆的三种颜色）叠加结果稳定、可控，消除因生成/销毁时序导致的随机遮挡。",
+             "Render order (draw priority). When multiple particle descriptors of different colors overlap under the same Feature (same NameTag), this decides their draw order: a larger value draws later and appears on top (covering smaller values); ties keep registration order. Only affects layering between different descriptors — not physics, and not within a single descriptor. Use it to make multi-color fluids (e.g. lava's three colors) composite in a stable, controllable way, removing the random occlusion caused by spawn/despawn timing.",
+             "描画順序（描画優先度）。同じ Feature（同一 NameTag）下で異なる色の複数の粒子記述子が重なる際、その描画順を決定します：値が大きいほど後に描画され上（前面）に表示され、小さい値を覆います。同値は登録順。物理には影響せず、単一記述子の内部にも影響しません。多色流体（溶岩の3色など）の合成を安定・制御可能にし、生成/破棄タイミングによるランダムな遮蔽を解消します。")]
+        public int RenderOrder = 0;
+
         // 无参构造函数：必须存在，否则 Unity 自动实例化本可序列化嵌套类时不会调用任何构造函数，
         // 上方字段初始化器（C# 中编译进构造函数）不执行，所有默认值（Color / ColorMode / GradientSpeedMax /
         // GradientFoamStart / GradientFoamEnd 等）会落成类型零值（如 Foam Start/End = 0，映射退化）。
