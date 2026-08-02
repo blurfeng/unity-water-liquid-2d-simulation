@@ -34,6 +34,7 @@ namespace Fs.Liquid2D.Editor
         private SerializedProperty _gradientSpeedMax;
         private SerializedProperty _gradientFoamStart;
         private SerializedProperty _gradientFoamEnd;
+        private SerializedProperty _gradientImpactStrength;
         private SerializedProperty _gradientFoamPersistence;
         private SerializedProperty _gradientSmoothing;
 
@@ -56,6 +57,7 @@ namespace Fs.Liquid2D.Editor
                 _gradientSpeedMax = _renderSettings.FindPropertyRelative("GradientSpeedMax");
                 _gradientFoamStart = _renderSettings.FindPropertyRelative("GradientFoamStart");
                 _gradientFoamEnd = _renderSettings.FindPropertyRelative("GradientFoamEnd");
+                _gradientImpactStrength = _renderSettings.FindPropertyRelative("GradientImpactStrength");
                 _gradientFoamPersistence = _renderSettings.FindPropertyRelative("GradientFoamPersistence");
                 _gradientSmoothing = _renderSettings.FindPropertyRelative("GradientSmoothing");
             }
@@ -294,14 +296,19 @@ namespace Fs.Liquid2D.Editor
             if (_gradientSource != null)
                 EditorGUILayout.PropertyField(_gradientSource, new GUIContent("Gradient Source", _gradientSource.tooltip));
 
-            // 按子模式只显示相关参数：Speed→Speed Max；Foam→Foam Start/End；FoamWithSpeed→两者都要。
-            // Show only the relevant params per sub-mode: Speed→Speed Max; Foam→Foam Start/End; FoamWithSpeed→both.
-            // サブモード別に関連パラメータのみ表示：Speed→Speed Max、Foam→Foam Start/End、FoamWithSpeed→両方。
+            // 按子模式只显示相关参数：
+            //   Foam Start/End（密度门/贴图）→ Density / DensityWithImpact / DensityWithSpeed；Speed Min/Max（速度门/重映射）→ Speed / DensityWithSpeed；
+            //   Impact Strength → DensityWithImpact；Foam Persistence → DensityWithImpact / DensityWithSpeed。
+            // Show only the relevant params per sub-mode. // サブモード別に関連パラメータのみ表示。
             int src = _gradientSource != null ? _gradientSource.enumValueIndex : (int)EGradientColorSource.Speed;
-            bool usesFoam = src == (int)EGradientColorSource.Foam || src == (int)EGradientColorSource.FoamWithSpeed;
-            bool usesSpeed = src == (int)EGradientColorSource.Speed || src == (int)EGradientColorSource.FoamWithSpeed;
+            bool isImpact = src == (int)EGradientColorSource.DensityWithImpact;
+            bool isSpeedFoam = src == (int)EGradientColorSource.DensityWithSpeed;
+            // Foam Start/End：Density 作贴图，DensityWith* 作密度区域门。 // density map vs region gate. // 密度貼図/領域ゲート。
+            bool usesDensity = src == (int)EGradientColorSource.Density || isImpact || isSpeedFoam;
+            bool usesSpeed = src == (int)EGradientColorSource.Speed || isSpeedFoam; // Speed Min/Max：Speed 重映射，DensityWithSpeed 速度门控。 // remap vs speed gate. // 速度。
+            bool usesPersistence = isImpact || isSpeedFoam; // Foam Persistence：两个动态来源。 // both dynamic sources. // 動的 2 種。
 
-            if (usesFoam)
+            if (usesDensity)
             {
                 if (_gradientFoamStart != null)
                     EditorGUILayout.PropertyField(_gradientFoamStart, new GUIContent("Foam Start", _gradientFoamStart.tooltip));
@@ -326,7 +333,6 @@ namespace Fs.Liquid2D.Editor
                 if (_gradientSpeedMin != null)
                     EditorGUILayout.PropertyField(_gradientSpeedMin, new GUIContent("Speed Min", _gradientSpeedMin.tooltip));
 
-                // FoamWithSpeed 模式下 Speed Max 语义为「泡沫达到满强度所需的速度」。 // In FoamWithSpeed mode, Speed Max is "the speed at which foam reaches full strength". // FoamWithSpeed では「泡が最大になる速度」。
                 EditorGUILayout.PropertyField(_gradientSpeedMax, new GUIContent("Speed Max", _gradientSpeedMax.tooltip));
 
                 // Speed Min 应小于 Speed Max（否则速度重映射退化）。 // Speed Min should be less than Speed Max. // Speed Min < Speed Max。
@@ -363,16 +369,20 @@ namespace Fs.Liquid2D.Editor
                 }
             }
 
-            // 泡沫持久度（仅 FoamWithSpeed）：泡沫生成后按此时长逐渐消退，0=瞬时（旧行为）。 // Foam persistence (FoamWithSpeed only): foam fades over this duration; 0 = instantaneous (old behavior). // 泡持続（FoamWithSpeed のみ）。
-            if (src == (int)EGradientColorSource.FoamWithSpeed && _gradientFoamPersistence != null)
+            // Impact Strength 仅 DensityWithImpact（冲击=密度上升率）使用；密度门(Foam Start/End)与速度门(Speed Min/Max)在上方对应块显示。 // Impact Strength only for DensityWithImpact. // 衝撃感度。
+            if (isImpact && _gradientImpactStrength != null)
+                EditorGUILayout.PropertyField(_gradientImpactStrength, new GUIContent("Impact Strength", _gradientImpactStrength.tooltip));
+
+            // Foam Persistence：两个动态来源（DensityWithImpact / DensityWithSpeed）都用——生成后按此时长消退。 // both dynamic sources. // 消退時長。
+            if (usesPersistence && _gradientFoamPersistence != null)
             {
                 EditorGUILayout.PropertyField(_gradientFoamPersistence, new GUIContent("Foam Persistence", _gradientFoamPersistence.tooltip));
                 if (_gradientFoamPersistence.floatValue <= 0f)
                 {
                     EditorGUILayout.HelpBox(
-                        L("Foam Persistence = 0：泡沫无持久度，随生成量瞬时变化（等于旧行为）。设为 >0 可让泡沫在流体静止后按此时长（秒）逐渐消退：海浪≈0.4~1.2、奶泡≈3~8、啤酒≈8~20。",
-                            "Foam Persistence = 0: foam has no persistence and follows the instantaneous generation (the old behavior). Set > 0 so foam fades over this many seconds after the fluid settles: sea≈0.4~1.2, milk≈3~8, beer≈8~20.",
-                            "Foam Persistence = 0：泡は持続せず生成量に瞬時追従（旧動作）。>0 にすると流体が静止後この秒数で徐々に消えます：波≈0.4~1.2、ミルク≈3~8、ビール≈8~20。"),
+                        L("Foam Persistence = 0：泡沫只在生成那一刻出现、瞬间消失。设为 >0 可让泡沫在生成后按此时长（秒）逐渐消退：海浪≈0.4~1.2、奶泡≈3~8、啤酒≈8~20。",
+                            "Foam Persistence = 0: foam appears only at the instant it is generated and vanishes immediately. Set > 0 so foam fades over this many seconds: sea≈0.4~1.2, milk≈3~8, beer≈8~20.",
+                            "Foam Persistence = 0：泡は生成の瞬間のみ現れ即消えます。>0 にするとこの秒数で徐々に消えます：波≈0.4~1.2、ミルク≈3~8、ビール≈8~20。"),
                         MessageType.Info);
                 }
             }

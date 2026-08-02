@@ -96,7 +96,7 @@ namespace Fs.Liquid2D
 
         // 容量级缓冲（slot 索引，扩容时保状态重建）。 // Capacity-level buffers (slot-indexed). // 容量レベルバッファ。
         private ComputeBuffer _positions, _predicted, _velocities, _velNext, _densities, _colors, _colorsNext, _lastMix;
-        // 渲染用平滑标量 float3 (x=密度, y=速度, z=FoamWithSpeed 泡沫累加器 F)（EMA/累加，渐变渲染直读）。合并为单缓冲以规避 D3D11 每 kernel 8 UAV 上限（ScatterSpawn 触顶）。 // Render-only smoothed scalars float3 (x=density, y=speed, z=FoamWithSpeed accumulator F), merged into one buffer to stay within D3D11's 8-UAV-per-kernel limit. // レンダー用平滑スカラー float3。
+        // 渲染用平滑标量 float3 (x=密度, y=速度, z=Impact 冲击泡沫累加器 F)（EMA/累加，渐变渲染直读）。合并为单缓冲以规避 D3D11 每 kernel 8 UAV 上限（ScatterSpawn 触顶）。 // Render-only smoothed scalars float3 (x=density, y=speed, z=Impact accumulator F), merged into one buffer to stay within D3D11's 8-UAV-per-kernel limit. // レンダー用平滑スカラー float3。
         private ComputeBuffer _renderScalars;
         private ComputeBuffer _radii, _invMass, _typeId, _groupId;
         // count 级。 // count-level.
@@ -109,8 +109,8 @@ namespace Fs.Liquid2D
         private ComputeBuffer _materials, _mixDatas, _colliders, _points, _forceFields;
         // 按类型的渲染平滑 EMA 系数（numTypes 级，CPU 上传）。 // Per-type render-smoothing EMA factors (numTypes-level, uploaded by CPU). // 型ごとの平滑係数。
         private ComputeBuffer _renderGradientKBuf;
-        // 按类型的 FoamWithSpeed 泡沫累加器生成参数（numTypes 级，stride 24，CPU 上传；CopyColor 按 TypeId 读）。 // Per-type FoamWithSpeed foam-accumulator gen params (numTypes-level, stride 24, uploaded by CPU; CopyColor reads by TypeId). // 型ごとの泡累加器生成パラメータ。
-        private ComputeBuffer _renderFoamParamsBuf;
+        // 按类型的动态泡沫累加器参数（numTypes 级，stride 32，CPU 上传；CopyColor 按 TypeId 读）。 // Per-type dynamic-foam accumulator params (numTypes-level, stride 32, uploaded by CPU; CopyColor reads by TypeId). // 型ごとの動的泡累加器パラメータ。
+        private ComputeBuffer _renderDynamicFoamParamsBuf;
         // 动态体接触累积（合并为单个缓冲，规避 D3D11 每 kernel 8 UAV 上限）：每体 _accumStride 个 int 通道，通道定义见 _accum* 常量与 shader ACCUM_*。
         // Per-body contact accumulation merged into one buffer (works around D3D11's 8-UAV-per-kernel limit): _accumStride int channels per body.
         // 動的体の接触累積を単一バッファに統合（D3D11 の 8 UAV 制限回避）。
@@ -563,7 +563,7 @@ namespace Fs.Liquid2D
         {
             Ensure(ref _materials, numTypes, 36); Ensure(ref _mixDatas, numTypes, 20);
             Ensure(ref _renderGradientKBuf, numTypes, 4);
-            Ensure(ref _renderFoamParamsBuf, numTypes, 24); // FoamGenParams：6 floats = 24 bytes（与 Liquid2DFoamGenParams / compute struct 对齐）。 // 6 floats = 24 bytes. // 24 バイト。
+            Ensure(ref _renderDynamicFoamParamsBuf, numTypes, 32); // DynamicFoamParams：7 float + 1 int = 32 bytes（与 Liquid2DDynamicFoamParams / compute struct 对齐）。 // 8×4 = 32 bytes. // 32 バイト。
             Ensure(ref _colliders, Mathf.Max(1, numColliders), 88); Ensure(ref _points, Mathf.Max(1, numPoints), 8);
             Ensure(ref _bodyAccum, numBodies * _accumStride, 4);
             Ensure(ref _forceFields, Mathf.Max(1, numForceFields), 44);
@@ -590,9 +590,9 @@ namespace Fs.Liquid2D
             if (ctx.RenderGradientK is { IsCreated: true, Length: > 0 } && _renderGradientKBuf != null)
                 _renderGradientKBuf.SetData(ctx.RenderGradientK, 0, 0, Mathf.Min(ctx.RenderGradientK.Length, _renderGradientKBuf.count));
 
-            // 按类型的 FoamWithSpeed 泡沫累加器生成参数（CopyColor 用）。 // Per-type FoamWithSpeed foam-accumulator gen params (used by CopyColor). // 型ごとの泡累加器生成パラメータ。
-            if (ctx.RenderFoamParams is { IsCreated: true, Length: > 0 } && _renderFoamParamsBuf != null)
-                _renderFoamParamsBuf.SetData(ctx.RenderFoamParams, 0, 0, Mathf.Min(ctx.RenderFoamParams.Length, _renderFoamParamsBuf.count));
+            // 按类型的动态泡沫累加器参数（CopyColor 用）。 // Per-type dynamic-foam accumulator params (used by CopyColor). // 型ごとの動的泡累加器パラメータ。
+            if (ctx.RenderDynamicFoamParams is { IsCreated: true, Length: > 0 } && _renderDynamicFoamParamsBuf != null)
+                _renderDynamicFoamParamsBuf.SetData(ctx.RenderDynamicFoamParams, 0, 0, Mathf.Min(ctx.RenderDynamicFoamParams.Length, _renderDynamicFoamParamsBuf.count));
 
             EnsureArray(ref _mixA, numTypes);
             int mixN = ctx.MixData.IsCreated ? ctx.MixData.Length : 0;
@@ -639,7 +639,7 @@ namespace Fs.Liquid2D
             Bind("Positions", _positions); Bind("Predicted", _predicted); Bind("Velocities", _velocities);
             Bind("VelNext", _velNext); Bind("Densities", _densities);
             Bind("RenderScalars", _renderScalars); Bind("RenderGradientK", _renderGradientKBuf);
-            Bind("RenderFoamParams", _renderFoamParamsBuf); Bind("Colors", _colors);
+            Bind("RenderDynamicFoamParams", _renderDynamicFoamParamsBuf); Bind("Colors", _colors);
             Bind("ColorsNext", _colorsNext); Bind("LastMixTime", _lastMix); Bind("Radii", _radii);
             Bind("InvMass", _invMass); Bind("TypeId", _typeId); Bind("GroupId", _groupId);
             Bind("ActiveIndices", _active); Bind("Materials", _materials); Bind("MixDatas", _mixDatas);
@@ -734,7 +734,7 @@ namespace Fs.Liquid2D
         {
             positions = _positions; colors = _colors; radii = _radii; typeIds = _typeId; activeIndices = _active;
             velocities = _velocities;
-            // 渲染读平滑后的标量 float3 (x=密度, y=速度, z=FoamWithSpeed 泡沫累加器 F)，非物理原始 _densities（float2）/ _velocities（float2）。 // render reads the smoothed scalars float3 (x=density, y=speed, z=FoamWithSpeed accumulator F), not the raw physics buffers. // 平滑スカラーを返す。
+            // 渲染读平滑后的标量 float3 (x=密度, y=速度, z=Impact 冲击泡沫累加器 F)，非物理原始 _densities（float2）/ _velocities（float2）。 // render reads the smoothed scalars float3 (x=density, y=speed, z=Impact accumulator F), not the raw physics buffers. // 平滑スカラーを返す。
             renderScalars = _renderScalars;
             count = _lastCount;
             return _valid && _positions != null && _active != null && _lastCount > 0;
@@ -777,7 +777,7 @@ namespace Fs.Liquid2D
             R(_radii); R(_invMass); R(_typeId); R(_groupId);
             R(_active); R(_bucketOf); R(_sortedSlots); R(_killFlags); R(_counts); R(_cellStart); R(_cursor);
             R(_blockSums); R(_scanMismatch);
-            R(_materials); R(_mixDatas); R(_renderGradientKBuf); R(_renderFoamParamsBuf); R(_colliders); R(_points); R(_forceFields);
+            R(_materials); R(_mixDatas); R(_renderGradientKBuf); R(_renderDynamicFoamParamsBuf); R(_colliders); R(_points); R(_forceFields);
             R(_bodyAccum);
             R(_deadZones); R(_deadZonePoints);
             R(_upSlots); R(_upPos); R(_upVel); R(_upColor);

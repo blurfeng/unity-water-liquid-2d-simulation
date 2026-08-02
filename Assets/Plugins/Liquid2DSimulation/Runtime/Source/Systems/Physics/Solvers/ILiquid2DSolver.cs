@@ -5,26 +5,35 @@ using Unity.Mathematics;
 namespace Fs.Liquid2D
 {
     /// <summary>
-    /// FoamWithSpeed 渐变来源的「泡沫累加器」逐类型生成参数（预算好的常量，避免热循环里除法）。字段顺序/布局必须与
-    /// Compute Shader（Liquid2DSph.compute）中的 <c>struct FoamGenParams</c> 逐字段一致（GPU 直接 SetData 上传）。
-    /// Per-type generation params for the FoamWithSpeed "foam accumulator" (precomputed to avoid divides in the hot loop).
-    /// The field order/layout MUST match <c>struct FoamGenParams</c> in the compute shader (Liquid2DSph.compute) exactly (uploaded via SetData).
-    /// FoamWithSpeed「泡累加器」の型ごと生成パラメータ。フィールド順は compute の FoamGenParams と一致必須。
+    /// Impact 渐变来源的「冲击泡沫累加器」逐类型参数（预算好的常量）。字段顺序/布局必须与 Compute Shader
+    /// （Liquid2DSph.compute）中的 <c>struct DynamicFoamParams</c> 逐字段一致（GPU 直接 SetData 上传）。
+    /// 动态泡沫（DensityWithImpact / DensityWithSpeed）逐类型参数（预算好的常量）。生成量 = 密度区域门 × 动态因子：
+    /// 区域门 = 密度亏空(FoamStart/FoamRangeInv，FoamStart 卡在内部/水底密度以下→排除内部)；动态因子 = Mode==1 ? 速度门控(saturate((平滑速度−SpeedMin)·SpeedRangeInv)) : 冲击(saturate((Δ平滑密度·InvRestDensity)·ImpactStrength))。
+    /// F = max(F·Decay, 生成量)。内部/水底（区域门0）不产泡；平静/未压实（动态因子0）不产泡且已有泡消退。
+    /// Per-type params for the dynamic foam (DensityWithImpact / DensityWithSpeed), precomputed. Field order/layout MUST match
+    /// <c>struct DynamicFoamParams</c> in Liquid2DSph.compute (uploaded via SetData). generation = densityGate × dynamicFactor:
+    /// densityGate = density deficit (FoamStart/FoamRangeInv); dynamicFactor = Mode==1 ? speedGate(saturate((smoothedSpeed−SpeedMin)·SpeedRangeInv)) : impact(saturate((Δsmoothed·InvRestDensity)·ImpactStrength)).
+    /// F = max(F·Decay, generation).
+    /// 動的泡（DensityWithImpact / DensityWithSpeed）の型ごとパラメータ。generation = 密度領域ゲート × 動的因子。フィールド順は compute の DynamicFoamParams と一致必須。
     /// </summary>
-    public struct Liquid2DFoamGenParams
+    public struct Liquid2DDynamicFoamParams
     {
-        /// <summary>起泡上界（密度比）。 // foam upper bound (density ratio). // 泡立ち上界。</summary>
-        public float FoamStart;
-        /// <summary>= 1/(FoamStart − FoamEnd)，密度亏空归一化。 // foam-deficit normalization. // 密度不足の正規化。</summary>
-        public float FoamRangeInv;
-        /// <summary>速度门控下限。 // speed-gate lower bound. // 速度ゲート下限。</summary>
-        public float SpeedMin;
-        /// <summary>= 1/(SpeedMax − SpeedMin)，速度门控归一化。 // speed-gate normalization. // 速度ゲート正規化。</summary>
-        public float SpeedRangeInv;
-        /// <summary>= 1/静止密度，把 SPH 密度归一化为密度比。 // 1/rest density. // 静止密度の逆数。</summary>
+        /// <summary>= 1/静止密度，把密度/变化量归一化为密度比。 // 1/rest density. // 静止密度の逆数。</summary>
         public float InvRestDensity;
-        /// <summary>每帧衰减系数 = exp(−fixedDeltaTime/持久度秒)；0=不持久（F=gen）。 // per-step decay; 0 = not persistent. // 減衰係数。</summary>
+        /// <summary>冲击灵敏度（Mode==0/DensityWithImpact）。 // impact sensitivity (Mode==0). // 衝撃感度。</summary>
+        public float ImpactStrength;
+        /// <summary>每帧衰减系数 = exp(−fixedDeltaTime/持久度秒)；0=不持久（F=生成量）。 // per-step decay; 0 = not persistent. // 減衰係数。</summary>
         public float Decay;
+        /// <summary>区域门上界（密度比）：密度比低于此值才算有效区域（应卡在内部/水底密度以下以排除内部）。 // gate upper bound. // 領域ゲート上界。</summary>
+        public float FoamStart;
+        /// <summary>= 1/(FoamStart − FoamEnd)，区域门归一化。 // gate normalization. // 領域ゲート正規化。</summary>
+        public float FoamRangeInv;
+        /// <summary>速度门控下限（Mode==1/DensityWithSpeed）。 // speed-gate lower bound (Mode==1). // 速度ゲート下限。</summary>
+        public float SpeedMin;
+        /// <summary>= 1/(SpeedMax − SpeedMin)，速度门控归一化（Mode==1）。 // speed-gate normalization (Mode==1). // 速度ゲート正規化。</summary>
+        public float SpeedRangeInv;
+        /// <summary>动态因子选择：0=冲击（密度上升率），1=速度门控。 // dynamic factor: 0=impact, 1=speed. // 動的因子選択。</summary>
+        public int Mode;
     }
 
     /// <summary>
@@ -115,17 +124,14 @@ namespace Fs.Liquid2D
         [ReadOnly] public NativeArray<float> RenderGradientK;
 
         /// <summary>
-        /// 按类型（typeId）的 FoamWithSpeed 泡沫累加器生成参数（预算好的常量，供求解器每帧更新持久化泡沫值 F）。
-        /// 生成量 gen = saturate((FoamStart − 平滑密度·InvRestDensity)·FoamRangeInv) × saturate((平滑速度 − SpeedMin)·SpeedRangeInv)；
-        /// 累加器 F = max(F·Decay, gen)（快升慢降）。Decay = exp(−fixedDeltaTime/持久度秒)，0=不持久（F=gen，等于旧的瞬时 FoamWithSpeed）。
-        /// 仅 FoamWithSpeed 类型读取 F；其余类型 Decay=0，F 恒为瞬时值且不被渲染读取。不影响物理。
-        /// Per-type (typeId) FoamWithSpeed foam-accumulator generation params (precomputed constants; the solver updates the
-        /// persistent foam value F each frame). gen = saturate((FoamStart − smoothedDensity·InvRestDensity)·FoamRangeInv) ×
-        /// saturate((smoothedSpeed − SpeedMin)·SpeedRangeInv); F = max(F·Decay, gen). Decay = exp(−fixedDeltaTime/persistenceSec),
-        /// 0 = not persistent (F = gen, the old instantaneous FoamWithSpeed). Only FoamWithSpeed types read F. Does not affect physics.
-        /// 型ごと（typeId）の FoamWithSpeed 泡累加器生成パラメータ。gen と累加器 F を毎フレーム更新。物理には影響しません。
+        /// 按类型（typeId）的动态泡沫（DensityWithImpact / DensityWithSpeed）累加器参数（预算好的常量，供求解器每帧更新持久化泡沫值 F）。
+        /// 生成量 = 密度区域门 × 动态因子（冲击或速度，见 <see cref="Liquid2DDynamicFoamParams"/>）；F = max(F·Decay, 生成量)。
+        /// 仅动态泡沫类型读取 F；其余类型参数使动态因子为 0，F 恒为 0 且不被渲染读取。不影响物理。
+        /// Per-type (typeId) dynamic-foam (DensityWithImpact / DensityWithSpeed) accumulator params. generation = densityGate ×
+        /// dynamicFactor; F = max(F·Decay, generation). Only dynamic-foam types read F; others produce 0. Does not affect physics.
+        /// 型ごと（typeId）の動的泡累加器パラメータ。物理には影響しません。
         /// </summary>
-        [ReadOnly] public NativeArray<Liquid2DFoamGenParams> RenderFoamParams;
+        [ReadOnly] public NativeArray<Liquid2DDynamicFoamParams> RenderDynamicFoamParams;
 
         /// <summary>动态碰撞体数量（>0 时 GPU 才回读冲量）。 // Dynamic collider count (GPU reads impulse back only when >0). // 動的コライダー数。</summary>
         public int DynamicBodyCount;

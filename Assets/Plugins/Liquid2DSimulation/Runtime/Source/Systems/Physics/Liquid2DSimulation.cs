@@ -81,8 +81,8 @@ namespace Fs.Liquid2D
         private NativeArray<Liquid2DMixData> _mixData;
         // 按类型的渲染平滑 EMA 系数 k（=1−GradientSmoothing，非 Gradient 类型为 1=不平滑）。 // Per-type render-smoothing EMA factor k (=1−GradientSmoothing; 1 for non-Gradient types). // 型ごとの平滑係数。
         private NativeArray<float> _renderGradientK;
-        // 按类型的 FoamWithSpeed 泡沫累加器生成参数（含每帧衰减 = exp(−fixedDeltaTime/持久度)）。 // Per-type FoamWithSpeed foam-accumulator gen params (incl. per-step decay). // 型ごとの泡累加器生成パラメータ。
-        private NativeArray<Liquid2DFoamGenParams> _renderFoamParams;
+        // 按类型的动态泡沫（DensityWithImpact/Speed）累加器参数（含每帧衰减 = exp(−fixedDeltaTime/持久度)）。 // Per-type dynamic-foam accumulator params (incl. per-step decay). // 型ごとの動的泡累加器パラメータ。
+        private NativeArray<Liquid2DDynamicFoamParams> _renderDynamicFoamParams;
 
         // nameTag → groupId（0 为空标签通配）。 // nameTag → groupId (0 = empty-tag wildcard). // nameTag → groupId。
         private readonly Dictionary<string, int> _nameTagToGroup = new Dictionary<string, int>();
@@ -206,11 +206,11 @@ namespace Fs.Liquid2D
                 if (_materials.IsCreated) _materials.Dispose();
                 if (_mixData.IsCreated) _mixData.Dispose();
                 if (_renderGradientK.IsCreated) _renderGradientK.Dispose();
-                if (_renderFoamParams.IsCreated) _renderFoamParams.Dispose();
+                if (_renderDynamicFoamParams.IsCreated) _renderDynamicFoamParams.Dispose();
                 _materials = new NativeArray<Liquid2DMaterialData>(n, Allocator.Persistent);
                 _mixData = new NativeArray<Liquid2DMixData>(n, Allocator.Persistent);
                 _renderGradientK = new NativeArray<float>(n, Allocator.Persistent);
-                _renderFoamParams = new NativeArray<Liquid2DFoamGenParams>(n, Allocator.Persistent);
+                _renderDynamicFoamParams = new NativeArray<Liquid2DDynamicFoamParams>(n, Allocator.Persistent);
             }
             // 泡沫累加器每帧衰减 = exp(−fixedDeltaTime/持久度秒)：EnsureMaterials 每 FixedUpdate 调用一次，故用固定步长。
             // Foam-accumulator per-step decay = exp(−fixedDeltaTime/persistenceSec): EnsureMaterials runs once per FixedUpdate, so use the fixed timestep. // 減衰係数は固定ステップで算出。
@@ -228,38 +228,41 @@ namespace Fs.Liquid2D
                 _renderGradientK[i] = rs != null && rs.ColorMode == EParticleColorMode.Gradient
                     ? 1f - math.clamp(rs.GradientSmoothing, 0f, 1f)
                     : 1f;
-                _renderFoamParams[i] = BuildFoamGenParams(rs, d != null ? d.Material : null, targetDensity, fixedDt);
+                _renderDynamicFoamParams[i] = BuildDynamicFoamParams(rs, d != null ? d.Material : null, targetDensity, fixedDt);
             }
         }
 
         /// <summary>
-        /// 构建某类型的 FoamWithSpeed 泡沫累加器生成参数（预算好常量避免热循环里除法）。仅 FoamWithSpeed 类型给出非零 Decay
-        /// （持久度&gt;0 时），其余类型 Decay=0（F=gen，不被渲染读取）。restDensity 与求解器/Pass 的 rho0 口径一致。
-        /// Build a type's FoamWithSpeed foam-accumulator gen params. Only FoamWithSpeed types get a nonzero Decay (when
-        /// persistence&gt;0); others get Decay=0 (F=gen, unread). restDensity matches the solver/Pass rho0. // 生成パラメータ構築。
+        /// 构建某类型的动态泡沫（DensityWithImpact / DensityWithSpeed）累加器参数（预算好常量）。仅这两个来源给出非零 Decay 与
+        /// 对应动态因子（冲击 or 速度）；其余类型动态因子恒 0（F 恒 0 且不被渲染读取）。restDensity 与求解器/Pass 的 rho0 口径一致。
+        /// Build a type's dynamic-foam (DensityWithImpact / DensityWithSpeed) accumulator params. Only those two sources get a
+        /// nonzero Decay and dynamic factor; others produce 0. restDensity matches the solver/Pass rho0. // パラメータ構築。
         /// </summary>
-        private static Liquid2DFoamGenParams BuildFoamGenParams(Liquid2DParticleRenderSettings rs,
+        private static Liquid2DDynamicFoamParams BuildDynamicFoamParams(Liquid2DParticleRenderSettings rs,
             Liquid2DParticleMaterial mat, float targetDensity, float fixedDt)
         {
-            float foamStart = rs != null ? rs.GradientFoamStart : 1.1f;
-            float foamEnd = rs != null ? rs.GradientFoamEnd : 1f;
-            float speedMin = rs != null ? rs.GradientSpeedMin : 0.2f;
-            float speedMax = rs != null ? rs.GradientSpeedMax : 10f;
             // 静止密度 = 全局目标密度 × 材质密度倍率（与 Pass/compute 的 rho0 完全一致）。 // rest density = global target × material scale. // 静止密度。
             float restDensity = math.max(1e-4f, targetDensity * (mat != null ? math.max(0.01f, mat.TargetDensityScale) : 1f));
-            // Decay 仅对启用持久度的 FoamWithSpeed 类型有意义；否则 0 使 F=gen（瞬时，等于旧行为）。 // Decay only for FoamWithSpeed with persistence; else 0 → F=gen. // Decay。
-            bool foamWithSpeed = rs != null && rs.ColorMode == EParticleColorMode.Gradient
-                && rs.GradientSource == EGradientColorSource.FoamWithSpeed;
+            bool isGradient = rs != null && rs.ColorMode == EParticleColorMode.Gradient;
+            bool isImpact = isGradient && rs.GradientSource == EGradientColorSource.DensityWithImpact;
+            bool isSpeed = isGradient && rs.GradientSource == EGradientColorSource.DensityWithSpeed;
+            bool isDynamic = isImpact || isSpeed;
             float persistence = rs != null ? rs.GradientFoamPersistence : 0f;
-            float decay = foamWithSpeed && persistence > 1e-4f ? math.exp(-fixedDt / persistence) : 0f;
-            return new Liquid2DFoamGenParams
+            float foamStart = rs != null ? rs.GradientFoamStart : 1f;
+            float foamEnd = rs != null ? rs.GradientFoamEnd : 0.85f;
+            float speedMin = rs != null ? rs.GradientSpeedMin : 0.2f;
+            float speedMax = rs != null ? rs.GradientSpeedMax : 10f;
+            return new Liquid2DDynamicFoamParams
             {
+                InvRestDensity = 1f / restDensity,
+                // DensityWithImpact 用冲击；非该来源 ImpactStrength=0 使冲击因子恒 0。 // impact factor only for DensityWithImpact. // 衝撃因子。
+                ImpactStrength = isImpact ? math.max(0f, rs.GradientImpactStrength) : 0f,
+                Decay = isDynamic && persistence > 1e-4f ? math.exp(-fixedDt / persistence) : 0f,
                 FoamStart = foamStart,
                 FoamRangeInv = 1f / math.max(1e-4f, foamStart - foamEnd),
                 SpeedMin = speedMin,
                 SpeedRangeInv = 1f / math.max(1e-4f, speedMax - speedMin),
-                InvRestDensity = 1f / restDensity,
-                Decay = decay,
+                Mode = isSpeed ? 1 : 0, // 1=速度门控（DensityWithSpeed），0=冲击（DensityWithImpact / 其余）。 // 1=speed, 0=impact. // 動的因子選択。
             };
         }
 
@@ -488,7 +491,7 @@ namespace Fs.Liquid2D
                 Time = now,
                 MixMode = (int)ColorMixMode,
                 RenderGradientK = _renderGradientK, // 按类型的渲染平滑 EMA 系数。 // per-type render-smoothing EMA factors. // 型ごとの平滑係数。
-                RenderFoamParams = _renderFoamParams, // 按类型的 FoamWithSpeed 泡沫累加器生成参数。 // per-type FoamWithSpeed foam-accumulator gen params. // 型ごとの泡累加器生成パラメータ。
+                RenderDynamicFoamParams = _renderDynamicFoamParams, // 按类型的动态泡沫累加器参数。 // per-type dynamic-foam accumulator params. // 型ごとの動的泡累加器パラメータ。
                 DynamicBodyCount = _dynamicReceivers.Count,
                 GPUPendingSpawns = _gpuPendingSpawns,
             };
@@ -727,7 +730,7 @@ namespace Fs.Liquid2D
             if (_materials.IsCreated) _materials.Dispose();
             if (_mixData.IsCreated) _mixData.Dispose();
             if (_renderGradientK.IsCreated) _renderGradientK.Dispose();
-            if (_renderFoamParams.IsCreated) _renderFoamParams.Dispose();
+            if (_renderDynamicFoamParams.IsCreated) _renderDynamicFoamParams.Dispose();
         }
 
 #if UNITY_EDITOR

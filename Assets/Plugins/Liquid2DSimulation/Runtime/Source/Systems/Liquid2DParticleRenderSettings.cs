@@ -49,33 +49,39 @@ namespace Fs.Liquid2D
         public EGradientColorSource GradientSource = EGradientColorSource.Speed;
 
         [Min(0f), LocalizationTooltip(
-             "Speed / FoamWithSpeed 模式：速度归一化下限（世界单位/秒）。速度低于此值视作 0（t=0），使缓慢移动的流体不产生颜色/泡沫，表现更稳定。应小于 Speed Max。",
-             "Speed / FoamWithSpeed mode: speed normalization lower bound (world units/sec). Speed below this maps to 0 (t=0), so slowly moving fluid produces no color/foam, appearing more stable. Should be less than Speed Max.",
-             "Speed / FoamWithSpeed モード：速度正規化の下限（ワールド単位/秒）。これ未満の速度は 0（t=0）とみなし、ゆっくり動く流体は色/泡を出さず安定します。Speed Max より小さくします。")]
+             "Speed / DensityWithSpeed 模式：速度归一化下限（世界单位/秒）。速度低于此值视作 0，使缓慢移动的流体不出色/不起泡。应小于 Speed Max。",
+             "Speed / DensityWithSpeed mode: speed normalization lower bound (world units/sec). Speed below this maps to 0, so slowly moving fluid produces no color/foam. Should be less than Speed Max.",
+             "Speed / DensityWithSpeed モード：速度正規化の下限（ワールド単位/秒）。これ未満は 0 とみなし、ゆっくり動く流体は色/泡を出しません。Speed Max より小さく。")]
         public float GradientSpeedMin = 0.2f;
 
         [Min(0.0001f), LocalizationTooltip(
-             "Speed / FoamWithSpeed 模式：速度归一化上限（世界单位/秒）。t = saturate((|velocity| − Speed Min) / (Speed Max − Speed Min))。FoamWithSpeed 下为「泡沫达到满强度所需的速度」。",
-             "Speed / FoamWithSpeed mode: speed normalization upper bound (world units/sec). t = saturate((|velocity| − Speed Min) / (Speed Max − Speed Min)). In FoamWithSpeed it is the speed at which foam reaches full strength.",
-             "Speed / FoamWithSpeed モード：速度正規化の上限（ワールド単位/秒）。t = saturate((|velocity| − Speed Min) / (Speed Max − Speed Min))。FoamWithSpeed では泡が最大になる速度です。")]
+             "Speed / DensityWithSpeed 模式：速度归一化上限（世界单位/秒）。gate = saturate((|velocity| − Speed Min) / (Speed Max − Speed Min))。Speed 用于采色，DensityWithSpeed 用作速度门控。",
+             "Speed / DensityWithSpeed mode: speed normalization upper bound (world units/sec). gate = saturate((|velocity| − Speed Min) / (Speed Max − Speed Min)). Speed uses it for color; DensityWithSpeed as the speed gate.",
+             "Speed / DensityWithSpeed モード：速度正規化の上限（ワールド単位/秒）。gate = saturate((|velocity| − Speed Min) / (Speed Max − Speed Min))。")]
         public float GradientSpeedMax = 10f;
 
         [Range(0f, 2f), LocalizationTooltip(
-             "Foam 模式：起泡上界。密度比（密度/静止密度）低于此值开始起泡。典型自由表面≈0.5，内部≈1。",
-             "Foam mode: foam upper bound. Foam begins where density ratio (density/rest) drops below this. Free surface≈0.5, interior≈1.",
-             "Foam モード：泡立ちの上界。密度比（密度/静止密度）がこれを下回ると泡立ち開始。自由表面≈0.5、内部≈1。")]
-        public float GradientFoamStart = 1.1f;
+             "Density / DensityWithImpact / DensityWithSpeed 模式：有效密度上界（起泡/有效区域的上界）。密度比高于此值视作内部/水底（不起泡/无效区域）。⚠关键：把它卡在你的「内部/水底密度比」略下方（水底往往≈1.0，则设 0.95~1.0），才能把内部排除；设太高（如 1.1）会把水底也框进来。可先用 Density 模式配渐变观察密度分布来定位。",
+             "Density / DensityWithImpact / DensityWithSpeed mode:valid-density upper bound. Density ratio above this is treated as interior/bottom (no foam / invalid region). ⚠Key: set it just below your interior/bottom density ratio (the bottom is often ≈1.0, so use 0.95~1.0) to exclude the interior; too high (e.g. 1.1) lets the bottom in. Use Density mode with a gradient to inspect the density distribution.",
+             "Density / DensityWithImpact / DensityWithSpeed モード：有効密度の上界。これを超える密度比は内部/水底（泡なし/無効）。⚠重要：内部/水底の密度比のすぐ下（水底は≈1.0 が多いので 0.95~1.0）に設定して内部を除外。高すぎ（1.1 等）だと水底も入る。")]
+        public float GradientFoamStart = 1f;
 
         [Range(0f, 2f), LocalizationTooltip(
-             "Foam 模式：满泡下界。密度比低到此值泡沫拉满（t=1）。典型飞溅/水滴≈0.1~0.2。应小于 FoamStart。",
-             "Foam mode: full-foam lower bound. Foam saturates (t=1) at this density ratio. Spray/droplet≈0.1~0.2. Should be less than FoamStart.",
-             "Foam モード：満泡の下界。密度比がこの値まで下がると泡が最大（t=1）。飛沫/水滴≈0.1~0.2。FoamStart より小さくします。")]
-        public float GradientFoamEnd = 1f;
+             "Density / DensityWithImpact / DensityWithSpeed 模式：满效密度下界。密度比低到此值区域门/泡沫拉满（=1）。应小于 FoamStart，且低于表面密度（表面往往≈0.9，可设 0.8~0.9 让表面拿到较强的门值）。",
+             "Density / DensityWithImpact / DensityWithSpeed mode:full lower bound. The gate/foam saturates (=1) at this density ratio. Should be less than FoamStart, and below the surface density (surface is often ≈0.9, so 0.8~0.9 gives the surface a strong gate value).",
+             "Density / DensityWithImpact / DensityWithSpeed モード：満の下界。この密度比でゲート/泡が最大（=1）。FoamStart より小さく、表面密度（≈0.9 が多い）より下に（0.8~0.9）。")]
+        public float GradientFoamEnd = 0.85f;
+
+        [Min(0.0001f), LocalizationTooltip(
+             "DensityWithImpact 模式：冲击灵敏度（冲击项，最终还要乘以密度区域门）。冲击项 = saturate((平滑密度每步的上升量 / 静止密度) × 此值)，再与密度区域门(FoamStart/End)相乘得生成量。越大越容易起泡（弱冲击也起）；越小越只有强冲击才起泡。默认约 20，请按实际观感调（一般 8~60）。注意：上升量取自「平滑」密度，故 Gradient Smoothing 越大单步上升越小、冲击越弱，需相应调高此值。仅 DensityWithImpact 使用；不影响物理。",
+             "DensityWithImpact mode: impact sensitivity (the impact term; the generation is impact × density-gate). impact = saturate((smoothed-density rise per step / rest density) × this), multiplied by the density gate (FoamStart/End). Higher = foams more easily; lower = only strong impacts. Default ~20; tune visually (typically 8~60). Note: rise is from the smoothed density, so a larger Gradient Smoothing makes it weaker — raise this accordingly. DensityWithImpact only; does not affect physics.",
+             "DensityWithImpact モード：衝撃感度（衝撃項、生成量は 衝撃 × 密度領域ゲート）。衝撃 = saturate((平滑密度の1ステップ上昇量/静止密度)×この値)、密度ゲート(FoamStart/End)と乗算。既定 約20（概ね 8~60）。Gradient Smoothing が大きいほど弱くなる—相応に大きく。DensityWithImpact のみ使用。")]
+        public float GradientImpactStrength = 20f;
 
         [Min(0f), LocalizationTooltip(
-             "FoamWithSpeed 模式：泡沫持久度（秒，时间常数）。泡沫在稀疏 + 运动处生成后，即使流体静止/密度不再变化也会按此时长逐渐消退（模拟卷入的空气逃逸）：约经过此时长衰减到 37%，约 3 倍时长基本消失。0=不持久（生成即瞬时，等于旧行为）；海浪白沫≈0.4~1.2；奶泡/洗涤泡≈3~8；啤酒顶泡≈8~20。仅 FoamWithSpeed 使用；不影响物理。",
-             "FoamWithSpeed mode: foam persistence (seconds, time constant). After foam is generated at sparse + moving regions, it fades over this duration even if the fluid goes still / density stops changing (mimics entrained air escaping): decays to ~37% after this long, mostly gone after ~3×. 0 = not persistent (instantaneous, the old behavior); sea whitecaps≈0.4~1.2; milk/detergent foam≈3~8; beer head≈8~20. Used by FoamWithSpeed only; does not affect physics.",
-             "FoamWithSpeed モード：泡の持続時間（秒、時定数）。泡は疎 + 運動の箇所で生成後、流体が静止/密度が変化しなくなってもこの時間で徐々に消えます（巻き込んだ空気の逃逸を模倣）：この時間で約 37%、約 3 倍でほぼ消滅。0=非持続（瞬時、旧動作）。波の白泡≈0.4~1.2、ミルク/洗剤泡≈3~8、ビールの泡≈8~20。FoamWithSpeed のみ使用、物理には影響しません。")]
+             "DensityWithImpact / DensityWithSpeed 模式：泡沫持久度（秒，时间常数）。生成泡沫后，即使不再产生也会按此时长逐渐消退（模拟卷入的空气逃逸）：约经过此时长衰减到 37%，约 3 倍时长基本消失。0=不持久（只在生成那一刻发白）；海浪白沫≈0.4~1.2；奶泡/洗涤泡≈3~8；啤酒顶泡≈8~20。仅这两个动态来源使用；不影响物理。",
+             "DensityWithImpact / DensityWithSpeed mode: foam persistence (seconds, time constant). After foam is generated it fades over this duration even with no new generation (mimics entrained air escaping): decays to ~37% after this long, mostly gone after ~3×. 0 = not persistent; sea whitecaps≈0.4~1.2; milk/detergent foam≈3~8; beer head≈8~20. Both dynamic sources only; does not affect physics.",
+             "DensityWithImpact / DensityWithSpeed モード：泡の持続時間（秒、時定数）。生成後、新たな生成が無くてもこの時間で徐々に消えます：約 37%、約 3 倍でほぼ消滅。0=非持続。波の白泡≈0.4~1.2、ミルク/洗剤泡≈3~8、ビールの泡≈8~20。動的 2 種のみ使用。")]
         public float GradientFoamPersistence = 0.6f;
 
         [Range(0f, 1f), LocalizationTooltip(

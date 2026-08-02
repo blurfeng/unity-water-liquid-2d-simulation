@@ -842,7 +842,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3347b827bf391cd4bb88c9d458911050, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Liquid2DSimulation::Fs.Liquid2D.Liquid2DParticleDisplay
-  displayEnabled: 1
+  displayEnabled: 0
   material: {fileID: 2100000, guid: 6cde42e39ffc3cb45ad10b8a0fe3f1e7, type: 2}
   scale: 0.2
   colorMode: 0

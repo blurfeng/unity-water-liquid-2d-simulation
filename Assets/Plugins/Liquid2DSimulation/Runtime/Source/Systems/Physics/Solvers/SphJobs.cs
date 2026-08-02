@@ -208,11 +208,11 @@ namespace Fs.Liquid2D
     }
 
     /// <summary>
-    /// 把求解器每步临时的密度与速度按时间平滑（EMA，按类型 k）写回 store（按 slot），供渲染层做渐变 Foam / Speed / FoamWithSpeed 判断。
+    /// 把求解器每步临时的密度与速度按时间平滑（EMA，按类型 k）写回 store（按 slot），供渲染层做渐变 Foam / Speed 判断；并据平滑密度的变化速率算 Impact 冲击泡沫累加器写回 store.renderFoam。
     /// 仅在末子步调度一次。OutDensities/OutSpeeds 是跨帧持久的 EMA 累加器：Out = lerp(上帧值, 本帧原始值, SmoothK[typeId])。
-    /// SmoothK=1 无平滑；越小越平滑，消除 SPH 逐帧抖动引起的颜色闪烁。渲染读 store.densities（密度比）与 store.renderSpeeds（速度）。
-    /// EMA-smooth (per-type k) the solver's per-step density and speed back into the store (by slot) for the render layer's
-    /// gradient Foam / Speed / FoamWithSpeed modes. Scheduled once on the last substep. OutDensities/OutSpeeds are cross-frame
+    /// SmoothK=1 无平滑；越小越平滑，消除 SPH 逐帧抖动引起的颜色闪烁。渲染读 store.densities（密度比）、store.renderSpeeds（速度）、store.renderFoam（冲击泡沫 F）。
+    /// EMA-smooth (per-type k) the solver's per-step density and speed back into the store (by slot) for gradient Foam / Speed; and
+    /// compute the Impact impact-foam accumulator from the smoothed-density change rate into store.renderFoam. Scheduled once on the last substep. OutDensities/OutSpeeds are cross-frame
     /// EMA accumulators: Out = lerp(prev, raw, SmoothK[typeId]). SmoothK=1 = no smoothing; smaller = smoother.
     /// 密度と速度を EMA（型ごと k）で平滑して store へ書き戻し。OutDensities/OutSpeeds は跨帧 EMA 累加器。
     /// </summary>
@@ -224,11 +224,11 @@ namespace Fs.Liquid2D
         [ReadOnly] public NativeArray<float2> Velocities;
         [ReadOnly] public NativeArray<int> TypeId;
         [ReadOnly] public NativeArray<float> SmoothK; // 按类型 EMA 系数（=1−GradientSmoothing）。 // per-type EMA factor. // 型ごと係数。
-        [ReadOnly] public NativeArray<Liquid2DFoamGenParams> FoamParams; // 按类型的 FoamWithSpeed 泡沫累加器生成参数。 // per-type FoamWithSpeed foam-accumulator gen params. // 泡累加器生成パラメータ。
+        [ReadOnly] public NativeArray<Liquid2DDynamicFoamParams> DynamicFoamParams; // 按类型的动态泡沫累加器参数。 // per-type dynamic-foam accumulator params. // 動的泡累加器パラメータ。
         // 读写：每个活动粒子的 slot i 唯一，线程间不冲突（禁用 ParallelFor 限制仅因按 i 而非 k 索引）。 // Read/write; each active particle's slot i is unique. // 読み書き。
         [NativeDisableParallelForRestriction] public NativeArray<float> OutDensities;
         [NativeDisableParallelForRestriction] public NativeArray<float> OutSpeeds;
-        [NativeDisableParallelForRestriction] public NativeArray<float> OutFoam; // FoamWithSpeed 泡沫累加器 F（跨帧持久：快升慢降）。 // foam accumulator F (persistent: fast attack, slow release). // 泡累加器 F。
+        [NativeDisableParallelForRestriction] public NativeArray<float> OutFoam; // Impact 冲击泡沫累加器 F（跨帧持久：冲击快升、按持久度慢降）。 // impact-foam accumulator F (persistent). // 衝撃泡累加器 F。
 
         public void Execute(int k)
         {
@@ -236,37 +236,42 @@ namespace Fs.Liquid2D
             int type = TypeId[i];
             float rawD = Densities[i].x;
             float rawS = length(Velocities[i]);
-            float pd = OutDensities[i];
+            float pd = OutDensities[i]; // 上一帧的平滑密度（或哨兵<0）。 // previous smoothed density (or sentinel <0). // 前フレーム平滑密度。
 
-            float smD, smS; // 本帧平滑后的密度/速度（供泡沫生成量用，与渲染读取一致）。 // this-frame smoothed density/speed (for foam gen, matching what render reads). // 平滑後密度/速度。
+            float smD, smS; // 本帧平滑后的密度/速度（渲染 Foam/Speed 读取，也是冲击速率的基准量）。 // this-frame smoothed density/speed. // 平滑後密度/速度。
             bool firstFrame = pd < 0f;
             if (firstFrame)
             {
                 // 哨兵（<0）：spawn 后首帧直接快照到本帧真实值（无收敛瞬变）。 // Sentinel: snap to actual on the first frame after spawn. // 哨兵で快照。
                 smD = rawD;
                 smS = rawS;
-                OutDensities[i] = smD;
-                OutSpeeds[i] = smS;
             }
             else
             {
                 float kk = SmoothK[type];
                 smD = pd + (rawD - pd) * kk;                  // = lerp(prev, raw density, kk)。
                 smS = OutSpeeds[i] + (rawS - OutSpeeds[i]) * kk; // = lerp(prev, raw speed, kk)。
-                OutDensities[i] = smD;
-                OutSpeeds[i] = smS;
             }
+            OutDensities[i] = smD;
+            OutSpeeds[i] = smS;
 
-            // FoamWithSpeed 泡沫累加器：本帧生成量 gen = 密度亏空 × 速度门控（与旧的绘制时公式逐位一致）；
-            // F = max(F·Decay, gen)（生成时快升、静止后按持久度慢降；Decay=0 时 F=gen，等于旧的瞬时行为）。仅 FoamWithSpeed 类型读取。
-            // FoamWithSpeed accumulator: gen = density-deficit × speed-gate (bit-identical to the old draw-time formula);
-            // F = max(F·Decay, gen) (fast attack, slow release; Decay=0 → F=gen, the old instantaneous behavior). Only FoamWithSpeed reads it.
-            // 泡累加器：gen = 密度不足 × 速度ゲート、F = max(F·Decay, gen)。
-            var fp = FoamParams[type];
-            float deficit = saturate((fp.FoamStart - smD * fp.InvRestDensity) * fp.FoamRangeInv);
-            float speedGate = saturate((smS - fp.SpeedMin) * fp.SpeedRangeInv);
-            float gen = deficit * speedGate;
-            OutFoam[i] = firstFrame ? gen : max(OutFoam[i] * fp.Decay, gen);
+            // 动态泡沫累加器：生成量 = 密度区域门 × 动态因子（DensityWithImpact→冲击；DensityWithSpeed→速度门控）。
+            // 区域门 = 密度亏空(FoamStart/End，FoamStart 卡在内部密度以下排除内部)；动态因子 = Mode==1 ? 速度门控 : 冲击(密度上升率)。
+            // F = max(F·Decay, 生成量)。内部/水底(区域门0)、平静/未压实(动态因子0)不产泡；仅动态泡沫来源读取 F。
+            // Dynamic-foam accumulator: generation = densityGate × dynamicFactor (impact for DensityWithImpact, speedGate for DensityWithSpeed). // 動的泡累加器。
+            var dp = DynamicFoamParams[type];
+            float ratio = smD * dp.InvRestDensity;
+            float densityGate = saturate((dp.FoamStart - ratio) * dp.FoamRangeInv);
+            float dynamicFactor;
+            if (dp.Mode == 1) // DensityWithSpeed：速度门控。 // speed gate. // 速度ゲート。
+                dynamicFactor = saturate((smS - dp.SpeedMin) * dp.SpeedRangeInv);
+            else // DensityWithImpact：冲击=密度上升率。 // impact = density rise rate. // 衝撃。
+            {
+                float rise = firstFrame ? 0f : (smD - pd);
+                dynamicFactor = saturate(rise * dp.InvRestDensity * dp.ImpactStrength);
+            }
+            float generation = densityGate * dynamicFactor;
+            OutFoam[i] = firstFrame ? 0f : max(OutFoam[i] * dp.Decay, generation);
         }
     }
 

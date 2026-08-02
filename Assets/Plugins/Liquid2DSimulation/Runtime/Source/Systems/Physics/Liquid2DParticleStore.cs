@@ -28,8 +28,8 @@ namespace Fs.Liquid2D
         internal NativeArray<float4> colors;     // 当前颜色（混色读）。 // current color (mix reads). // 現在色（混色読み）。
         internal NativeArray<float4> colorsNext;  // 混色双缓冲（混色写）。 // mix double-buffer (mix writes). // 混色ダブルバッファ（混色書き）。
         internal NativeArray<float> densities;    // 每粒子渲染密度（EMA 时间平滑，求解器每步写入，供渐变 Foam 模式渲染判断空气混入量）。 // per-particle render density (EMA-smoothed, written by the solver each step; for gradient Foam-mode rendering). // 粒子ごとのレンダー密度（EMA 平滑、Foam モード用）。
-        internal NativeArray<float> renderSpeeds; // 每粒子渲染速度大小（EMA 时间平滑，供渐变 Speed / FoamWithSpeed 模式渲染）。 // per-particle render speed magnitude (EMA-smoothed, for gradient Speed / FoamWithSpeed rendering). // 粒子ごとのレンダー速度（EMA 平滑、Speed 用）。
-        internal NativeArray<float> renderFoam;   // 每粒子泡沫累加器 F（FoamWithSpeed 用，跨帧持久：生成时快升、静止后按持久度慢降）。扩容由 NativeArray.Copy 自动保连续。 // per-particle foam accumulator F (FoamWithSpeed; persistent: fast attack, slow release by persistence). Grow preserved by NativeArray.Copy. // 泡累加器 F。
+        internal NativeArray<float> renderSpeeds; // 每粒子渲染速度大小（EMA 时间平滑，供渐变 Speed 模式渲染）。 // per-particle render speed magnitude (EMA-smoothed, for gradient Speed rendering). // 粒子ごとのレンダー速度（EMA 平滑、Speed 用）。
+        internal NativeArray<float> renderFoam;   // 每粒子冲击泡沫累加器 F（Impact 用，跨帧持久：冲击时快升、按持久度慢降）。扩容由 NativeArray.Copy 自动保连续。 // per-particle impact-foam accumulator F (Impact; persistent). Grow preserved by NativeArray.Copy. // 衝撃泡累加器 F。
         internal NativeArray<float> radii;
         internal NativeArray<float> invMass;
         internal NativeArray<int> typeId;        // → 描述符/材质表。 // → descriptor/material table. // → 記述子/マテリアル表。

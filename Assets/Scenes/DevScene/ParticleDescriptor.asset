@@ -55,6 +55,8 @@ MonoBehaviour:
     GradientSpeedMax: 4
     GradientFoamStart: 1.1
     GradientFoamEnd: 1
+    GradientImpactStrength: 180
+    GradientFoamPersistence: 1.2
     GradientSmoothing: 0.93
     NameTag: Water
   MixSettings:
