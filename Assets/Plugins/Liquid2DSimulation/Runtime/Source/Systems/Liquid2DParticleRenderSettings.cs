@@ -43,9 +43,9 @@ namespace Fs.Liquid2D
         public Gradient ColorGradient = new Gradient();
 
         [LocalizationTooltip(
-             "渐变标量来源（仅 Gradient 生效）。Speed=按速度大小；Foam=按空气混入量（SPH 密度亏空，模拟真实泡沫在表面/飞溅处产生）。",
-             "Gradient scalar source (Gradient mode only). Speed = by velocity magnitude; Foam = by trapped-air (SPH density deficit, mimics real foam forming at surface/spray).",
-             "グラデーションのスカラーソース（Gradient のみ）。Speed = 速度の大きさ、Foam = 混入空気量（SPH 密度不足、表面/飛沫での実際の泡立ちを模倣）。")]
+             "渐变标量来源（仅 Gradient 生效）。Speed=按速度大小；Density=按当前密度亏空（表面恒有一层，静态）；DensityWithImpact=密度门×冲击（只在表面附近、被快速压实处起泡）；DensityWithSpeed=密度门×速度（表面附近运动越快越起泡）；Impact=纯冲击（无密度门，任意位置快速压实都发白）。",
+             "Gradient scalar source (Gradient mode only). Speed = by velocity magnitude; Density = by current density deficit (always-on surface layer, static); DensityWithImpact = density gate × impact (foam only near the surface where rapidly compressed); DensityWithSpeed = density gate × speed (near-surface, faster = more foam); Impact = pure impact (no density gate, any location whitens on rapid compression).",
+             "グラデーションのスカラーソース（Gradient のみ）。Speed=速度の大きさ；Density=現在の密度不足（表面常時、静的）；DensityWithImpact=密度ゲート×衝撃（表面付近の急圧縮のみ）；DensityWithSpeed=密度ゲート×速度（表面付近、速いほど泡）；Impact=純衝撃（門無し、任意位置の急圧縮で白化）。")]
         public EGradientColorSource GradientSource = EGradientColorSource.Speed;
 
         [Min(0f), LocalizationTooltip(
@@ -73,15 +73,15 @@ namespace Fs.Liquid2D
         public float GradientFoamEnd = 0.85f;
 
         [Min(0.0001f), LocalizationTooltip(
-             "DensityWithImpact 模式：冲击灵敏度（冲击项，最终还要乘以密度区域门）。冲击项 = saturate((平滑密度每步的上升量 / 静止密度) × 此值)，再与密度区域门(FoamStart/End)相乘得生成量。越大越容易起泡（弱冲击也起）；越小越只有强冲击才起泡。默认约 20，请按实际观感调（一般 8~60）。注意：上升量取自「平滑」密度，故 Gradient Smoothing 越大单步上升越小、冲击越弱，需相应调高此值。仅 DensityWithImpact 使用；不影响物理。",
-             "DensityWithImpact mode: impact sensitivity (the impact term; the generation is impact × density-gate). impact = saturate((smoothed-density rise per step / rest density) × this), multiplied by the density gate (FoamStart/End). Higher = foams more easily; lower = only strong impacts. Default ~20; tune visually (typically 8~60). Note: rise is from the smoothed density, so a larger Gradient Smoothing makes it weaker — raise this accordingly. DensityWithImpact only; does not affect physics.",
-             "DensityWithImpact モード：衝撃感度（衝撃項、生成量は 衝撃 × 密度領域ゲート）。衝撃 = saturate((平滑密度の1ステップ上昇量/静止密度)×この値)、密度ゲート(FoamStart/End)と乗算。既定 約20（概ね 8~60）。Gradient Smoothing が大きいほど弱くなる—相応に大きく。DensityWithImpact のみ使用。")]
+             "DensityWithImpact 模式：冲击灵敏度（冲击项，最终还要乘以密度区域门）。冲击项 = saturate((平滑密度每步的上升量 / 静止密度) × 此值)，再与密度区域门(FoamStart/End)相乘得生成量。越大越容易起泡（弱冲击也起）；越小越只有强冲击才起泡。默认约 20，请按实际观感调（一般 8~60）。注意：上升量取自「平滑」密度，故 Gradient Smoothing 越大单步上升越小、冲击越弱，需相应调高此值。DensityWithImpact / Impact 用作冲击灵敏度。不影响物理。",
+             "DensityWithImpact mode: impact sensitivity (the impact term; the generation is impact × density-gate). impact = saturate((smoothed-density rise per step / rest density) × this), multiplied by the density gate (FoamStart/End). Higher = foams more easily; lower = only strong impacts. Default ~20; tune visually (typically 8~60). Note: rise is from the smoothed density, so a larger Gradient Smoothing makes it weaker — raise this accordingly. Impact sensitivity for DensityWithImpact / Impact. Does not affect physics.",
+             "DensityWithImpact モード：衝撃感度（衝撃項、生成量は 衝撃 × 密度領域ゲート）。衝撃 = saturate((平滑密度の1ステップ上昇量/静止密度)×この値)、密度ゲート(FoamStart/End)と乗算。既定 約20（概ね 8~60）。Gradient Smoothing が大きいほど弱くなる—相応に大きく。DensityWithImpact / Impact で使用。物理には影響しません。")]
         public float GradientImpactStrength = 20f;
 
         [Min(0f), LocalizationTooltip(
-             "DensityWithImpact 模式：冲击死区（最小上升率下限）。冲击项 = saturate((平滑密度每步上升率 / 静止密度 − 此值) × ImpactStrength)。「每步上升率/静止密度」低于此值的区域完全不产泡，用于排除「密度从低到高但变化很小」的轻微扰动（避免看起来像冲击波的伪发白）；超过此值的部分从 0 起缓慢升起，无边界突跳。0=无死区（等同旧行为）。典型 0.002~0.02，按观感微调。注意：与 ImpactStrength 单位一致（都作用在归一化上升率上），死区在乘 ImpactStrength 之前扣除；Gradient Smoothing 越大单步上升越小，需相应调小此值。仅 DensityWithImpact 使用；不影响物理。",
-             "DensityWithImpact mode: impact deadzone (minimum rise-rate floor). impact = saturate((smoothed-density rise per step / rest − this) × ImpactStrength). Regions whose per-step normalized rise is below this value produce no foam, excluding weak 'low-to-high but tiny' disturbances (avoids shockwave-like false whitening); above it foam rises from 0 with no boundary jump. 0 = no deadzone (legacy behavior). Typically 0.002~0.02; tune visually. Note: same unit as ImpactStrength (both act on the normalized rise); the deadzone is subtracted before multiplying by ImpactStrength. A larger Gradient Smoothing shrinks the per-step rise, so lower this accordingly. DensityWithImpact only; does not affect physics.",
-             "DensityWithImpact モード：衝撃デッドゾーン（最小上昇率の下限）。衝撃 = saturate((平滑密度の1ステップ上昇率/静止密度 − この値)×ImpactStrength)。1ステップの正規化上昇率がこの値未満の領域は泡を出さず、「低→高だが変化が小さい」微弱な擾乱を除外（衝撃波的な偽の白飛びを回避）。超えた分は 0 から立ち上がり境界のポップなし。0=デッドゾーン無し（旧挙動と同一）。目安 0.002~0.02。ImpactStrength と同じ単位（正規化上昇率に作用）で、乗算前に差し引きます。Gradient Smoothing が大きいほど1ステップ上昇が小さくなるため相応に小さく。DensityWithImpact のみ使用。")]
+             "DensityWithImpact 模式：冲击死区（最小上升率下限）。冲击项 = saturate((平滑密度每步上升率 / 静止密度 − 此值) × ImpactStrength)。「每步上升率/静止密度」低于此值的区域完全不产泡，用于排除「密度从低到高但变化很小」的轻微扰动（避免看起来像冲击波的伪发白）；超过此值的部分从 0 起缓慢升起，无边界突跳。0=无死区（等同旧行为）。典型 0.002~0.02，按观感微调。注意：与 ImpactStrength 单位一致（都作用在归一化上升率上），死区在乘 ImpactStrength 之前扣除；Gradient Smoothing 越大单步上升越小，需相应调小此值。DensityWithImpact / Impact 用作上升死区。不影响物理。",
+             "DensityWithImpact mode: impact deadzone (minimum rise-rate floor). impact = saturate((smoothed-density rise per step / rest − this) × ImpactStrength). Regions whose per-step normalized rise is below this value produce no foam, excluding weak 'low-to-high but tiny' disturbances (avoids shockwave-like false whitening); above it foam rises from 0 with no boundary jump. 0 = no deadzone (legacy behavior). Typically 0.002~0.02; tune visually. Note: same unit as ImpactStrength (both act on the normalized rise); the deadzone is subtracted before multiplying by ImpactStrength. A larger Gradient Smoothing shrinks the per-step rise, so lower this accordingly. The rise deadzone for DensityWithImpact / Impact. Does not affect physics.",
+             "DensityWithImpact モード：衝撃デッドゾーン（最小上昇率の下限）。衝撃 = saturate((平滑密度の1ステップ上昇率/静止密度 − この値)×ImpactStrength)。1ステップの正規化上昇率がこの値未満の領域は泡を出さず、「低→高だが変化が小さい」微弱な擾乱を除外（衝撃波的な偽の白飛びを回避）。超えた分は 0 から立ち上がり境界のポップなし。0=デッドゾーン無し（旧挙動と同一）。目安 0.002~0.02。ImpactStrength と同じ単位（正規化上昇率に作用）で、乗算前に差し引きます。Gradient Smoothing が大きいほど1ステップ上昇が小さくなるため相応に小さく。DensityWithImpact / Impact で上昇デッドゾーンとして使用。物理には影響しません。")]
         public float GradientImpactRiseMin = 0.003f;
 
         [Min(0f), LocalizationTooltip(

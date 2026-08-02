@@ -786,7 +786,7 @@ namespace Fs.Liquid2D
                         }
                         else
                         {
-                            // DensityWithImpact（=2）/ DensityWithSpeed（=3）：求解器算好的动态泡沫累加器 F。 // solver's dynamic-foam accumulator F. // 動的泡累加器 F。
+                            // DensityWithImpact（=2）/ DensityWithSpeed（=3）/ Impact（=4）：求解器算好的动态泡沫累加器 F。 // solver's dynamic-foam accumulator F. // 動的泡累加器 F。
                             tt = foamArr[slot];
                         }
                         Color gc = settings.EvaluateGradientCpu(tt); // EvaluateGradientCpu 内部已 saturate(t)。 // clamps t internally. // 内部で saturate。

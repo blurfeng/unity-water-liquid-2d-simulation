@@ -54,7 +54,7 @@ RWStructuredBuffer<float2> Densities;    // (density, nearDensity)
 // レンダー用平滑スカラー (x=密度, y=速度, z=泡累加器 F)。D3D11 の 8 UAV 制限回避のため単一バッファに統合。
 RWStructuredBuffer<float3> RenderScalars;
 StructuredBuffer<float>    RenderGradientK; // 按类型的渲染平滑 EMA 系数（=1−GradientSmoothing，由 CPU 上传）。 // per-type render-smoothing EMA factor (uploaded by CPU). // 型ごとの平滑係数。
-// 按类型的动态泡沫参数（与 C# Liquid2DDynamicFoamParams 逐字段一致）。generation = 密度门 × 动态因子（mode==1 速度门控 / 否则 冲击=密度上升率）。 // Per-type dynamic-foam params (matches C# Liquid2DDynamicFoamParams field-for-field). // 型ごとの動的泡パラメータ。
+// 按类型的动态泡沫参数（与 C# Liquid2DDynamicFoamParams 逐字段一致）。generation = 区域门 × 动态因子。mode：0=冲击+密度门(DensityWithImpact) / 1=速度门控+密度门(DensityWithSpeed) / 2=纯冲击无门(Impact，区域门恒 1)。 // Per-type dynamic-foam params (matches C# Liquid2DDynamicFoamParams field-for-field). mode: 0=impact+gate, 1=speed+gate, 2=pure impact (gate=1). // 型ごとの動的泡パラメータ。
 struct DynamicFoamParams { float invRestDensity; float impactStrength; float impactRiseMin; float decay; float foamStart; float foamRangeInv; float speedMin; float speedRangeInv; int mode; };
 StructuredBuffer<DynamicFoamParams> RenderDynamicFoamParams;
 RWStructuredBuffer<float4> Colors;
@@ -1006,7 +1006,9 @@ void CopyColor(uint3 id : SV_DispatchThreadID)
     // 密度区域门 = 密度亏空（FoamStart 卡在内部密度以下→排除内部）。 // density gate = deficit (interior excluded). // 密度領域ゲート。
     float ratio = rs.x * dp.invRestDensity;
     float densityGate = saturate((dp.foamStart - ratio) * dp.foamRangeInv);
-    // 动态因子：mode==1 速度门控（DensityWithSpeed）/ 否则 冲击=密度上升率（DensityWithImpact）。 // dynamic factor: speed gate or density rise. // 動的因子。
+    // 区域门：DensityWithImpact(0)/DensityWithSpeed(1) 用密度门筛选表面；纯 Impact(2) 不筛选，门恒 1。 // pure Impact(2) skips the gate. // 純 Impact(2) は門=1。
+    float gate = dp.mode == 2 ? 1.0 : densityGate;
+    // 动态因子：mode==1 速度门控（DensityWithSpeed）/ 否则 冲击=密度上升率（DensityWithImpact / Impact）。 // dynamic factor: speed gate or density rise. // 動的因子。
     float dynamicFactor;
     if (dp.mode == 1)
         dynamicFactor = saturate((rs.y - dp.speedMin) * dp.speedRangeInv);
@@ -1016,7 +1018,7 @@ void CopyColor(uint3 id : SV_DispatchThreadID)
         // 死区：归一化上升率低于 impactRiseMin 的部分不产泡，排除轻微扰动的伪冲击波。riseMin=0 时与旧式等价。 // deadzone; equivalent to the old formula when riseMin=0. // デッドゾーン、riseMin=0 で旧式と等価。
         dynamicFactor = saturate((rise * dp.invRestDensity - dp.impactRiseMin) * dp.impactStrength);
     }
-    float generation = densityGate * dynamicFactor;
+    float generation = gate * dynamicFactor;
     rs.z = firstFrame ? 0.0 : max(rs.z * dp.decay, generation);
     RenderScalars[i] = rs;
 }

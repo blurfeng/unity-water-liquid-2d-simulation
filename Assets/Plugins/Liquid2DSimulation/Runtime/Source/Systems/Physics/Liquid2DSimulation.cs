@@ -246,7 +246,9 @@ namespace Fs.Liquid2D
             bool isGradient = rs != null && rs.ColorMode == EParticleColorMode.Gradient;
             bool isImpact = isGradient && rs.GradientSource == EGradientColorSource.DensityWithImpact;
             bool isSpeed = isGradient && rs.GradientSource == EGradientColorSource.DensityWithSpeed;
-            bool isDynamic = isImpact || isSpeed;
+            bool isPureImpact = isGradient && rs.GradientSource == EGradientColorSource.Impact;
+            bool usesImpact = isImpact || isPureImpact; // 都用冲击公式 + ImpactStrength/ImpactRiseMin（区别仅在是否做密度门）。 // both use the impact formula. // 両方衝撃式。
+            bool isDynamic = isImpact || isSpeed || isPureImpact;
             float persistence = rs != null ? rs.GradientFoamPersistence : 0f;
             float foamStart = rs != null ? rs.GradientFoamStart : 1f;
             float foamEnd = rs != null ? rs.GradientFoamEnd : 0.85f;
@@ -255,16 +257,16 @@ namespace Fs.Liquid2D
             return new Liquid2DDynamicFoamParams
             {
                 InvRestDensity = 1f / restDensity,
-                // DensityWithImpact 用冲击；非该来源 ImpactStrength=0 使冲击因子恒 0。 // impact factor only for DensityWithImpact. // 衝撃因子。
-                ImpactStrength = isImpact ? math.max(0f, rs.GradientImpactStrength) : 0f,
-                // 冲击死区（归一化上升率下限）：仅 DensityWithImpact 生效，低于此值不产泡。 // impact deadzone (DensityWithImpact only). // 衝撃デッドゾーン。
-                ImpactRiseMin = isImpact ? math.max(0f, rs.GradientImpactRiseMin) : 0f,
+                // DensityWithImpact / Impact 用冲击；非冲击来源 ImpactStrength=0 使冲击因子恒 0。 // impact factor for DensityWithImpact / Impact. // 衝撃因子。
+                ImpactStrength = usesImpact ? math.max(0f, rs.GradientImpactStrength) : 0f,
+                // 冲击死区（归一化上升率下限）：DensityWithImpact / Impact 生效，低于此值不产泡。 // impact deadzone (DensityWithImpact / Impact). // 衝撃デッドゾーン。
+                ImpactRiseMin = usesImpact ? math.max(0f, rs.GradientImpactRiseMin) : 0f,
                 Decay = isDynamic && persistence > 1e-4f ? math.exp(-fixedDt / persistence) : 0f,
                 FoamStart = foamStart,
                 FoamRangeInv = 1f / math.max(1e-4f, foamStart - foamEnd),
                 SpeedMin = speedMin,
                 SpeedRangeInv = 1f / math.max(1e-4f, speedMax - speedMin),
-                Mode = isSpeed ? 1 : 0, // 1=速度门控（DensityWithSpeed），0=冲击（DensityWithImpact / 其余）。 // 1=speed, 0=impact. // 動的因子選択。
+                Mode = isSpeed ? 1 : (isPureImpact ? 2 : 0), // 0=冲击+密度门(DensityWithImpact / 其余)，1=速度+密度门(DensityWithSpeed)，2=纯冲击无门(Impact)。 // 0=impact+gate, 1=speed+gate, 2=pure impact. // 動的因子選択。
             };
         }
 

@@ -50,7 +50,7 @@ Shader "Custom/URP/2D/Liquid2DParticleGpu"
             TEXTURE2D(_GradientLut);
             SAMPLER(sampler_GradientLut);
             int   _UseGradient;     // 0=用 _Colors；非0=用渐变。 // 0=use _Colors; nonzero=gradient. // 0=_Colors、非0=渐変。
-            int   _GradientSource;  // 0=Speed，1=Density，2=DensityWithImpact，3=DensityWithSpeed。 // 0/1/2/3。
+            int   _GradientSource;  // 0=Speed，1=Density，2=DensityWithImpact，3=DensityWithSpeed，4=Impact。 // 0/1/2/3/4。
             float _SpeedMin;        // 速度归一化下限（低于视作 0）。 // speed lower bound (below → 0). // 速度下限。
             float _GradientSpeedMax;
             float _RestDensity;     // 该类粒子静止密度（把 SPH 密度归一化为密度比）。 // rest density (normalizes SPH density to a ratio). // 静止密度。
@@ -129,7 +129,7 @@ Shader "Custom/URP/2D/Liquid2DParticleGpu"
                         float ratio = rscal.x / max(1e-4, _RestDensity);
                         t = saturate((_FoamStart - ratio) / max(1e-4, _FoamStart - _FoamEnd));
                     }
-                    else // DensityWithImpact（=2）/ DensityWithSpeed（=3）：求解器算好的动态泡沫累加器 F。 // dynamic-foam accumulator F. // 動的泡累加器 F。
+                    else // DensityWithImpact（=2）/ DensityWithSpeed（=3）/ Impact（=4）：求解器算好的动态泡沫累加器 F。 // dynamic-foam accumulator F. // 動的泡累加器 F。
                     {
                         t = rscal.z;
                     }

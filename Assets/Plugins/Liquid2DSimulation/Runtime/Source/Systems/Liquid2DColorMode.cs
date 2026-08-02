@@ -76,5 +76,18 @@ namespace Fs.Liquid2D
         /// 密度 × 速度（旧 FoamWithSpeed）：低密度の有効領域で速いほど泡立ち、持続度で運動停止後に消える。動的因子が速度である点のみ異なる。パラメータ：FoamStart/End + SpeedMin/SpeedMax + FoamPersistence。
         /// </summary>
         DensityWithSpeed = 3,
+
+        /// <summary>
+        /// 纯冲击（只看密度变化率，无密度区域门）：生成量 = 冲击 = saturate((Δ平滑密度/静止密度 − ImpactRiseMin) × ImpactStrength)。
+        /// 与 <see cref="DensityWithImpact"/> 的唯一区别是【不做密度区域门(FoamStart/End)筛选】——任意位置（含流体内部/水底）只要发生快速压实（密度快速上升）就发白，不再局限于表面附近。
+        /// 适合「整体受冲击即整体发白」而非「只在表面起泡」的效果。静止区域密度稳定(上升率≈0)不发白；配合 ImpactRiseMin 死区滤除轻微扰动；F = max(F·decay, 生成量) 由 FoamPersistence 控制消退。
+        /// 参数：ImpactStrength + ImpactRiseMin + FoamPersistence（不使用 FoamStart/End 与 SpeedMin/Max）。
+        /// Pure impact (density rise rate only, no density region gate): generation = impact = saturate((Δsmoothed-density/rest − ImpactRiseMin) × ImpactStrength).
+        /// The only difference from <see cref="DensityWithImpact"/> is that it does NOT apply the density region gate (FoamStart/End): any location (including fluid interior/bottom) whitens when rapidly compressed, not just near the surface.
+        /// Good for "the whole body whitens on impact" rather than "foam only at the surface". Static regions (rise≈0) don't whiten; ImpactRiseMin filters weak disturbances; F = max(F·decay, generation), fade by FoamPersistence.
+        /// Params: ImpactStrength + ImpactRiseMin + FoamPersistence (FoamStart/End and SpeedMin/Max unused).
+        /// 純衝撃（密度変化率のみ、密度領域ゲート無し）：generation = saturate((Δ平滑密度/静止密度 − ImpactRiseMin)×ImpactStrength)。<see cref="DensityWithImpact"/> との違いは領域ゲート(FoamStart/End)を行わない点——任意の位置（内部/水底含む）で急激な圧縮があれば白くなる。パラメータ：ImpactStrength + ImpactRiseMin + FoamPersistence。
+        /// </summary>
+        Impact = 4,
     }
 }

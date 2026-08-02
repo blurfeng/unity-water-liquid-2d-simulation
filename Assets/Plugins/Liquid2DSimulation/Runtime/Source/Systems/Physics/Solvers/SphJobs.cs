@@ -262,10 +262,14 @@ namespace Fs.Liquid2D
             var dp = DynamicFoamParams[type];
             float ratio = smD * dp.InvRestDensity;
             float densityGate = saturate((dp.FoamStart - ratio) * dp.FoamRangeInv);
+            // 区域门：DensityWithImpact(0)/DensityWithSpeed(1) 用密度亏空门筛选表面；纯 Impact(2) 不筛选，门恒 1（任意位置的快速压实都产泡）。
+            // Region gate: DensityWithImpact(0)/DensityWithSpeed(1) use the density-deficit gate; pure Impact(2) skips it (gate=1, any location foams on rapid compression).
+            // 領域ゲート：0/1 は密度ゲートで表面を絞る、純 Impact(2) は絞らず門=1。
+            float gate = dp.Mode == 2 ? 1f : densityGate;
             float dynamicFactor;
             if (dp.Mode == 1) // DensityWithSpeed：速度门控。 // speed gate. // 速度ゲート。
                 dynamicFactor = saturate((smS - dp.SpeedMin) * dp.SpeedRangeInv);
-            else // DensityWithImpact：冲击=密度上升率（减去死区 ImpactRiseMin 后再乘灵敏度）。 // impact = density rise rate minus the ImpactRiseMin deadzone. // 衝撃。
+            else // DensityWithImpact(0) / Impact(2)：冲击=密度上升率（减去死区 ImpactRiseMin 后再乘灵敏度）。 // impact = density rise rate minus the ImpactRiseMin deadzone. // 衝撃。
             {
                 float rise = firstFrame ? 0f : (smD - pd);
                 // 死区：归一化上升率低于 ImpactRiseMin 的部分不产泡，排除轻微扰动的伪冲击波。RiseMin=0 时与旧式等价。
@@ -273,7 +277,7 @@ namespace Fs.Liquid2D
                 // デッドゾーン：ImpactRiseMin 未満は泡なし。RiseMin=0 で旧式と等価。
                 dynamicFactor = saturate((rise * dp.InvRestDensity - dp.ImpactRiseMin) * dp.ImpactStrength);
             }
-            float generation = densityGate * dynamicFactor;
+            float generation = gate * dynamicFactor;
             OutFoam[i] = firstFrame ? 0f : max(OutFoam[i] * dp.Decay, generation);
         }
     }

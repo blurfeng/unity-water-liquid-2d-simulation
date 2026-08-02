@@ -305,10 +305,12 @@ namespace Fs.Liquid2D.Editor
             int src = _gradientSource != null ? _gradientSource.enumValueIndex : (int)EGradientColorSource.Speed;
             bool isImpact = src == (int)EGradientColorSource.DensityWithImpact;
             bool isSpeedFoam = src == (int)EGradientColorSource.DensityWithSpeed;
-            // Foam Start/End：Density 作贴图，DensityWith* 作密度区域门。 // density map vs region gate. // 密度貼図/領域ゲート。
+            bool isPureImpact = src == (int)EGradientColorSource.Impact; // 纯冲击：无密度门，只用冲击参数。 // pure impact: no density gate. // 純衝撃。
+            bool usesImpactParams = isImpact || isPureImpact; // Impact Strength + Impact Rise Min：DensityWithImpact 与 Impact 共用。 // both impact sources. // 衝撃系 2 種。
+            // Foam Start/End：Density 作贴图，DensityWith* 作密度区域门；纯 Impact 无密度门，不显示。 // density map vs region gate; pure Impact has none. // 密度貼図/領域ゲート（純 Impact は無し）。
             bool usesDensity = src == (int)EGradientColorSource.Density || isImpact || isSpeedFoam;
             bool usesSpeed = src == (int)EGradientColorSource.Speed || isSpeedFoam; // Speed Min/Max：Speed 重映射，DensityWithSpeed 速度门控。 // remap vs speed gate. // 速度。
-            bool usesPersistence = isImpact || isSpeedFoam; // Foam Persistence：两个动态来源。 // both dynamic sources. // 動的 2 種。
+            bool usesPersistence = isImpact || isSpeedFoam || isPureImpact; // Foam Persistence：三个动态来源。 // all dynamic sources. // 動的 3 種。
 
             if (usesDensity)
             {
@@ -371,12 +373,22 @@ namespace Fs.Liquid2D.Editor
                 }
             }
 
-            // Impact Strength / Impact Rise Min 仅 DensityWithImpact（冲击=密度上升率）使用；密度门(Foam Start/End)与速度门(Speed Min/Max)在上方对应块显示。 // Impact params only for DensityWithImpact. // 衝撃感度。
-            if (isImpact && _gradientImpactStrength != null)
+            // 纯 Impact 说明：无密度区域门，任意位置（含内部/水底）快速压实都会发白。 // Pure Impact note: no density gate, any location whitens on rapid compression. // 純 Impact：門無し。
+            if (isPureImpact)
+            {
+                EditorGUILayout.HelpBox(
+                    L("纯 Impact：只按密度变化率（冲击）发白，不做密度区域门筛选——任意位置（含流体内部/水底）发生快速压实都会发白，不局限于表面。静止区域不发白；用 Impact Rise Min 滤除轻微扰动。若只想在表面起泡，请改用 DensityWithImpact。",
+                        "Pure Impact: whitens purely by density rise rate (impact) with no density region gate — any location (including fluid interior/bottom) whitens on rapid compression, not just the surface. Static regions don't whiten; use Impact Rise Min to filter weak disturbances. For surface-only foam use DensityWithImpact.",
+                        "純 Impact：密度変化率（衝撃）のみで白くなり、密度領域ゲートを行いません——任意の位置（内部/水底含む）で急激な圧縮があれば白くなります。静止領域は白くなりません。表面のみの泡は DensityWithImpact を使用してください。"),
+                    MessageType.Info);
+            }
+
+            // Impact Strength / Impact Rise Min：DensityWithImpact（冲击=密度上升率）与 Impact（纯冲击）共用；密度门(Foam Start/End)与速度门(Speed Min/Max)在上方对应块显示。 // Impact params for DensityWithImpact & Impact. // 衝撃感度。
+            if (usesImpactParams && _gradientImpactStrength != null)
                 EditorGUILayout.PropertyField(_gradientImpactStrength, new GUIContent("Impact Strength", _gradientImpactStrength.tooltip));
 
             // Impact Rise Min：冲击死区下限，排除「密度从低到高但变化很小」的轻微扰动伪冲击波。 // impact deadzone floor. // 衝撃デッドゾーン下限。
-            if (isImpact && _gradientImpactRiseMin != null)
+            if (usesImpactParams && _gradientImpactRiseMin != null)
                 EditorGUILayout.PropertyField(_gradientImpactRiseMin, new GUIContent("Impact Rise Min", _gradientImpactRiseMin.tooltip));
 
             // Foam Persistence：两个动态来源（DensityWithImpact / DensityWithSpeed）都用——生成后按此时长消退。 // both dynamic sources. // 消退時長。

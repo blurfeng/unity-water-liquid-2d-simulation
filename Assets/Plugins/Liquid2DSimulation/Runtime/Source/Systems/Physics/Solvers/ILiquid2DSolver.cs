@@ -34,7 +34,7 @@ namespace Fs.Liquid2D
         public float SpeedMin;
         /// <summary>= 1/(SpeedMax − SpeedMin)，速度门控归一化（Mode==1）。 // speed-gate normalization (Mode==1). // 速度ゲート正規化。</summary>
         public float SpeedRangeInv;
-        /// <summary>动态因子选择：0=冲击（密度上升率），1=速度门控。 // dynamic factor: 0=impact, 1=speed. // 動的因子選択。</summary>
+        /// <summary>模式：0=冲击+密度门(DensityWithImpact)，1=速度门控+密度门(DensityWithSpeed)，2=纯冲击无密度门(Impact，门恒=1)。 // 0=impact+gate, 1=speed+gate, 2=pure impact (no gate). // 0=衝撃+ゲート, 1=速度+ゲート, 2=純衝撃(門無し)。</summary>
         public int Mode;
     }
 
