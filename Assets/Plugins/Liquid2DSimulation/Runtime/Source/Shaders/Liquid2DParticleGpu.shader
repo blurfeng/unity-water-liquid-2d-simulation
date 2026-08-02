@@ -24,8 +24,11 @@ Shader "Custom/URP/2D/Liquid2DParticleGpu"
         {
             Name "Liquid2DParticleGpu"
 
-            // 与 Liquid2DParticle 一致的混合，使粒子远距离即开始融合。 // Same blend as Liquid2DParticle for far-distance merging. // 同一ブレンド。
-            Blend SrcAlpha OneMinusSrcAlpha, One OneMinusSrcAlpha
+            // 与 Liquid2DParticle 一致的混合，使粒子远距离即开始融合。RT1（仅 _OPACITY_FIELD 开启时绑定）为独立透明度场，
+            // 加性累加 R=Σ(覆盖×O)、G=Σ覆盖，合成阶段 O=R/G。 // Same blend as Liquid2DParticle. RT1 (bound only when _OPACITY_FIELD)
+            // is the independent opacity field: additive R=Σ(coverage×O), G=Σcoverage; the composite computes O=R/G. // 同一ブレンド + 独立透明度場。
+            Blend 0 SrcAlpha OneMinusSrcAlpha, One OneMinusSrcAlpha
+            Blend 1 One One
             Cull Off
             ZWrite Off
 
@@ -33,6 +36,8 @@ Shader "Custom/URP/2D/Liquid2DParticleGpu"
             #pragma vertex Vert
             #pragma fragment Frag
             #pragma target 4.5
+            // 独立透明度场开关（与 CPU 路径同名，由 C# 运行时按需切换并绑定第二渲染目标）。 // Independent opacity field toggle (same as CPU path). // 独立透明度場スイッチ。
+            #pragma multi_compile_local _ _OPACITY_FIELD
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
             StructuredBuffer<float2> _Positions;
@@ -49,6 +54,9 @@ Shader "Custom/URP/2D/Liquid2DParticleGpu"
             StructuredBuffer<float3> _RenderScalars; // 逐粒子平滑标量 (x=密度→Foam, y=速度→Speed, z=Impact 冲击泡沫累加器 F)。 // per-particle scalars (x=density→Foam, y=speed→Speed, z=Impact accumulator F). // 平滑スカラー。
             TEXTURE2D(_GradientLut);
             SAMPLER(sampler_GradientLut);
+            // 透明度 LUT（仅 _OPACITY_FIELD + 渐变时使用）：按同一标量 t 采样得每粒子最终透明度倍率 O(t)。 // Opacity LUT (used only with _OPACITY_FIELD + gradient): O(t) by the same scalar t. // 透明度 LUT。
+            TEXTURE2D(_OpacityLut);
+            SAMPLER(sampler_OpacityLut);
             int   _UseGradient;     // 0=用 _Colors；非0=用渐变。 // 0=use _Colors; nonzero=gradient. // 0=_Colors、非0=渐変。
             int   _GradientSource;  // 0=Speed，1=Density，2=DensityWithImpact，3=DensityWithSpeed，4=Impact。 // 0/1/2/3/4。
             float _SpeedMin;        // 速度归一化下限（低于视作 0）。 // speed lower bound (below → 0). // 速度下限。
@@ -80,6 +88,7 @@ Shader "Custom/URP/2D/Liquid2DParticleGpu"
                 float4 positionCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
                 float4 color : TEXCOORD1;
+                float opacity : TEXCOORD2; // 逐粒子最终透明度倍率 O（_OPACITY_FIELD 用；否则恒 1）。 // per-particle opacity multiplier O. // 透明度倍率 O。
             };
 
             // 两个三角形拼出四边形（与 CPU quad 同尺寸 [-0.5,0.5]）。 // Two triangles form the quad. // 四角形。
@@ -112,6 +121,7 @@ Shader "Custom/URP/2D/Liquid2DParticleGpu"
 
                 OUT.positionCS = TransformWorldToHClip(float3(world, 0));
                 OUT.uv = QUV[vid];
+                OUT.opacity = 1.0; // 默认不透明倍率；渐变+_OPACITY_FIELD 时下方按 t 采样覆盖。 // default; overwritten by LUT below when gradient+_OPACITY_FIELD. // 既定 1。
 
                 // 颜色：渐变模式按每粒子标量采 LUT（顶点纹理取样，同实例 6 顶点结果一致）；否则用 store 颜色。
                 // Color: gradient mode samples the LUT by a per-particle scalar (vertex texture fetch; identical across the
@@ -135,6 +145,10 @@ Shader "Custom/URP/2D/Liquid2DParticleGpu"
                     }
                     t = saturate(t);
                     OUT.color = SAMPLE_TEXTURE2D_LOD(_GradientLut, sampler_GradientLut, float2(t, 0.5), 0);
+                    #if defined(_OPACITY_FIELD)
+                    // 按同一标量 t 采样透明度 LUT，得到该粒子的最终透明度倍率。 // Sample the opacity LUT by the same t. // 同じ t で透明度 LUT をサンプリング。
+                    OUT.opacity = SAMPLE_TEXTURE2D_LOD(_OpacityLut, sampler_OpacityLut, float2(t, 0.5), 0).r;
+                    #endif
                 }
                 else
                 {
@@ -150,11 +164,29 @@ Shader "Custom/URP/2D/Liquid2DParticleGpu"
                 return OUT;
             }
 
+            #if defined(_OPACITY_FIELD)
+            struct FragOut
+            {
+                half4 color : SV_Target0; // RGB=颜色, A=覆盖度。 // RGB=color, A=coverage.
+                half2 op    : SV_Target1; // R=覆盖×O, G=覆盖。 // R=coverage×O, G=coverage.
+            };
+            FragOut Frag(Varying IN)
+            {
+                half4 tex = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, IN.uv);
+                half4 col = tex * IN.color;
+                FragOut OUT;
+                OUT.color = col;
+                half cov = col.a;
+                OUT.op = half2(cov * (half)IN.opacity, cov);
+                return OUT;
+            }
+            #else
             half4 Frag(Varying IN) : SV_Target
             {
                 half4 tex = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, IN.uv);
                 return tex * IN.color;
             }
+            #endif
             ENDHLSL
         }
     }

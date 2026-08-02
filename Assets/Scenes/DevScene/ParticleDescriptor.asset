@@ -26,7 +26,7 @@ MonoBehaviour:
       key1: {r: 0, g: 0.5592723, b: 1, a: 1}
       key2: {r: 0.3726415, g: 0.9138918, b: 1, a: 1}
       key3: {r: 1, g: 1, b: 1, a: 0}
-      key4: {r: 1.2311444, g: 1.2311444, b: 1.2311444, a: 0}
+      key4: {r: 1, g: 1, b: 1, a: 0}
       key5: {r: 0.37254903, g: 0.9137255, b: 1, a: 0}
       key6: {r: 0.37254903, g: 0.9137255, b: 1, a: 0}
       key7: {r: 0, g: 0, b: 0, a: 0}
@@ -50,6 +50,48 @@ MonoBehaviour:
       m_ColorSpace: 0
       m_NumColorKeys: 6
       m_NumAlphaKeys: 2
+    GradientOpacity:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0.5
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 0.45854634
+        value: 0.6464814
+        inSlope: 1.0174639
+        outSlope: 1.0174639
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.70902056
+      - serializedVersion: 3
+        time: 0.5145519
+        value: 0.8027878
+        inSlope: 0.9344748
+        outSlope: 0.9344748
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0.3083251
+        outWeight: 0.10734838
+      - serializedVersion: 3
+        time: 1
+        value: 0.95
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
     GradientSource: 3
     GradientSpeedMin: 0.2
     GradientSpeedMax: 4

@@ -43,6 +43,12 @@ namespace Fs.Liquid2D
         public Gradient ColorGradient = new Gradient();
 
         [LocalizationTooltip(
+             "透明度曲线（仅 ColorMode=Gradient 生效）。按与颜色相同的每粒子标量 t（0→1）采样，得到该粒子的最终透明度倍率（0=全透，1=不透）。与 ColorGradient 的 alpha（用作距离场覆盖度，决定流体形状）解耦：此曲线只影响最终渲染透明度、不改变流体形状。默认恒为 1（无变化，零开销）。可用于模拟海浪浪尖半透等按采样动态变化的透明度。",
+             "Opacity curve (effective only when ColorMode=Gradient). Sampled by the same per-particle scalar t (0→1) as the color, yielding the particle's final opacity multiplier (0 = fully transparent, 1 = opaque). Decoupled from ColorGradient's alpha (which is the distance-field coverage that shapes the fluid): this curve affects only the final render opacity, not the fluid shape. Defaults to a constant 1 (no change, zero cost). Useful for sampling-driven opacity such as translucent wave crests.",
+             "透明度カーブ（ColorMode=Gradient のときのみ有効）。色と同じ粒子ごとのスカラー t（0→1）でサンプリングし、その粒子の最終透明度倍率（0=完全透明、1=不透明）を得ます。ColorGradient の alpha（流体形状を決める距離場カバレッジ）とは分離され、このカーブは最終描画の透明度のみに作用し、流体形状は変えません。既定は定数 1（変化なし、ゼロコスト）。波の穂先の半透明などサンプリング駆動の透明度に利用できます。")]
+        public AnimationCurve GradientOpacity = AnimationCurve.Constant(0f, 1f, 1f);
+
+        [LocalizationTooltip(
              "渐变标量来源（仅 Gradient 生效）。Speed=按速度大小；Density=按当前密度亏空（表面恒有一层，静态）；DensityWithImpact=密度门×冲击（只在表面附近、被快速压实处起泡）；DensityWithSpeed=密度门×速度（表面附近运动越快越起泡）；Impact=纯冲击（无密度门，任意位置快速压实都发白）。",
              "Gradient scalar source (Gradient mode only). Speed = by velocity magnitude; Density = by current density deficit (always-on surface layer, static); DensityWithImpact = density gate × impact (foam only near the surface where rapidly compressed); DensityWithSpeed = density gate × speed (near-surface, faster = more foam); Impact = pure impact (no density gate, any location whitens on rapid compression).",
              "グラデーションのスカラーソース（Gradient のみ）。Speed=速度の大きさ；Density=現在の密度不足（表面常時、静的）；DensityWithImpact=密度ゲート×衝撃（表面付近の急圧縮のみ）；DensityWithSpeed=密度ゲート×速度（表面付近、速いほど泡）；Impact=純衝撃（門無し、任意位置の急圧縮で白化）。")]
@@ -143,8 +149,30 @@ namespace Fs.Liquid2D
         [NonSerialized] private Texture2D _lutGpu;
         [NonSerialized] private bool _lutDirty = true;
 
+        // 透明度 LUT（与颜色 LUT 共享同一标量 t 与脏标记）：CPU 绘制路径用 float[] 按 t 取倍率；GPU 绘制路径用 256×1 RHalf 纹理在 shader 内采样。
+        // 与颜色 LUT 解耦，专门承载 GradientOpacity 曲线烘焙出的每粒子最终透明度倍率 O(t)。_gradientOpacityActive 缓存「曲线是否非恒 1」，
+        // 恒 1 时整条独立透明度场链路可完全跳过（现有 Gradient 资产零开销、行为不变）。
+        // Opacity LUT (shares the same scalar t and dirty flag as the color LUT): the CPU draw path indexes a float[] by t; the GPU
+        // draw path samples a 256×1 RHalf texture in-shader. Decoupled from the color LUT; carries the per-particle final opacity
+        // multiplier O(t) baked from the GradientOpacity curve. _gradientOpacityActive caches whether the curve deviates from a
+        // constant 1; when it is a flat 1 the whole independent-opacity-field path is skipped (existing gradient assets: zero cost).
+        // 透明度 LUT（色 LUT と同じ t・ダーティフラグを共有）。CPU は float[]、GPU は 256×1 RHalf。GradientOpacity から焼く O(t) を保持。
+        [NonSerialized] private float[] _opacityLutCpu;
+        [NonSerialized] private Texture2D _opacityLutGpu;
+        [NonSerialized] private bool _gradientOpacityActive;
+
         /// <summary>标记渐变 LUT 失效（渐变/相关参数改动后调用，下次使用时重建）。 // Mark the gradient LUT dirty (rebuilt on next use). // LUT をダーティに。</summary>
         public void InvalidateGradientLut() => _lutDirty = true;
+
+        /// <summary>
+        /// 透明度曲线是否「非恒 1」（需要独立透明度场）。恒 1 时可完全跳过 MRT 透明度链路，现有资产零开销。惰性烘焙后可用。
+        /// Whether the opacity curve is non-constant-1 (needs the independent opacity field). When flat 1, the whole MRT opacity
+        /// path can be skipped (zero cost for existing assets). Valid after the lazy bake. // 透明度カーブが非定数1か（独立透明度場が要るか）。
+        /// </summary>
+        public bool GradientOpacityActive
+        {
+            get { EnsureGradientLut(); return _gradientOpacityActive; }
+        }
 
         /// <summary>
         /// 确保 LUT 已烘焙（须在主线程调用——会创建 Texture2D）。应在渲染 Pass 的 Record 阶段预热，勿在渲染执行回调内首次创建纹理。
@@ -154,7 +182,7 @@ namespace Fs.Liquid2D
         /// </summary>
         public void EnsureGradientLut()
         {
-            if (!_lutDirty && _lutCpu != null && _lutGpu) return;
+            if (!_lutDirty && _lutCpu != null && _lutGpu && _opacityLutCpu != null && _opacityLutGpu) return;
             if (ColorGradient == null) ColorGradient = new Gradient();
 
             if (_lutCpu == null || _lutCpu.Length != GradientLutSize) _lutCpu = new Color[GradientLutSize];
@@ -182,6 +210,39 @@ namespace Fs.Liquid2D
             }
             _lutGpu.SetPixels(_lutCpu);
             _lutGpu.Apply(false);
+
+            // ---- 透明度 LUT 烘焙 // Bake the opacity LUT // 透明度 LUT の焼き込み ---- //
+            // 透明度是线性的倍率（非颜色），不做任何色彩空间转换，直接烘焙曲线求值并裁剪到 [0,1]。同时记录曲线是否非恒 1。
+            // Opacity is a linear multiplier (not a color): no color-space conversion; bake the raw curve value clamped to [0,1].
+            // Also record whether the curve deviates from a constant 1. // 透明度は線形倍率（色ではない）。色空間変換なしで [0,1] にクランプして焼く。
+            if (_opacityLutCpu == null || _opacityLutCpu.Length != GradientLutSize) _opacityLutCpu = new float[GradientLutSize];
+            var opacityCurve = GradientOpacity;
+            bool active = false;
+            for (int i = 0; i < GradientLutSize; i++)
+            {
+                float o = opacityCurve != null && opacityCurve.length > 0
+                    ? Mathf.Clamp01(opacityCurve.Evaluate(i / (float)(GradientLutSize - 1)))
+                    : 1f;
+                _opacityLutCpu[i] = o;
+                if (Mathf.Abs(o - 1f) > 1e-4f) active = true;
+            }
+            _gradientOpacityActive = active;
+
+            if (!_opacityLutGpu)
+            {
+                // linear=true：透明度是线性倍率，采样不做 sRGB 转换。 // linear=true: opacity is a linear multiplier; sampling does no sRGB conversion. // linear=true。
+                _opacityLutGpu = new Texture2D(GradientLutSize, 1, TextureFormat.RHalf, false, true)
+                {
+                    name = "Liquid2DOpacityLut",
+                    wrapMode = TextureWrapMode.Clamp,
+                    filterMode = FilterMode.Bilinear,
+                    hideFlags = HideFlags.HideAndDontSave,
+                };
+            }
+            for (int i = 0; i < GradientLutSize; i++)
+                _opacityLutGpu.SetPixel(i, 0, new Color(_opacityLutCpu[i], 0f, 0f, 0f));
+            _opacityLutGpu.Apply(false);
+
             _lutDirty = false;
         }
 
@@ -193,11 +254,26 @@ namespace Fs.Liquid2D
             return _lutCpu[idx];
         }
 
+        /// <summary>按标量 t（0..1）从 CPU 透明度 LUT 取最终透明度倍率（CPU 绘制路径用）。 // Sample the final opacity multiplier from the CPU opacity LUT by scalar t (0..1). // スカラー t で透明度倍率を取得。</summary>
+        public float EvaluateOpacityCpu(float t)
+        {
+            EnsureGradientLut();
+            int idx = Mathf.Clamp((int)(Mathf.Clamp01(t) * (GradientLutSize - 1) + 0.5f), 0, GradientLutSize - 1);
+            return _opacityLutCpu[idx];
+        }
+
         /// <summary>获取渐变 LUT 纹理（GPU 绘制路径 shader 采样用）。 // Get the gradient LUT texture (for GPU shader sampling). // グラデーション LUT テクスチャを取得。</summary>
         public Texture2D GetGradientLut()
         {
             EnsureGradientLut();
             return _lutGpu;
+        }
+
+        /// <summary>获取透明度 LUT 纹理（GPU 绘制路径 shader 采样用）。 // Get the opacity LUT texture (for GPU shader sampling). // 透明度 LUT テクスチャを取得。</summary>
+        public Texture2D GetOpacityLut()
+        {
+            EnsureGradientLut();
+            return _opacityLutGpu;
         }
 
         #endregion

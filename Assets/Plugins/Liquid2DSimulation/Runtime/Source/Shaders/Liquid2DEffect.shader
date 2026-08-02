@@ -38,6 +38,11 @@ Shader "Custom/URP/2D/Liquid2DEffect"
             // 透明度倍率：乘法 / 覆盖。 // Opacity multiplier: multiply / replace. // 透明度倍率：乗算 / 上書き。
             #pragma multi_compile_local _ _OPACITY_MULTIPLY _OPACITY_REPLACE
 
+            // 独立透明度场（Gradient 透明度曲线）：开启时采样 RG 场，O=R/G 得覆盖度加权的逐区域透明度倍率，乘入最终 alpha。
+            // Independent opacity field (Gradient opacity curve): when on, sample the RG field, O=R/G gives the coverage-weighted
+            // per-region opacity multiplier folded into the final alpha. // 独立透明度場：ON で RG 場を採り O=R/G を最終 alpha に乗算。
+            #pragma multi_compile_local _ _OPACITY_FIELD
+
             // 开启水体扰动。 // Enable water distortion. // 水体の歪みを有効化。
             #pragma multi_compile_local _ _DISTORT_ENABLE
 
@@ -76,6 +81,11 @@ Shader "Custom/URP/2D/Liquid2DEffect"
             
             TEXTURE2D_X(_ObstructorTex);
             SAMPLER(sampler_linear_clamp_ObstructorTex);
+
+            // 独立透明度场（RG：R=Σ覆盖×O, G=Σ覆盖）。复用 _MainTex 的采样器。 // Independent opacity field (RG). Reuses the _MainTex sampler. // 独立透明度場(RG)。
+            #if defined(_OPACITY_FIELD)
+            TEXTURE2D_X(_OpacityTex);
+            #endif
             
             // 背景纹理。当需要扰动或像素化背景时使用。将处理后的背景作为流体的背景。
             // 否则流体是透明的，可以看到真正的背景。
@@ -200,6 +210,18 @@ CBUFFER_END
                 col = lerp(col, _EdgeColor, (1 - edge));
                 #endif
 
+                #endif
+
+                // ---- 独立透明度场（Gradient 透明度曲线）// Independent opacity field (Gradient opacity curve) // 独立透明度場 ---- //
+                // 采样 RG 场：O = R/G = Σ(覆盖×O)/Σ覆盖，即覆盖度加权的逐区域最终透明度倍率（与形状/Cutoff 解耦），乘入当前 alpha。
+                // 与 OpacityMode 组合：Default→形状×O；Multiply→形状×OpacityValue×O；Replace→OpacityValue×O（此组合最可控，适合海浪）。
+                // Sample the RG field: O = R/G = Σ(coverage×O)/Σcoverage — the coverage-weighted per-region final opacity multiplier
+                // (decoupled from shape/Cutoff), folded into the current alpha. Combines with OpacityMode: Default→shape×O;
+                // Multiply→shape×OpacityValue×O; Replace→OpacityValue×O (the most controllable combo, ideal for waves).
+                #if defined(_OPACITY_FIELD)
+                half4 opacField = SAMPLE_TEXTURE2D_X(_OpacityTex, sampler_linear_clamp_MainTex, uvProcess);
+                half fieldO = opacField.r / max(1e-4, opacField.g);
+                col.a *= saturate(fieldO);
                 #endif
 
                 // ---- 阻挡纹理处理 // Obstructor texture processing // 阻害テクスチャ処理 ---- //

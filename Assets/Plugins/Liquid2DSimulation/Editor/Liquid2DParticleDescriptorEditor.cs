@@ -29,6 +29,7 @@ namespace Fs.Liquid2D.Editor
         private SerializedProperty _nameTag;
         private SerializedProperty _colorMode;
         private SerializedProperty _colorGradient;
+        private SerializedProperty _gradientOpacity;
         private SerializedProperty _gradientSource;
         private SerializedProperty _gradientSpeedMin;
         private SerializedProperty _gradientSpeedMax;
@@ -53,6 +54,7 @@ namespace Fs.Liquid2D.Editor
                 _nameTag = _renderSettings.FindPropertyRelative("NameTag");
                 _colorMode = _renderSettings.FindPropertyRelative("ColorMode");
                 _colorGradient = _renderSettings.FindPropertyRelative("ColorGradient");
+                _gradientOpacity = _renderSettings.FindPropertyRelative("GradientOpacity");
                 _gradientSource = _renderSettings.FindPropertyRelative("GradientSource");
                 _gradientSpeedMin = _renderSettings.FindPropertyRelative("GradientSpeedMin");
                 _gradientSpeedMax = _renderSettings.FindPropertyRelative("GradientSpeedMax");
@@ -295,6 +297,9 @@ namespace Fs.Liquid2D.Editor
 
             if (_colorGradient != null)
                 DrawGradientWithCopyPaste(_colorGradient, new GUIContent("Color Gradient", _colorGradient.tooltip));
+            // 透明度曲线：按同一标量 t 采样得逐区域最终透明度倍率（与颜色/形状解耦，恒 1 时零开销）。 // Opacity curve: per-region final opacity by the same t (decoupled from color/shape; zero cost when flat 1). // 透明度カーブ。
+            if (_gradientOpacity != null)
+                EditorGUILayout.PropertyField(_gradientOpacity, new GUIContent("Gradient Opacity", _gradientOpacity.tooltip));
             if (_gradientSource != null)
                 EditorGUILayout.PropertyField(_gradientSource, new GUIContent("Gradient Source", _gradientSource.tooltip));
 

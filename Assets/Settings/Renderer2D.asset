@@ -240,7 +240,7 @@ MonoBehaviour:
       serializedVersion: 0
       m_Bits: 4
     Cutoff: 0.6
-    OpacityMode: 1
+    OpacityMode: 0
     OpacityValue: 0.6
     Blur:
       Iterations: 3

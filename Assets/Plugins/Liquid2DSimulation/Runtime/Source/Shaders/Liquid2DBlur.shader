@@ -26,6 +26,10 @@ Shader "Custom/URP/2D/Liquid2DBlur"
             // survives build stripping. // C# から実行時に切り替えるため multi_compile でバリアントを保持する。
             // 忽略背景色。 // Ignore background color. // 背景色を無視します。
             #pragma multi_compile_local _ _IGNORE_BG_COLOR
+            // 独立透明度场：开启时第二渲染目标(RG：R=Σ覆盖×O, G=Σ覆盖)与颜色图共用同一批模糊偏移一起模糊(真 MRT)。
+            // Independent opacity field: when on, a second target (RG: R=Σcoverage×O, G=Σcoverage) is blurred together with the
+            // color texture using the SAME offsets (true MRT). // 独立透明度場：ON で第二ターゲット(RG)を色図と同じオフセットで同時ブラー。
+            #pragma multi_compile_local _ _OPACITY_FIELD
             // ---- Keywords ------------------------------------- End
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
@@ -50,7 +54,12 @@ Shader "Custom/URP/2D/Liquid2DBlur"
             TEXTURE2D_X(_MainTex);
             SAMPLER(sampler_linear_clamp_MainTex);
             half2 _MainTex_TexelSize;
-            
+
+            // 独立透明度场源纹理（RG）。复用 _MainTex 的采样器。 // Independent opacity field source (RG). Reuses the _MainTex sampler. // 独立透明度場ソース(RG)。
+            #if defined(_OPACITY_FIELD)
+            TEXTURE2D_X(_OpacityTex);
+            #endif
+
             half _BlurOffset;
 
             Varying Vert(Attribute IN)
@@ -71,7 +80,7 @@ Shader "Custom/URP/2D/Liquid2DBlur"
                 return OUT;
             }
 
-            half4 Frag(Varying IN) : SV_Target
+            half4 BlurColor(Varying IN)
             {
                 // ---- 描述 // Description // 説明 ---- //
                 // 1. 采样根据当前像素，向四个斜方向偏移 _BlurOffset 个像素进行采样，然后取平均值作为模糊后的颜色。
@@ -133,7 +142,42 @@ Shader "Custom/URP/2D/Liquid2DBlur"
                 return col * 0.125;
                 #endif
             }
-            
+
+            #if defined(_OPACITY_FIELD)
+            // 独立透明度场模糊：对 RG 两通道做与颜色相同偏移的 Kawase 盒式平均（中心权重4）。
+            // R=Σ覆盖×O 与 G=Σ覆盖 同为线性累加量，逐通道盒式平均可保持比值，合成阶段 O=R/G 仍为覆盖度加权。
+            // Opacity-field blur: Kawase box average (center weight 4) of the RG channels with the same offsets as the color.
+            // R=Σcoverage×O and G=Σcoverage are linear accumulations; per-channel box averaging preserves the ratio, so the
+            // composite O=R/G stays coverage-weighted. // 透明度場ブラー：RG を色と同じオフセットで盒式平均。比値保持。
+            half2 BlurOpacity(Varying IN)
+            {
+                half2 o  = SAMPLE_TEXTURE2D_X(_OpacityTex, sampler_linear_clamp_MainTex, IN.uv01.xy).rg * 4;
+                o += SAMPLE_TEXTURE2D_X(_OpacityTex, sampler_linear_clamp_MainTex, IN.uv01.zw).rg;
+                o += SAMPLE_TEXTURE2D_X(_OpacityTex, sampler_linear_clamp_MainTex, IN.uv23.xy).rg;
+                o += SAMPLE_TEXTURE2D_X(_OpacityTex, sampler_linear_clamp_MainTex, IN.uv23.zw).rg;
+                o += SAMPLE_TEXTURE2D_X(_OpacityTex, sampler_linear_clamp_MainTex, IN.uv4).rg;
+                return o * 0.125;
+            }
+
+            struct BlurOut
+            {
+                half4 color : SV_Target0;
+                half2 op    : SV_Target1;
+            };
+            BlurOut Frag(Varying IN)
+            {
+                BlurOut OUT;
+                OUT.color = BlurColor(IN);
+                OUT.op = BlurOpacity(IN);
+                return OUT;
+            }
+            #else
+            half4 Frag(Varying IN) : SV_Target
+            {
+                return BlurColor(IN);
+            }
+            #endif
+
             ENDHLSL
         }
     }
