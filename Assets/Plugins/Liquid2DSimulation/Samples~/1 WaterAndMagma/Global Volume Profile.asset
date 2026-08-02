@@ -29,7 +29,6 @@ MonoBehaviour:
       Cutoff: 0.397
       OpacityMode: 0
       OpacityValue: 1
-      CoverColor: {r: 0, g: 0, b: 0, a: 0}
       Blur:
         Iterations: 7
         BlurSpread: 0.8
