@@ -845,6 +845,10 @@ namespace Fs.Liquid2D
                     (d.Material != null ? Mathf.Max(0.01f, d.Material.TargetDensityScale) : 1f));
                 float foamStart = settings.GradientFoamStart;
                 float foamRangeInv = 1f / Mathf.Max(1e-4f, settings.GradientFoamStart - settings.GradientFoamEnd);
+                // 渐变 CPU LUT：Record 阶段（PrepareGradientLuts）已预热，这里每描述符取一次数组直接按索引查，
+                // 避免每粒子调用 EnsureGradientLut（含 Unity 对象判空）的开销。 // Gradient CPU LUTs: warmed in Record; fetch the arrays once per descriptor and index directly, avoiding a per-particle EnsureGradientLut. // 記述子ごとに一度取得。
+                Color[] cpuGradientLut = gradient ? settings.GetGradientLutCpu() : null;
+                float[] cpuOpacityLut = gradient && data.OpacityFieldActive ? settings.GetOpacityLutCpu() : null;
 
                 mpb.Clear();
                 mpb.SetTexture(ShaderIds.MainTexId, settings.Sprite.texture);
@@ -896,10 +900,12 @@ namespace Fs.Liquid2D
                             // DensityWithImpact（=2）/ DensityWithSpeed（=3）/ Impact（=4）：求解器算好的动态泡沫累加器 F。 // solver's dynamic-foam accumulator F. // 動的泡累加器 F。
                             tt = foamArr[slot];
                         }
-                        Color gc = settings.EvaluateGradientCpu(tt); // EvaluateGradientCpu 内部已 saturate(t)。 // clamps t internally. // 内部で saturate。
+                        // 每粒子只算一次 LUT 索引，颜色与透明度共用（GradientLutIndex 内部已 saturate(t)）。 // One LUT index per particle, shared by color and opacity (GradientLutIndex saturates t internally). // 索引を1回だけ算出し色/透明度で共用。
+                        int lutIdx = Liquid2DParticleRenderSettings.GradientLutIndex(tt);
+                        Color gc = cpuGradientLut[lutIdx];
                         colors[count] = new Vector4(gc.r, gc.g, gc.b, gc.a);
-                        // 透明度：按同一标量 t 采 CPU 透明度 LUT。 // Opacity: sample the CPU opacity LUT by the same scalar t. // 透明度：同じ t で CPU 透明度 LUT。
-                        if (data.OpacityFieldActive) opacities[count] = settings.EvaluateOpacityCpu(tt);
+                        // 透明度：按同一索引取 CPU 透明度 LUT。 // Opacity: index the CPU opacity LUT with the same index. // 透明度：同じ索引で CPU 透明度 LUT。
+                        if (data.OpacityFieldActive) opacities[count] = cpuOpacityLut[lutIdx];
                     }
                     else
                     {

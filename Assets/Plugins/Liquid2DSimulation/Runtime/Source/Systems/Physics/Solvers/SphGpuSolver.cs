@@ -109,7 +109,7 @@ namespace Fs.Liquid2D
         private ComputeBuffer _materials, _mixDatas, _colliders, _points, _forceFields;
         // 按类型的渲染平滑 EMA 系数（numTypes 级，CPU 上传）。 // Per-type render-smoothing EMA factors (numTypes-level, uploaded by CPU). // 型ごとの平滑係数。
         private ComputeBuffer _renderGradientKBuf;
-        // 按类型的动态泡沫累加器参数（numTypes 级，stride 32，CPU 上传；CopyColor 按 TypeId 读）。 // Per-type dynamic-foam accumulator params (numTypes-level, stride 32, uploaded by CPU; CopyColor reads by TypeId). // 型ごとの動的泡累加器パラメータ。
+        // 按类型的动态泡沫累加器参数（numTypes 级，stride 36，CPU 上传；CopyColor 按 TypeId 读）。 // Per-type dynamic-foam accumulator params (numTypes-level, stride 36, uploaded by CPU; CopyColor reads by TypeId). // 型ごとの動的泡累加器パラメータ。
         private ComputeBuffer _renderDynamicFoamParamsBuf;
         // 动态体接触累积（合并为单个缓冲，规避 D3D11 每 kernel 8 UAV 上限）：每体 _accumStride 个 int 通道，通道定义见 _accum* 常量与 shader ACCUM_*。
         // Per-body contact accumulation merged into one buffer (works around D3D11's 8-UAV-per-kernel limit): _accumStride int channels per body.

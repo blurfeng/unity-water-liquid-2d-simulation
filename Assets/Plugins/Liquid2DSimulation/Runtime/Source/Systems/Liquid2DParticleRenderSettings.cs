@@ -160,6 +160,8 @@ namespace Fs.Liquid2D
         [NonSerialized] private float[] _opacityLutCpu;
         [NonSerialized] private Texture2D _opacityLutGpu;
         [NonSerialized] private bool _gradientOpacityActive;
+        // 透明度 LUT 上传用的复用 Color[] 暂存：一次 SetPixels 取代 256 次 SetPixel 的原生调用。 // Reused Color[] scratch for uploading the opacity LUT: one SetPixels instead of 256 SetPixel native calls. // 透明度 LUT アップロード用 Color[] 再利用。
+        [NonSerialized] private Color[] _opacityLutColorScratch;
 
         /// <summary>标记渐变 LUT 失效（渐变/相关参数改动后调用，下次使用时重建）。 // Mark the gradient LUT dirty (rebuilt on next use). // LUT をダーティに。</summary>
         public void InvalidateGradientLut() => _lutDirty = true;
@@ -216,6 +218,7 @@ namespace Fs.Liquid2D
             // Opacity is a linear multiplier (not a color): no color-space conversion; bake the raw curve value clamped to [0,1].
             // Also record whether the curve deviates from a constant 1. // 透明度は線形倍率（色ではない）。色空間変換なしで [0,1] にクランプして焼く。
             if (_opacityLutCpu == null || _opacityLutCpu.Length != GradientLutSize) _opacityLutCpu = new float[GradientLutSize];
+            if (_opacityLutColorScratch == null || _opacityLutColorScratch.Length != GradientLutSize) _opacityLutColorScratch = new Color[GradientLutSize];
             var opacityCurve = GradientOpacity;
             bool active = false;
             for (int i = 0; i < GradientLutSize; i++)
@@ -224,6 +227,7 @@ namespace Fs.Liquid2D
                     ? Mathf.Clamp01(opacityCurve.Evaluate(i / (float)(GradientLutSize - 1)))
                     : 1f;
                 _opacityLutCpu[i] = o;
+                _opacityLutColorScratch[i] = new Color(o, 0f, 0f, 0f); // 同一循环内填充上传暂存（R=倍率）。 // fill the upload scratch in the same loop (R=multiplier). // アップロード暂存を同ループで充填。
                 if (Mathf.Abs(o - 1f) > 1e-4f) active = true;
             }
             _gradientOpacityActive = active;
@@ -239,27 +243,28 @@ namespace Fs.Liquid2D
                     hideFlags = HideFlags.HideAndDontSave,
                 };
             }
-            for (int i = 0; i < GradientLutSize; i++)
-                _opacityLutGpu.SetPixel(i, 0, new Color(_opacityLutCpu[i], 0f, 0f, 0f));
+            _opacityLutGpu.SetPixels(_opacityLutColorScratch); // 一次上传（RHalf 只取 R）。 // single upload (RHalf keeps R). // 一括アップロード。
             _opacityLutGpu.Apply(false);
 
             _lutDirty = false;
         }
 
-        /// <summary>按标量 t（0..1）从 CPU LUT 取渐变色（CPU 绘制路径用）。 // Sample the gradient color from the CPU LUT by scalar t (0..1). // スカラー t で CPU LUT から色を取得。</summary>
-        public Color EvaluateGradientCpu(float t)
+        /// <summary>把标量 t（0..1）映射为 LUT 索引（最近邻，四舍五入并裁剪）。CPU 绘制热循环里每粒子调用，配合 GetGradientLutCpu / GetOpacityLutCpu 直接按索引取值。 // Map scalar t (0..1) to a LUT index (nearest, rounded & clamped); use with GetGradientLutCpu / GetOpacityLutCpu. // スカラー t を LUT 索引へ。</summary>
+        public static int GradientLutIndex(float t)
+            => Mathf.Clamp((int)(Mathf.Clamp01(t) * (GradientLutSize - 1) + 0.5f), 0, GradientLutSize - 1);
+
+        /// <summary>获取 CPU 渐变色 LUT 数组（按 <see cref="GradientLutIndex"/> 直接索引）。确保已烘焙。CPU 绘制热循环里每描述符取一次，避免每粒子的 EnsureGradientLut 与 Unity 对象判空开销。 // Get the CPU gradient color LUT array (index via GradientLutIndex); ensures baked. Fetch once per descriptor to avoid per-particle overhead. // CPU 色 LUT 配列を取得。</summary>
+        public Color[] GetGradientLutCpu()
         {
             EnsureGradientLut();
-            int idx = Mathf.Clamp((int)(Mathf.Clamp01(t) * (GradientLutSize - 1) + 0.5f), 0, GradientLutSize - 1);
-            return _lutCpu[idx];
+            return _lutCpu;
         }
 
-        /// <summary>按标量 t（0..1）从 CPU 透明度 LUT 取最终透明度倍率（CPU 绘制路径用）。 // Sample the final opacity multiplier from the CPU opacity LUT by scalar t (0..1). // スカラー t で透明度倍率を取得。</summary>
-        public float EvaluateOpacityCpu(float t)
+        /// <summary>获取 CPU 透明度 LUT 数组（按 <see cref="GradientLutIndex"/> 直接索引）。确保已烘焙。 // Get the CPU opacity LUT array (index via GradientLutIndex); ensures baked. // CPU 透明度 LUT 配列を取得。</summary>
+        public float[] GetOpacityLutCpu()
         {
             EnsureGradientLut();
-            int idx = Mathf.Clamp((int)(Mathf.Clamp01(t) * (GradientLutSize - 1) + 0.5f), 0, GradientLutSize - 1);
-            return _opacityLutCpu[idx];
+            return _opacityLutCpu;
         }
 
         /// <summary>获取渐变 LUT 纹理（GPU 绘制路径 shader 采样用）。 // Get the gradient LUT texture (for GPU shader sampling). // グラデーション LUT テクスチャを取得。</summary>
@@ -274,6 +279,32 @@ namespace Fs.Liquid2D
         {
             EnsureGradientLut();
             return _opacityLutGpu;
+        }
+
+        /// <summary>
+        /// 释放渐变/透明度 LUT 纹理。运行时创建的 <see cref="HideFlags.HideAndDontSave"/> 纹理不会被 GC 或 UnloadUnusedAssets 回收，
+        /// 须显式销毁——由 <see cref="Liquid2DParticleDescriptor"/> 卸载（OnDisable）时调用，避免编辑器反复进出 Play 时纹理累积。
+        /// CPU 侧 LUT 数组随 GC 回收无需处理。销毁后置脏，下次使用会重建。
+        /// Release the gradient/opacity LUT textures. Runtime-created <see cref="HideFlags.HideAndDontSave"/> textures are not
+        /// reclaimed by GC or UnloadUnusedAssets and must be destroyed explicitly — called from
+        /// <see cref="Liquid2DParticleDescriptor"/> unload (OnDisable) to avoid texture accumulation across editor play/stop cycles.
+        /// CPU-side LUT arrays are GC-managed. Marks dirty so the next use rebuilds.
+        /// グラデーション/透明度 LUT テクスチャを解放（HideAndDontSave は GC/UnloadUnusedAssets で回収されないため明示破棄）。記述子の OnDisable から呼ぶ。
+        /// </summary>
+        public void DisposeGradientLut()
+        {
+            DestroyTexture(ref _lutGpu);
+            DestroyTexture(ref _opacityLutGpu);
+            _lutDirty = true;
+        }
+
+        // 运行时用 Destroy、编辑器（非 Play）用 DestroyImmediate 销毁纹理；已销毁/为空时安全跳过。 // Destroy the texture (Destroy at runtime, DestroyImmediate in edit mode); safe when already destroyed/null. // 実行時 Destroy / エディタ DestroyImmediate。
+        private static void DestroyTexture(ref Texture2D tex)
+        {
+            if (!tex) { tex = null; return; }
+            if (Application.isPlaying) UnityEngine.Object.Destroy(tex);
+            else UnityEngine.Object.DestroyImmediate(tex);
+            tex = null;
         }
 
         #endregion
